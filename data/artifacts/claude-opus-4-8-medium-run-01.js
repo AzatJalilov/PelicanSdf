@@ -1,0 +1,533 @@
+// Interactive 3D signed-distance-field artwork: a pelican riding a bicycle.
+// Pure WebGL2 ray marching. No external assets, no animation loop of its own.
+
+const VS = `#version 300 es
+void main(){
+  vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));
+  gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
+}`;
+
+const FS = `#version 300 es
+precision highp float;
+out vec4 fragColor;
+uniform vec2 uRes;
+uniform vec3 uRo;
+uniform mat3 uCam;
+uniform float uT;
+
+#define PI 3.14159265359
+const vec3 SUN = vec3(0.5488, 0.7127, 0.4358);
+
+float smin(float a, float b, float k){
+  float h = clamp(0.5 + 0.5*(b-a)/k, 0.0, 1.0);
+  return mix(b,a,h) - k*h*(1.0-h);
+}
+vec2 rot2(vec2 p, float a){ float c=cos(a), s=sin(a); return vec2(c*p.x - s*p.y, s*p.x + c*p.y); }
+float sdSeg(vec3 p, vec3 a, vec3 b, float r){
+  vec3 pa = p-a, ba = b-a;
+  float h = clamp(dot(pa,ba)/dot(ba,ba), 0.0, 1.0);
+  return length(pa - ba*h) - r;
+}
+float sdSegT(vec3 p, vec3 a, vec3 b, float ra, float rb){
+  vec3 pa = p-a, ba = b-a;
+  float h = clamp(dot(pa,ba)/dot(ba,ba), 0.0, 1.0);
+  return length(pa - ba*h) - mix(ra,rb,h);
+}
+float sdEll(vec3 p, vec3 r){
+  float k0 = length(p/r);
+  float k1 = length(p/(r*r));
+  return k0*(k0-1.0)/max(k1,1e-6);
+}
+float sdTorus(vec3 p, float R, float r){
+  vec2 q = vec2(length(p.xy)-R, p.z);
+  return length(q)-r;
+}
+float sdBox(vec3 p, vec3 b){
+  vec3 q = abs(p)-b;
+  return length(max(q,0.0)) + min(max(q.x,max(q.y,q.z)),0.0);
+}
+float sdCyl(vec3 p, float r, float h){
+  return max(length(p.xy)-r, abs(p.z)-h);
+}
+
+float tireD(vec3 p){ return sdTorus(p, 0.34, 0.046); }
+
+float wheelMetal(vec3 p, float ang){
+  vec2 q = rot2(p.xy, ang);
+  float r = length(q);
+  float d = max(abs(r-0.302)-0.014, abs(p.z)-0.016);           // rim
+  float a = atan(q.y, q.x);
+  float sec = PI/4.0;
+  a = mod(a + 0.5*sec, sec) - 0.5*sec;
+  vec3 s = vec3(cos(a)*r, sin(a)*r, p.z);
+  d = min(d, sdSeg(s, vec3(0.036,0.0,0.0), vec3(0.30,0.0,0.0), 0.0055));
+  d = min(d, sdCyl(p, 0.042, 0.055));                          // hub
+  return d;
+}
+
+vec3 kneePos(vec3 hip, vec3 foot, float l1, float l2){
+  vec3 d = foot - hip;
+  float L = length(d);
+  vec3 dir = d / max(L, 1e-4);
+  L = min(L, l1+l2-0.002);
+  float a = (l1*l1 - l2*l2 + L*L) / (2.0*L);
+  float h = sqrt(max(l1*l1 - a*a, 0.0));
+  vec3 bend = normalize(vec3(-dir.y, dir.x, 0.0));
+  return hip + dir*a + bend*h;
+}
+
+// returns (distance, material id)
+vec2 map(vec3 p){
+  float ca = uT*3.0;
+  float wa = -uT*3.0;
+  float bob = 0.012*sin(uT*6.0);
+
+  vec3 BB = vec3(0.0, 0.30, 0.0);
+  vec3 ST = vec3(-0.22, 0.80, 0.0);
+  vec3 HT = vec3(0.46, 0.87, 0.0);
+  vec3 HB = vec3(0.53, 0.60, 0.0);
+  vec3 RH = vec3(-0.62, 0.385, 0.0);
+  vec3 FH = vec3(0.62, 0.385, 0.0);
+
+  vec3 pf = p - FH;
+  vec3 pr = p - RH;
+  vec3 q  = vec3(p.x, p.y, abs(p.z));
+
+  // ---- rubber (tires + pedals) ----
+  float rub = min(tireD(pf), tireD(pr));
+
+  // ---- metal / frame ----
+  float met = min(wheelMetal(pf, wa), wheelMetal(pr, wa));
+  float f = sdSeg(p, BB, ST, 0.022);
+  f = min(f, sdSeg(p, ST, HT, 0.020));
+  f = min(f, sdSeg(p, BB, vec3(0.50,0.66,0.0), 0.024));
+  f = min(f, sdSeg(p, HT, HB, 0.030));
+  f = min(f, sdSeg(q, BB + vec3(0.0,0.0,0.03), RH + vec3(0.0,0.0,0.05), 0.016));
+  f = min(f, sdSeg(q, ST + vec3(0.0,0.0,0.02), RH + vec3(0.0,0.0,0.05), 0.014));
+  f = min(f, sdSeg(q, HB + vec3(-0.01,0.0,0.045), FH + vec3(0.0,0.0,0.05), 0.017));
+  f = min(f, sdSeg(p, ST, vec3(-0.27,0.87,0.0), 0.014));            // seat post
+  f = min(f, sdSeg(p, HT, vec3(0.52,0.955,0.0), 0.016));            // stem
+  f = min(f, sdSeg(p, vec3(0.52,0.955,-0.19), vec3(0.52,0.955,0.19), 0.017));
+  f = min(f, sdSeg(q, vec3(0.52,0.955,0.19), vec3(0.565,0.915,0.235), 0.019));
+  met = min(met, f);
+
+  // crank + chain
+  vec3 ck = vec3(cos(ca), sin(ca), 0.0)*0.105;
+  vec3 c1 = BB + ck + vec3(0.0,0.0,0.068);
+  vec3 c2 = BB - ck - vec3(0.0,0.0,0.068);
+  float cr = sdSeg(p, BB+vec3(0.0,0.0,0.068), c1, 0.014);
+  cr = min(cr, sdSeg(p, BB-vec3(0.0,0.0,0.068), c2, 0.014));
+  cr = min(cr, sdTorus(p - BB - vec3(0.0,0.0,0.078), 0.088, 0.007));
+  cr = min(cr, sdCyl(p - BB - vec3(0.0,0.0,0.078), 0.028, 0.006));
+  cr = min(cr, sdTorus(p - RH - vec3(0.0,0.0,0.078), 0.034, 0.007));
+  cr = min(cr, sdSeg(p, BB+vec3(0.0,0.088,0.078), RH+vec3(0.0,0.034,0.078), 0.008));
+  cr = min(cr, sdSeg(p, BB+vec3(0.0,-0.088,0.078), RH+vec3(0.0,-0.034,0.078), 0.008));
+  met = min(met, cr);
+
+  // ---- pedals (rubber) + legs (orange) ----
+  vec3 pedA = BB + ck + vec3(0.0,0.0,0.10);
+  vec3 pedB = BB - ck - vec3(0.0,0.0,0.10);
+  rub = min(rub, sdBox(p - pedA, vec3(0.05,0.011,0.038)));
+  rub = min(rub, sdBox(p - pedB, vec3(0.05,0.011,0.038)));
+
+  float legs = 1e9;
+  for(int i=0;i<2;i++){
+    float s = i==0 ? 1.0 : -1.0;
+    vec3 ped = i==0 ? pedA : pedB;
+    vec3 hip = vec3(-0.13, 0.90, s*0.115);
+    vec3 foot = ped + vec3(0.005, 0.030, 0.0);
+    vec3 kn = kneePos(hip, foot, 0.34, 0.355);
+    legs = min(legs, sdSegT(p, hip, kn, 0.062, 0.042));
+    legs = min(legs, sdSegT(p, kn, foot, 0.040, 0.026));
+    legs = min(legs, sdBox(p - ped - vec3(0.012,0.026,0.0), vec3(0.058,0.013,0.033)));
+  }
+
+  // ---- saddle ----
+  float seat = sdEll(p - vec3(-0.27,0.895,0.0), vec3(0.11,0.028,0.068));
+  seat = smin(seat, sdSegT(p - vec3(0.0,0.895,0.0), vec3(-0.20,0.0,0.0), vec3(-0.05,0.005,0.0), 0.045, 0.018), 0.05);
+
+  // ---- pelican ----
+  vec3 pb = p - vec3(0.0, bob, 0.0);
+  vec3 qb = vec3(pb.x, pb.y, abs(pb.z));
+
+  float body = sdEll(pb - vec3(-0.13,1.06,0.0), vec3(0.30,0.27,0.245));
+  body = smin(body, sdEll(pb - vec3(0.07,1.02,0.0), vec3(0.20,0.20,0.19)), 0.10);
+  // tail
+  vec3 qt = vec3(pb.x, (pb.y-1.15)*2.2 + 1.15, pb.z);
+  body = smin(body, sdSegT(qt, vec3(-0.28,1.10,0.0), vec3(-0.62,1.22,0.0), 0.17,0.05)/2.2, 0.07);
+  // neck
+  float neck = sdSegT(pb, vec3(0.02,1.20,0.0), vec3(0.19,1.42,0.0), 0.145, 0.098);
+  neck = min(neck, sdSegT(pb, vec3(0.19,1.42,0.0), vec3(0.30,1.55,0.0), 0.098, 0.105));
+  body = smin(body, neck, 0.09);
+  // head
+  float head = length(pb - vec3(0.30,1.565,0.0)) - 0.125;
+  body = smin(body, head, 0.055);
+  // wings
+  float wing = 1e9;
+  for(int i=0;i<2;i++){
+    float z0 = (i==0 ? 0.215 : -0.215);
+    vec3 qw = vec3(pb.x, pb.y, (pb.z - z0)*2.0 + z0);
+    float w = sdSegT(qw, vec3(-0.09,1.18,z0), vec3(0.20,1.07,z0*1.10), 0.135, 0.115);
+    w = smin(w, sdSegT(qw, vec3(0.20,1.07,z0*1.10), vec3(0.485,0.985,z0*0.92), 0.115, 0.055), 0.06);
+    w = smin(w, sdSegT(qw, vec3(0.02,1.12,z0*1.05), vec3(-0.34,1.10,z0*0.85), 0.12, 0.045), 0.07);
+    wing = min(wing, w*0.5);
+  }
+  body = smin(body, wing, 0.05);
+
+  // beak + pouch (orange)
+  vec3 qk = vec3(pb.x, (pb.y-1.50)*1.55 + 1.50, pb.z*1.12);
+  float beak = sdSegT(qk, vec3(0.355,1.545,0.0), vec3(0.90,1.435,0.0), 0.098, 0.020)/1.55;
+  float pouch = sdEll(pb - vec3(0.565,1.365,0.0), vec3(0.255,0.135,0.115));
+  pouch = smin(pouch, sdEll(pb - vec3(0.345,1.40,0.0), vec3(0.12,0.11,0.10)), 0.08);
+  beak = smin(beak, pouch, 0.075);
+  float orange = min(beak, legs);
+
+  // eyes
+  float eye = length(qb - vec3(0.378,1.605,0.083)) - 0.031;
+
+  vec2 res = vec2(rub, 1.0);
+  if(met < res.x) res = vec2(met, 2.0);
+  if(body < res.x) res = vec2(body, 3.0);
+  if(orange < res.x) res = vec2(orange, 4.0);
+  if(eye < res.x) res = vec2(eye, 5.0);
+  if(seat < res.x) res = vec2(seat, 6.0);
+  return res;
+}
+
+vec3 calcNormal(vec3 p){
+  vec2 e = vec2(1.0,-1.0)*0.0009;
+  return normalize(e.xyy*map(p+e.xyy).x + e.yyx*map(p+e.yyx).x +
+                   e.yxy*map(p+e.yxy).x + e.xxx*map(p+e.xxx).x);
+}
+
+vec2 march(vec3 ro, vec3 rd, float tn, float tf){
+  float t = tn;
+  float id = -1.0;
+  for(int i=0;i<130;i++){
+    vec3 p = ro + rd*t;
+    vec2 h = map(p);
+    if(h.x < 0.0007*max(t,0.6)){ id = h.y; break; }
+    t += h.x*0.82;
+    if(t > tf) break;
+  }
+  return vec2(t, id);
+}
+
+float shadow(vec3 ro, vec3 rd){
+  float res = 1.0, t = 0.02;
+  for(int i=0;i<34;i++){
+    float h = map(ro + rd*t).x;
+    res = min(res, 9.0*h/t);
+    t += clamp(h, 0.012, 0.20);
+    if(res < 0.004 || t > 4.5) break;
+  }
+  return clamp(res, 0.0, 1.0);
+}
+
+float calcAO(vec3 p, vec3 n){
+  float occ = 0.0, sca = 1.0;
+  for(int i=0;i<5;i++){
+    float h = 0.014 + 0.06*float(i);
+    float d = map(p + n*h).x;
+    occ += (h-d)*sca;
+    sca *= 0.72;
+  }
+  return clamp(1.0 - 1.5*occ, 0.0, 1.0);
+}
+
+vec3 sky(vec3 rd){
+  float h = max(rd.y, 0.0);
+  vec3 c = mix(vec3(0.80,0.86,0.94), vec3(0.20,0.40,0.72), pow(h,0.62));
+  c += vec3(1.0,0.86,0.62)*pow(max(dot(rd,SUN),0.0), 80.0)*0.9;
+  c += vec3(1.0,0.90,0.75)*pow(max(dot(rd,SUN),0.0), 5.0)*0.10;
+  c = mix(vec3(0.36,0.37,0.36), c, smoothstep(-0.07, 0.03, rd.y));
+  return c;
+}
+
+void getMat(float id, vec3 p, out vec3 alb, out float rough, out float metal){
+  alb = vec3(0.8); rough = 0.6; metal = 0.0;
+  if(id < 1.5){ alb = vec3(0.045,0.046,0.052); rough = 0.55; }
+  else if(id < 2.5){ alb = vec3(0.80,0.13,0.11); rough = 0.16; metal = 0.7; }
+  else if(id < 3.5){
+    alb = vec3(0.96,0.955,0.925);
+    float w = smoothstep(0.10,0.30,abs(p.z)) * smoothstep(1.22,1.02,p.y);
+    w = max(w, smoothstep(-0.30,-0.55,p.x));
+    alb = mix(alb, vec3(0.40,0.44,0.50), clamp(w,0.0,1.0)*0.85);
+    rough = 0.82;
+  }
+  else if(id < 4.5){
+    alb = mix(vec3(0.99,0.62,0.13), vec3(0.96,0.44,0.16), smoothstep(0.35,0.9,p.x));
+    rough = 0.34;
+  }
+  else if(id < 5.5){ alb = vec3(0.02,0.02,0.025); rough = 0.08; metal = 0.3; }
+  else if(id < 6.5){ alb = vec3(0.24,0.12,0.06); rough = 0.42; }
+  else {
+    float ck = mod(floor(p.x*1.2) + floor(p.z*1.2), 2.0);
+    vec3 g = mix(vec3(0.295,0.315,0.285), vec3(0.355,0.375,0.335), ck);
+    float fade = smoothstep(5.0, 15.0, length(p.xz));
+    alb = mix(g, vec3(0.33,0.35,0.31), fade);
+    rough = 0.9;
+  }
+}
+
+vec3 shade(vec3 p, vec3 n, vec3 rd, float id){
+  vec3 alb; float rough, metal;
+  getMat(id, p, alb, rough, metal);
+  float sh = shadow(p + n*0.005, SUN);
+  float ao = calcAO(p, n);
+  float dif = max(dot(n, SUN), 0.0)*sh;
+  vec3 hv = normalize(SUN - rd);
+  float sp = pow(max(dot(n,hv),0.0), mix(10.0, 200.0, 1.0-rough))*sh*(0.20 + metal*0.9);
+  vec3 col = alb*vec3(1.10,1.00,0.86)*dif*1.55;
+  col += alb*sky(n)*0.45*ao;
+  col += alb*vec3(0.30,0.27,0.22)*clamp(0.5 - 0.5*n.y, 0.0, 1.0)*ao*0.35;
+  col += vec3(1.0,0.95,0.85)*sp;
+  float fr = pow(1.0 - max(dot(n,-rd),0.0), 4.0);
+  col += sky(reflect(rd,n))*fr*(0.05 + metal*0.40)*ao;
+  return col;
+}
+
+void main(){
+  vec2 uv = (gl_FragCoord.xy*2.0 - uRes)/uRes.y;
+  vec3 rd = normalize(uCam*vec3(uv, 1.65));
+  vec3 ro = uRo;
+
+  float tg = 1e9;
+  if(rd.y < -1e-4){ float h = -ro.y/rd.y; if(h > 0.0) tg = h; }
+
+  vec3 bc = vec3(0.0, 0.90, 0.0);
+  float br = 1.45;
+  vec3 oc = ro - bc;
+  float b = dot(oc, rd);
+  float c = dot(oc,oc) - br*br;
+  float disc = b*b - c;
+
+  float t = 1e9, id = -1.0;
+  if(disc > 0.0){
+    float sq = sqrt(disc);
+    float ta = max(-b - sq, 0.0);
+    float tb = -b + sq;
+    if(tb > 0.0){
+      vec2 r = march(ro, rd, ta, min(tb, min(tg, 40.0)));
+      if(r.y > 0.0){ t = r.x; id = r.y; }
+    }
+  }
+  if(id < 0.0 && tg < 60.0){ t = tg; id = 7.0; }
+
+  vec3 col;
+  if(id < 0.0){
+    col = sky(rd);
+  } else {
+    vec3 p = ro + rd*t;
+    vec3 n = (id > 6.5) ? vec3(0.0,1.0,0.0) : calcNormal(p);
+    col = shade(p, n, rd, id);
+    float fog = (id > 6.5) ? smoothstep(6.0, 26.0, t) : smoothstep(12.0, 30.0, t);
+    col = mix(col, sky(rd), fog);
+  }
+
+  col *= 1.05;
+  col = (col*(2.51*col + 0.03))/(col*(2.43*col + 0.59) + 0.14);
+  col = pow(clamp(col, 0.0, 1.0), vec3(0.4545));
+  float vig = 1.0 - 0.18*dot(uv,uv)*0.35;
+  fragColor = vec4(col*vig, 1.0);
+}`;
+
+export function createPelicanSdf(canvas) {
+  if (!canvas || typeof canvas.getContext !== 'function') {
+    throw new Error('createPelicanSdf: an HTMLCanvasElement is required');
+  }
+  const gl = canvas.getContext('webgl2', {
+    antialias: false, alpha: false, depth: false, stencil: false,
+    preserveDrawingBuffer: false, powerPreference: 'high-performance'
+  });
+  if (!gl) throw new Error('createPelicanSdf: WebGL2 is not available in this browser');
+
+  let prog = null, vao = null, lost = false, disposed = false;
+  const loc = {};
+
+  function compile(type, src) {
+    const s = gl.createShader(type);
+    gl.shaderSource(s, src);
+    gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+      const log = gl.getShaderInfoLog(s);
+      gl.deleteShader(s);
+      throw new Error('createPelicanSdf: shader compilation failed: ' + log);
+    }
+    return s;
+  }
+
+  function build() {
+    const vs = compile(gl.VERTEX_SHADER, VS);
+    const fs = compile(gl.FRAGMENT_SHADER, FS);
+    const p = gl.createProgram();
+    gl.attachShader(p, vs);
+    gl.attachShader(p, fs);
+    gl.linkProgram(p);
+    gl.deleteShader(vs);
+    gl.deleteShader(fs);
+    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
+      const log = gl.getProgramInfoLog(p);
+      gl.deleteProgram(p);
+      throw new Error('createPelicanSdf: program link failed: ' + log);
+    }
+    prog = p;
+    loc.res = gl.getUniformLocation(p, 'uRes');
+    loc.ro = gl.getUniformLocation(p, 'uRo');
+    loc.cam = gl.getUniformLocation(p, 'uCam');
+    loc.t = gl.getUniformLocation(p, 'uT');
+    vao = gl.createVertexArray();
+  }
+  build();
+
+  // ---- camera state ----
+  const TARGET = [0.06, 0.88, 0.0];
+  const MINP = -1.35, MAXP = 1.35, MIND = 0.42, MAXD = 12.0;
+  let yaw = 0.72, pitch = 0.22, dist = 3.35;
+
+  function clampView() {
+    pitch = Math.max(MINP, Math.min(MAXP, pitch));
+    dist = Math.max(MIND, Math.min(MAXD, dist));
+  }
+
+  // ---- input ----
+  if (!canvas.hasAttribute('tabindex')) canvas.tabIndex = 0;
+  try { canvas.style.touchAction = 'none'; canvas.style.outline = 'none'; } catch (e) {}
+
+  const pointers = new Map();
+  let lastX = 0, lastY = 0, pinch = 0;
+
+  const onDown = (e) => {
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.size === 1) { lastX = e.clientX; lastY = e.clientY; }
+    else if (pointers.size === 2) { pinch = pinchDist(); }
+    try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
+    try { canvas.focus({ preventScroll: true }); } catch (err) { canvas.focus(); }
+    e.preventDefault();
+  };
+  function pinchDist() {
+    const a = [...pointers.values()];
+    if (a.length < 2) return 0;
+    return Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y);
+  }
+  const onMove = (e) => {
+    if (!pointers.has(e.pointerId)) return;
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.size === 1) {
+      const dx = e.clientX - lastX, dy = e.clientY - lastY;
+      lastX = e.clientX; lastY = e.clientY;
+      yaw -= dx * 0.0085;
+      pitch += dy * 0.0085;
+      clampView();
+    } else if (pointers.size >= 2) {
+      const d = pinchDist();
+      if (pinch > 0 && d > 0) { dist *= pinch / d; clampView(); }
+      pinch = d;
+    }
+    e.preventDefault();
+  };
+  const onUp = (e) => {
+    pointers.delete(e.pointerId);
+    pinch = pointers.size === 2 ? pinchDist() : 0;
+    try { canvas.releasePointerCapture(e.pointerId); } catch (err) {}
+    e.preventDefault();
+  };
+  const onWheel = (e) => {
+    dist *= Math.exp((e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY) * 0.0012);
+    clampView();
+    e.preventDefault();
+  };
+  const onKey = (e) => {
+    let used = true;
+    const k = e.key;
+    if (k === 'ArrowLeft') yaw -= 0.09;
+    else if (k === 'ArrowRight') yaw += 0.09;
+    else if (k === 'ArrowUp') pitch += 0.07;
+    else if (k === 'ArrowDown') pitch -= 0.07;
+    else if (k === '+' || k === '=' || k === 'Add') dist *= 0.90;
+    else if (k === '-' || k === '_' || k === 'Subtract') dist *= 1.11;
+    else used = false;
+    if (used) { clampView(); e.preventDefault(); }
+  };
+  const onCtxLost = (e) => { e.preventDefault(); lost = true; };
+  const onCtxRestored = () => {
+    lost = false;
+    try { prog = null; vao = null; build(); } catch (err) { lost = true; }
+  };
+
+  canvas.addEventListener('pointerdown', onDown);
+  canvas.addEventListener('pointermove', onMove);
+  canvas.addEventListener('pointerup', onUp);
+  canvas.addEventListener('pointercancel', onUp);
+  canvas.addEventListener('wheel', onWheel, { passive: false });
+  canvas.addEventListener('keydown', onKey);
+  canvas.addEventListener('webglcontextlost', onCtxLost, false);
+  canvas.addEventListener('webglcontextrestored', onCtxRestored, false);
+
+  function camBasis() {
+    const cp = Math.cos(pitch), sp = Math.sin(pitch);
+    const ro = [
+      TARGET[0] + dist * Math.sin(yaw) * cp,
+      TARGET[1] + dist * sp,
+      TARGET[2] + dist * Math.cos(yaw) * cp
+    ];
+    let fx = TARGET[0] - ro[0], fy = TARGET[1] - ro[1], fz = TARGET[2] - ro[2];
+    const fl = Math.hypot(fx, fy, fz) || 1;
+    fx /= fl; fy /= fl; fz /= fl;
+    let rx = fy * 0 - fz * 1, ry = fz * 0 - fx * 0, rz = fx * 1 - fy * 0;
+    const rl = Math.hypot(rx, ry, rz) || 1;
+    rx /= rl; ry /= rl; rz /= rl;
+    const ux = ry * fz - rz * fy, uy = rz * fx - rx * fz, uz = rx * fy - ry * fx;
+    return { ro, m: new Float32Array([rx, ry, rz, ux, uy, uz, fx, fy, fz]) };
+  }
+
+  return {
+    render(timeSeconds) {
+      if (disposed || lost || !prog) return;
+      if (gl.isContextLost && gl.isContextLost()) return;
+      const w = canvas.width | 0, h = canvas.height | 0;
+      if (w <= 0 || h <= 0) return;
+      const t = (typeof timeSeconds === 'number' && isFinite(timeSeconds)) ? timeSeconds : 0;
+      const cam = camBasis();
+      gl.viewport(0, 0, w, h);
+      gl.disable(gl.DEPTH_TEST);
+      gl.disable(gl.BLEND);
+      gl.disable(gl.CULL_FACE);
+      gl.useProgram(prog);
+      gl.bindVertexArray(vao);
+      gl.uniform2f(loc.res, w, h);
+      gl.uniform3f(loc.ro, cam.ro[0], cam.ro[1], cam.ro[2]);
+      gl.uniformMatrix3fv(loc.cam, false, cam.m);
+      gl.uniform1f(loc.t, t);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      gl.bindVertexArray(null);
+    },
+    setView(y, p, d) {
+      if (typeof y === 'number' && isFinite(y)) yaw = y;
+      if (typeof p === 'number' && isFinite(p)) pitch = p;
+      if (typeof d === 'number' && isFinite(d)) dist = d;
+      clampView();
+    },
+    getView() { return { yaw: yaw, pitch: pitch, distance: dist }; },
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      canvas.removeEventListener('pointerdown', onDown);
+      canvas.removeEventListener('pointermove', onMove);
+      canvas.removeEventListener('pointerup', onUp);
+      canvas.removeEventListener('pointercancel', onUp);
+      canvas.removeEventListener('wheel', onWheel);
+      canvas.removeEventListener('keydown', onKey);
+      canvas.removeEventListener('webglcontextlost', onCtxLost);
+      canvas.removeEventListener('webglcontextrestored', onCtxRestored);
+      pointers.clear();
+      try {
+        if (vao) gl.deleteVertexArray(vao);
+        if (prog) gl.deleteProgram(prog);
+        const ext = gl.getExtension('WEBGL_lose_context');
+        if (ext) ext.loseContext();
+      } catch (e) {}
+      prog = null; vao = null;
+    }
+  };
+}

@@ -1,0 +1,10 @@
+# Keep byte-exact benchmark inputs and outputs stable across platforms.
+* text=auto eol=lf
+
+*.gif binary
+*.jpeg binary
+*.jpg binary
+*.png binary
+*.webp binary
+*.woff binary
+*.woff2 binary

@@ -1,0 +1,541 @@
+export function createPelicanSdf(canvas) {
+    let gl = canvas.getContext("webgl2", { alpha: false, depth: false, antialias: false, powerPreference: "high-performance" });
+    if (!gl) {
+        throw new Error("WebGL2 not supported");
+    }
+
+    let yaw = 0.6;
+    let pitch = 0.25;
+    let distance = 4.5;
+    let width = canvas.width;
+    let height = canvas.height;
+
+    // Compile shaders
+    const vsSource = `#version 300 es
+    in vec2 position;
+    out vec2 v_uv;
+    void main() {
+        v_uv = position;
+        gl_Position = vec4(position, 0.0, 1.0);
+    }`;
+
+    const fsSource = `#version 300 es
+    precision highp float;
+    in vec2 v_uv;
+    out vec4 fragColor;
+
+    uniform vec2 u_resolution;
+    uniform float u_time;
+    uniform vec3 u_cam_pos;
+    uniform mat3 u_cam_rot;
+
+    // Distance functions
+    float sdSphere(vec3 p, float r) {
+        return length(p) - r;
+    }
+
+    float sdBox(vec3 p, vec3 b) {
+        vec3 q = abs(p) - b;
+        return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0);
+    }
+
+    float sdCylinder(vec3 p, float h, float r) {
+        vec2 d = abs(vec2(length(p.xz), p.y)) - vec2(r, h);
+        return min(max(d.x, d.y), 0.0) + length(max(d, 0.0));
+    }
+
+    float sdTorus(vec3 p, vec2 t) {
+        vec2 q = vec2(length(p.xz) - t.x, p.y);
+        return length(q) - t.y;
+    }
+
+    float sdCapsule(vec3 p, vec3 a, vec3 b, float r) {
+        vec3 pa = p - a, ba = b - a;
+        float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
+        return length(pa - ba * h) - r;
+    }
+
+    float sdEllipsoid(vec3 p, vec3 r) {
+        float k0 = length(p / r);
+        float k1 = length(p / (r * r));
+        return k0 * (k0 - 1.0) / k1;
+    }
+
+    // Smoothie
+    float smin(float a, float b, float k) {
+        float h = clamp(0.5 + 0.5 * (b - a)/k, 0.0, 1.0);
+        return mix(b, a, h) - k * h * (1.0 - h);
+    }
+
+    // Rotations
+    vec3 rotateX(vec3 p, float a) {
+        float c = cos(a), s = sin(a);
+        return vec3(p.x, c * p.y - s * p.z, s * p.y + c * p.z);
+    }
+    vec3 rotateY(vec3 p, float a) {
+        float c = cos(a), s = sin(a);
+        return vec3(c * p.x + s * p.z, p.y, -s * p.x + c * p.z);
+    }
+    vec3 rotateZ(vec3 p, float a) {
+        float c = cos(a), s = sin(a);
+        return vec3(c * p.x - s * p.y, s * p.x + c * p.y, p.z);
+    }
+
+    // Map function
+    // Materials: 1.0=Pelican Body, 2.0=Beak/Pouch, 3.0=Eyes, 4.0=Metal Frame (Red), 5.0=Chrome, 6.0=Tires, 7.0=Ground
+    vec2 map(vec3 p) {
+        float t = u_time * 3.0;
+        vec2 res = vec2(1e10, 0.0);
+
+        // Ground plane
+        float dGround = p.y + 1.2;
+        res = vec2(dGround, 7.0);
+
+        // --- BICYCLE ---
+        // Rear wheel (at z = -1.1)
+        vec3 pRW = p - vec3(0.0, -0.4, -1.1);
+        float dRearTire = sdTorus(pRW.zyx, vec2(0.7, 0.06));
+        float dRearRim = sdTorus(pRW.zyx, vec2(0.66, 0.02));
+        float dRearWheel = min(dRearTire, dRearRim);
+        if (dRearWheel < res.x) res = vec2(dRearWheel, (dRearTire < dRearRim) ? 6.0 : 5.0);
+
+        // Front wheel (at z = 1.1)
+        // Fork angle rotates front wheel a bit based on steering (kept straight here)
+        vec3 pFW = p - vec3(0.0, -0.4, 1.1);
+        float dFrontTire = sdTorus(pFW.zyx, vec2(0.7, 0.06));
+        float dFrontRim = sdTorus(pFW.zyx, vec2(0.66, 0.02));
+        float dFrontWheel = min(dFrontTire, dFrontRim);
+        if (dFrontWheel < res.x) res = vec2(dFrontWheel, (dFrontTire < dFrontRim) ? 6.0 : 5.0);
+
+        // Frame Hubs
+        vec3 pHubR = vec3(0.0, -0.4, -1.1);
+        vec3 pHubF = vec3(0.0, -0.4, 1.1);
+        vec3 pBB = vec3(0.0, -0.3, -0.1); // Bottom Bracket
+        vec3 pSeatT = vec3(0.0, 0.4, -0.45); // Seat top joint
+        vec3 pHeadT = vec3(0.0, 0.6, 0.82); // Head tube top
+        vec3 pHeadB = vec3(0.0, 0.1, 0.82); // Head tube bottom
+
+        // Frame Tubes
+        float fTube1 = sdCapsule(p, pBB, pSeatT, 0.04);       // Seat tube
+        float fTube2 = sdCapsule(p, pBB, pHubR, 0.03);        // Chain stays
+        float fTube3 = sdCapsule(p, pSeatT, pHubR, 0.03);     // Seat stays
+        float fTube4 = sdCapsule(p, pBB, pHeadB, 0.04);       // Down tube
+        float fTube5 = sdCapsule(p, pSeatT, pHeadT, 0.04);     // Top tube
+        float fTube6 = sdCapsule(p, pHeadB, pHeadT, 0.045);    // Head tube
+        float frame = min(min(min(min(min(fTube1, fTube2), fTube3), fTube4), fTube5), fTube6);
+        if (frame < res.x) res = vec2(frame, 4.0);
+
+        // Front Fork
+        float fork1 = sdCapsule(p, pHeadT, vec3(0.0, 0.7, 0.82), 0.04); // stem
+        float fork2 = sdCapsule(p, vec3(0.0, 0.1, 0.82), pHubF, 0.03);  // fork blades
+        float fork = min(fork1, fork2);
+        if (fork < res.x) res = vec2(fork, 5.0);
+
+        // Handlebars
+        vec3 pHB = p - vec3(0.0, 0.7, 0.82);
+        float hBarCenter = sdCapsule(pHB, vec3(-0.35, 0.1, 0.05), vec3(0.35, 0.1, 0.05), 0.025);
+        float hBarStem = sdCapsule(pHB, vec3(0.0, 0.0, 0.0), vec3(0.0, 0.1, 0.05), 0.03);
+        float hBarGrips = min(sdSphere(pHB - vec3(-0.35, 0.1, 0.05), 0.035), sdSphere(pHB - vec3(0.35, 0.1, 0.05), 0.035));
+        float handlebars = min(min(hBarCenter, hBarStem), hBarGrips);
+        if (handlebars < res.x) res = vec2(handlebars, 5.0);
+
+        // Seat
+        vec3 pSeat = p - (pSeatT + vec3(0.0, 0.04, 0.0));
+        float seatBase = sdBox(pSeat, vec3(0.09, 0.03, 0.16));
+        float seatNose = sdCapsule(pSeat, vec3(0.0, 0.0, 0.0), vec3(0.0, -0.01, 0.18), 0.05);
+        float seat = min(seatBase, seatNose);
+        if (seat < res.x) res = vec2(seat, 6.0);
+
+        // Pedals / Crankset (Rotates with time)
+        float cProt = t;
+        float pedalOffset = 0.28;
+        vec3 crankL = vec3(0.0, sin(cProt)*pedalOffset, cos(cProt)*pedalOffset);
+        vec3 crankR = vec3(0.0, -sin(cProt)*pedalOffset, -cos(cProt)*pedalOffset);
+        
+        float dCrankL = sdCapsule(p, pBB, pBB + vec3(-0.12, crankL.y, crankL.z), 0.022);
+        float dPedalL = sdBox(p - (pBB + vec3(-0.15, crankL.y, crankL.z)), vec3(0.06, 0.02, 0.06));
+        
+        float dCrankR = sdCapsule(p, pBB, pBB + vec3(0.12, crankR.y, crankR.z), 0.022);
+        float dPedalR = sdBox(p - (pBB + vec3(0.15, crankR.y, crankR.z)), vec3(0.06, 0.02, 0.06));
+        
+        float pedals = min(min(dCrankL, dPedalL), min(dCrankR, dPedalR));
+        if (pedals < res.x) res = vec2(pedals, 5.0);
+
+
+        // --- PELICAN ---
+        vec3 pPel = p - vec3(0.0, 0.52, -0.15); // Offset whole pelican to sit nicely
+
+        // Body
+        float dBody = sdEllipsoid(rotateX(pPel - vec3(0.0, 0.2, -0.1), 0.1), vec3(0.28, 0.32, 0.44));
+        
+        // Neck & Head
+        vec3 pNeck = pPel - vec3(0.0, 0.65, 0.15);
+        pNeck = rotateX(pNeck, -0.3 + 0.05 * sin(t)); 
+        float dNeck = sdEllipsoid(pNeck - vec3(0.0, -0.1, 0.0), vec3(0.13, 0.22, 0.13));
+        float dHead = sdSphere(pNeck - vec3(0.0, 0.15, 0.0), 0.2);
+        float headCombo = smin(dNeck, dHead, 0.1);
+        float pelicanBody = smin(dBody, headCombo, 0.16);
+
+        // Wings (folded next to body)
+        float dWingL = sdEllipsoid(rotateZ(rotateX(pPel - vec3(-0.25, 0.18, -0.1), 0.2), -0.15), vec3(0.07, 0.23, 0.35));
+        float dWingR = sdEllipsoid(rotateZ(rotateX(pPel - vec3(0.25, 0.18, -0.1), 0.2), 0.15), vec3(0.07, 0.23, 0.35));
+        pelicanBody = smin(pelicanBody, min(dWingL, dWingR), 0.03);
+
+        // Tail feathers
+        float dTail = sdEllipsoid(rotateX(pPel - vec3(0.0, 0.28, -0.5), -0.4), vec3(0.12, 0.08, 0.2));
+        pelicanBody = smin(pelicanBody, dTail, 0.08);
+
+        if (pelicanBody < res.x) res = vec2(pelicanBody, 1.0);
+
+        // Eyes (black beads)
+        vec3 pEyeOffset = pNeck - vec3(0.0, 0.21, 0.11);
+        float dEyeL = sdSphere(pEyeOffset - vec3(-0.11, 0.0, 0.0), 0.026);
+        float dEyeR = sdSphere(pEyeOffset - vec3(0.11, 0.0, 0.0), 0.026);
+        float eyes = min(dEyeL, dEyeR);
+        if (eyes < res.x) res = vec2(eyes, 3.0);
+
+        // Large Beak & Throat Pouch
+        vec3 pBeak = pNeck - vec3(0.0, 0.12, 0.18);
+        pBeak = rotateX(pBeak, 0.05); // slight angle down
+        float dBeakTop = sdEllipsoid(pBeak - vec3(0.0, 0.02, 0.26), vec3(0.09, 0.06, 0.35)); // Top hard bill
+        float dBeakPouch = sdEllipsoid(pBeak - vec3(0.0, -0.13, 0.24), vec3(0.11, 0.16, 0.3)); // Drooping throat pouch
+        float beak = smin(dBeakTop, dBeakPouch, 0.05);
+        if (beak < res.x) res = vec2(beak, 2.0);
+
+        // Legs (pedaling pose)
+        // Left leg target is Left Pedal, Right leg target is Right Pedal
+        vec3 targetL = pBB + vec3(-0.15, crankL.y, crankL.z);
+        vec3 targetR = pBB + vec3(0.15, crankR.y, crankR.z);
+        vec3 hipL = pPel + vec3(-0.18, 0.0, -0.1);
+        vec3 hipR = pPel + vec3(0.18, 0.0, -0.1);
+
+        // Joint kinematic simulation
+        vec3 kneeL = mix(hipL, targetL, 0.4) + vec3(-0.06, 0.1, 0.06);
+        vec3 kneeR = mix(hipR, targetR, 0.4) + vec3(0.06, 0.1, -0.06);
+
+        float dLegL = min(sdCapsule(p, hipL, kneeL, 0.045), sdCapsule(p, kneeL, targetL, 0.035));
+        float dLegR = min(sdCapsule(p, hipR, kneeR, 0.045), sdCapsule(p, kneeR, targetR, 0.035));
+        float legs = min(dLegL, dLegR);
+        if (legs < res.x) res = vec2(legs, 2.0); // Legs match orange beak color beautifully
+
+        return res;
+    }
+
+    vec3 calcNormal(vec3 p) {
+        const float h = 0.0005;
+        const vec2 k = vec2(1.0, -1.0);
+        return normalize(k.xyy * map(p + k.xyy * h).x +
+                         k.yyx * map(p + k.yyx * h).x +
+                         k.yxy * map(p + k.yxy * h).x +
+                         k.xxx * map(p + k.xxx * h).x);
+    }
+
+    float calcAO(vec3 pos, vec3 nor) {
+        float occ = 0.0;
+        float sca = 1.0;
+        for (int i = 0; i < 5; i++) {
+            float h = 0.01 + 0.12 * float(i) / 4.0;
+            float d = map(pos + h * nor).x;
+            occ += (h - d) * sca;
+            sca *= 0.95;
+        }
+        return clamp(1.0 - 3.0 * occ, 0.0, 1.0);
+    }
+
+    // Shadow calculation
+    float shadow(vec3 ro, vec3 rd, float mint, float maxt) {
+        float res = 1.0;
+        float t = mint;
+        for (int i = 0; i < 24; i++) {
+            float h = map(ro + rd * t).x;
+            if (h < 0.001) return 0.0;
+            res = min(res, 8.0 * h / t);
+            t += clamp(h, 0.02, 0.2);
+            if (t > maxt) break;
+        }
+        return clamp(res, 0.0, 1.0);
+    }
+
+    void main() {
+        vec2 p = v_uv;
+        p.x *= u_resolution.x / u_resolution.y;
+
+        vec3 ro = u_cam_pos;
+        vec3 rd = u_cam_rot * normalize(vec3(p, -1.6));
+
+        // Background sky gradient
+        vec3 col = mix(vec3(0.53, 0.81, 0.98), vec3(0.9, 0.95, 1.0), clamp(0.5 + 0.5 * rd.y, 0.0, 1.0));
+
+        // Raymarch
+        float tmax = 20.0;
+        float t = 0.1;
+        float d = -1.0;
+        float matID = 0.0;
+        
+        for (int i = 0; i < 110; i++) {
+            vec3 pos = ro + rd * t;
+            vec2 h = map(pos);
+            if (h.x < 0.001) {
+                d = t;
+                matID = h.y;
+                break;
+            }
+            if (t > tmax) break;
+            t += h.x;
+        }
+
+        // Shading
+        if (d > 0.0) {
+            vec3 pos = ro + rd * d;
+            vec3 nor = calcNormal(pos);
+            vec3 ref = reflect(rd, nor);
+
+            // Shading colors
+            vec3 mate = vec3(0.8);
+            float roughness = 0.5;
+            float metallic = 0.0;
+
+            if (matID == 1.0) { // Pelican feathers (white/cream)
+                mate = vec3(0.95, 0.95, 0.92);
+                roughness = 0.8;
+            } else if (matID == 2.0) { // Orange Beak / Pouches / legs
+                mate = vec3(0.98, 0.54, 0.15);
+                roughness = 0.6;
+            } else if (matID == 3.0) { // Black eyes
+                mate = vec3(0.04, 0.04, 0.04);
+                roughness = 0.1;
+            } else if (matID == 4.0) { // Red Frame
+                mate = vec3(0.85, 0.08, 0.12);
+                roughness = 0.15;
+                metallic = 0.3;
+            } else if (matID == 5.0) { // Chrome
+                mate = vec3(0.9, 0.92, 0.95);
+                roughness = 0.05;
+                metallic = 0.9;
+            } else if (matID == 6.0) { // Dark Tire/Seat
+                mate = vec3(0.12, 0.12, 0.14);
+                roughness = 0.8;
+            } else if (matID == 7.0) { // Ground
+                // Checkerboard pattern
+                float f = mod(floor(pos.x * 2.0) + floor(pos.z * 2.0), 2.0);
+                mate = mix(vec3(0.72, 0.82, 0.72), vec3(0.77, 0.87, 0.77), f);
+                roughness = 0.9;
+            }
+
+            // Lights
+            vec3 lig = normalize(vec3(1.5, 3.0, 1.0));
+            vec3 hal = normalize(lig - rd);
+            float occ = calcAO(pos, nor);
+            
+            float dif = clamp(dot(nor, lig), 0.0, 1.0);
+            float sha = shadow(pos + nor * 0.002, lig, 0.01, 6.0);
+            
+            float spe = pow(clamp(dot(nor, hal), 0.0, 1.0), mix(4.0, 120.0, 1.0 - roughness));
+            spe *= dif;
+
+            // Simple environment map approximation
+            float fre = clamp(1.0 + dot(nor, rd), 0.0, 1.0);
+            vec3 env = mix(vec3(0.4, 0.6, 0.9), vec3(0.8, 0.82, 0.85), clamp(0.5 + 0.5 * nor.y, 0.0, 1.0));
+
+            // Accumulate lighting
+            vec3 lin = vec3(0.0);
+            // Direct Light
+            lin += dif * vec3(1.2) * sha;
+            // Ambient / Sky
+            lin += occ * env * 0.45;
+            // Bounce
+            lin += clamp(nor.y * -0.5 + 0.5, 0.0, 1.0) * vec3(0.3, 0.35, 0.4) * occ;
+
+            col = mate * lin;
+            // Specular / Reflection
+            col += mix(vec3(0.04), mate, metallic) * (spe * sha * 2.0 + fre * fre * env * (1.0 - roughness));
+        }
+
+        // Fog
+        col = mix(col, vec3(0.8, 0.88, 1.0), 1.0 - exp(-0.0004 * t * t * t));
+        
+        // Gamma correction
+        col = pow(col, vec3(0.4545));
+
+        fragColor = vec4(col, 1.0);
+    }`;
+
+    // Helper functions for shaders compiling
+    function createShader(gl, type, source) {
+        const shader = gl.createShader(type);
+        gl.shaderSource(shader, source);
+        gl.compileShader(shader);
+        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+            const err = gl.getShaderInfoLog(shader);
+            gl.deleteShader(shader);
+            throw new Error("Shader compilation failed: " + err);
+        }
+        return shader;
+    }
+
+    const vs = createShader(gl, gl.VERTEX_SHADER, vsSource);
+    const fs = createShader(gl, gl.FRAGMENT_SHADER, fsSource);
+    const program = gl.createProgram();
+    gl.attachShader(program, vs);
+    gl.attachShader(program, fs);
+    gl.linkProgram(program);
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+        throw new Error("Program linking failed: " + gl.getProgramInfoLog(program));
+    }
+
+    const posAttr = gl.getAttribLocation(program, "position");
+    const uRes = gl.getUniformLocation(program, "u_resolution");
+    const uTime = gl.getUniformLocation(program, "u_time");
+    const uCamPos = gl.getUniformLocation(program, "u_cam_pos");
+    const uCamRot = gl.getUniformLocation(program, "u_cam_rot");
+
+    // Quad geometry
+    const positionBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+        -1.0, -1.0,   1.0, -1.0,  -1.0,  1.0,
+        -1.0,  1.0,   1.0, -1.0,   1.0,  1.0
+    ]), gl.STATIC_DRAW);
+
+    const vao = gl.createVertexArray();
+    gl.bindVertexArray(vao);
+    gl.enableVertexAttribArray(posAttr);
+    gl.vertexAttribPointer(posAttr, 2, gl.FLOAT, false, 0, 0);
+
+    // Camera Math (yaw & pitch to 3x3 rotation matrix)
+    function getCameraMatrix(yaw, pitch) {
+        let cy = Math.cos(yaw), sy = Math.sin(yaw);
+        let cp = Math.cos(pitch), sp = Math.sin(pitch);
+
+        // Compute forward, right, up
+        let fwdX = cy * cp;
+        let fwdY = sp;
+        let fwdZ = sy * cp;
+
+        // Arbitrary up reference
+        let upX = 0, upY = 1, upZ = 0;
+
+        // Right = Forward x Up
+        let rX = fwdZ * upY;
+        let rY = 0;
+        let rZ = -fwdX * upY;
+        let rLen = Math.hypot(rX, rZ);
+        rX /= rLen; rZ /= rLen;
+
+        // Safe Up = Right x Forward
+        let uX = rZ * fwdY;
+        let uY = rZ * fwdX - rX * fwdZ; // simplified cross
+        let uZ = -rX * fwdY;
+
+        // Return flattened 3x3 rotation matrix for matching raycaster
+        return [
+            rX, rY, rZ,
+            uX, uY, uZ,
+            -fwdX, -fwdY, -fwdZ
+        ];
+    }
+
+    // Interactive variables
+    let isDragging = false;
+    let prevMouseX = 0;
+    let prevMouseY = 0;
+
+    canvas.tabIndex = canvas.tabIndex || 0;
+    canvas.focus();
+
+    function onPointerDown(e) {
+        isDragging = true;
+        prevMouseX = e.clientX;
+        prevMouseY = e.clientY;
+        canvas.focus();
+    }
+
+    function onPointerMove(e) {
+        if (!isDragging) return;
+        let dx = e.clientX - prevMouseX;
+        let dy = e.clientY - prevMouseY;
+        yaw -= dx * 0.007;
+        pitch += dy * 0.007;
+        pitch = Math.max(-0.6, Math.min(1.2, pitch));
+        prevMouseX = e.clientX;
+        prevMouseY = e.clientY;
+        e.preventDefault();
+    }
+
+    function onPointerUp() {
+        isDragging = false;
+    }
+
+    function onWheel(e) {
+        distance += e.deltaY * 0.005;
+        distance = Math.max(1.5, Math.min(10.0, distance));
+        e.preventDefault();
+    }
+
+    function onKeyDown(e) {
+        if (e.key === "ArrowLeft") yaw -= 0.05;
+        else if (e.key === "ArrowRight") yaw += 0.05;
+        else if (e.key === "ArrowUp") pitch = Math.min(1.2, pitch + 0.05);
+        else if (e.key === "ArrowDown") pitch = Math.max(-0.6, pitch - 0.05);
+        else if (e.key === "+" || e.key === "=") distance = Math.max(1.5, distance - 0.2);
+        else if (e.key === "-" || e.key === "_") distance = Math.min(10.0, distance + 0.2);
+    }
+
+    canvas.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+    canvas.addEventListener("wheel", onWheel, { passive: false });
+    canvas.addEventListener("keydown", onKeyDown);
+
+    // Expose main object
+    return {
+        render(timeSeconds) {
+            if (canvas.width !== width || canvas.height !== height) {
+                width = canvas.width;
+                height = canvas.height;
+            }
+
+            gl.viewport(0, 0, width, height);
+            gl.useProgram(program);
+
+            // Compute camera matrix & position
+            let cpX = distance * Math.cos(yaw) * Math.cos(pitch);
+            let cpY = distance * Math.sin(pitch);
+            let cpZ = distance * Math.sin(yaw) * Math.cos(pitch);
+            const m = getCameraMatrix(yaw, pitch);
+
+            // Upload uniforms
+            gl.uniform2f(uRes, width, height);
+            gl.uniform1f(uTime, timeSeconds);
+            gl.uniform3f(uCamPos, cpX, cpY, cpZ);
+            gl.uniformMatrix3fv(uCamRot, false, m);
+
+            gl.bindVertexArray(vao);
+            gl.drawArrays(gl.TRIANGLES, 0, 6);
+        },
+
+        setView(newYaw, newPitch, newDistance) {
+            yaw = newYaw;
+            pitch = newPitch;
+            distance = newDistance;
+        },
+
+        getView() {
+            return { yaw, pitch, distance };
+        },
+
+        dispose() {
+            canvas.removeEventListener("pointerdown", onPointerDown);
+            window.removeEventListener("pointermove", onPointerMove);
+            window.removeEventListener("pointerup", onPointerUp);
+            canvas.removeEventListener("wheel", onWheel);
+            canvas.removeEventListener("keydown", onKeyDown);
+
+            gl.deleteProgram(program);
+            gl.deleteShader(vs);
+            gl.deleteShader(fs);
+            gl.deleteBuffer(positionBuffer);
+            gl.deleteVertexArray(vao);
+        }
+    };
+}

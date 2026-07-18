@@ -1,0 +1,298 @@
+export function createPelicanSdf(canvas){
+"use strict";
+const gl=canvas.getContext("webgl2",{antialias:false,alpha:false,depth:false,stencil:false,powerPreference:"high-performance"});
+if(!gl)throw new Error("createPelicanSdf: WebGL2 is not available.");
+const VS=`#version 300 es
+void main(){vec2 v=vec2(float((gl_VertexID<<1)&2),float(gl_VertexID&2));gl_Position=vec4(v*2.-1.,0.,1.);}`;
+const FS=`#version 300 es
+precision highp float;
+uniform vec2 uRes;
+uniform float uTime;
+uniform vec3 uPos;
+uniform mat3 uCam;
+out vec4 O;
+mat2 rot(float a){float c=cos(a),s=sin(a);return mat2(c,-s,s,c);}
+float sdE(vec3 p,vec3 r){float k0=length(p/r),k1=length(p/(r*r));return k0*(k0-1.)/k1;}
+float sdC(vec3 p,vec3 a,vec3 b,float r){vec3 pa=p-a,ba=b-a;float h=clamp(dot(pa,ba)/dot(ba,ba),0.,1.);return length(pa-ba*h)-r;}
+float sdTz(vec3 p,vec2 t){return length(vec2(length(p.xy)-t.x,p.z))-t.y;}
+float sdCz(vec3 p,float r,float h){vec2 d=abs(vec2(length(p.xy),p.z))-vec2(r,h);return min(max(d.x,d.y),0.)+length(max(d,0.));}
+float sdRB(vec3 p,vec3 b,float r){vec3 q=abs(p)-b;return length(max(q,0.))+min(max(q.x,max(q.y,q.z)),0.)-r;}
+float sdRC(vec3 p,vec3 a,vec3 b,float r1,float r2){vec3 ba=b-a;float l2=dot(ba,ba),rr=r1-r2,a2=l2-rr*rr,il2=1./l2;vec3 pa=p-a;float y=dot(pa,ba),z=y-l2;vec3 x=pa*l2-ba*y;float x2=dot(x,x),y2=y*y*l2,z2=z*z*l2,k=sign(rr)*rr*rr*x2;if(sign(z)*a2*z2>k)return sqrt(x2+z2)*il2-r2;if(sign(y)*a2*y2<k)return sqrt(x2+y2)*il2-r1;return(sqrt(x2*a2*il2)+y*rr)*il2-r1;}
+#define U(d,m) if(d<r.x)r=vec2(d,m)
+vec2 map(vec3 p){
+vec2 r=vec2(1e9,0.);
+float t=uTime,wa=t*2.6,ca=t*1.4;
+for(int i=0;i<2;i++){
+vec3 q=p-vec3(i==0?-0.85:0.85,0.56,0.);
+U(sdTz(q,vec2(0.500,0.055)),1.);
+U(sdTz(q,vec2(0.448,0.017)),2.);
+U(sdCz(q,0.034,0.050),2.);
+vec2 sp=rot(-wa)*q.xy;
+float a=mod(atan(sp.y,sp.x)+0.3927,0.7854)-0.3927;
+vec2 sq=length(sp)*vec2(cos(a),sin(a));
+U(length(sq-vec2(clamp(sq.x,0.04,0.44),0.))-0.009,2.);
+}
+vec3 B=vec3(-0.15,0.42,0.);
+U(sdC(p,B,vec3(0.56,0.78,0.),0.032),3.);
+U(sdC(p,vec3(-0.42,1.20,0.),vec3(0.68,1.28,0.),0.030),3.);
+U(sdC(p,B,vec3(-0.44,1.22,0.),0.030),3.);
+U(sdC(p,vec3(0.55,0.75,0.),vec3(0.71,1.33,0.),0.042),3.);
+U(sdC(p,vec3(-0.15,0.42,0.07),vec3(-0.85,0.56,0.07),0.020),3.);
+U(sdC(p,vec3(-0.15,0.42,-0.07),vec3(-0.85,0.56,-0.07),0.020),3.);
+U(sdC(p,vec3(-0.44,1.20,0.055),vec3(-0.85,0.56,0.055),0.016),3.);
+U(sdC(p,vec3(-0.44,1.20,-0.055),vec3(-0.85,0.56,-0.055),0.016),3.);
+U(sdC(p,vec3(0.60,0.84,0.05),vec3(0.85,0.56,0.05),0.022),3.);
+U(sdC(p,vec3(0.60,0.84,-0.05),vec3(0.85,0.56,-0.05),0.022),3.);
+U(sdC(p,vec3(0.71,1.30,0.),vec3(0.74,1.46,0.),0.024),3.);
+U(sdC(p,vec3(0.74,1.46,-0.21),vec3(0.74,1.46,0.21),0.018),5.);
+U(sdC(p,vec3(0.74,1.46,0.15),vec3(0.66,1.45,0.27),0.028),6.);
+U(sdC(p,vec3(0.74,1.46,-0.15),vec3(0.66,1.45,-0.27),0.028),6.);
+U(sdC(p,vec3(-0.44,1.16,0.),vec3(-0.46,1.30,0.),0.022),5.);
+U(sdE(p-vec3(-0.48,1.335,0.),vec3(0.17,0.05,0.09)),4.);
+U(sdC(p,vec3(-0.15,0.42,-0.10),vec3(-0.15,0.42,0.10),0.018),7.);
+U(sdCz(p-vec3(-0.15,0.42,0.078),0.095,0.010),7.);
+U(sdCz(p-vec3(-0.85,0.56,0.078),0.050,0.008),7.);
+U(sdC(p,vec3(-0.15,0.515,0.078),vec3(-0.85,0.610,0.078),0.011),7.);
+U(sdC(p,vec3(-0.15,0.325,0.078),vec3(-0.85,0.510,0.078),0.011),7.);
+for(int i=0;i<2;i++){
+float s=i==0?1.:-1.,a=ca+(i==0?0.:3.14159);
+vec2 e=B.xy+0.17*vec2(cos(a),sin(a));
+U(sdC(p,vec3(B.xy,0.09*s),vec3(e,0.15*s),0.020),7.);
+U(sdC(p,vec3(e,0.13*s),vec3(e,0.205*s),0.012),7.);
+U(sdRB(p-vec3(e.x,e.y,0.185*s),vec3(0.085,0.018,0.055),0.008),8.);
+vec3 ank=vec3(e.x,e.y+0.055,0.185*s),hip=vec3(-0.36,1.50,0.11*s),kn=mix(hip,ank,0.42)+vec3(0.15,0.06,0.02*s);
+U(sdC(p,hip,kn,0.052),14.);
+U(sdC(p,kn,ank,0.036),14.);
+U(sdE(p-vec3(ank.x+0.035,ank.y-0.005,ank.z),vec3(0.075,0.024,0.05)),14.);
+}
+vec3 pb=p-vec3(0.,0.012*sin(t*2.2),0.);
+U(sdE(pb-vec3(-0.40,1.62,0.),vec3(0.34,0.27,0.23)),9.);
+U(sdRC(pb,vec3(-0.16,1.72,0.),vec3(0.10,2.04,0.),0.105,0.075),9.);
+U(sdE(pb-vec3(0.16,2.14,0.),vec3(0.135,0.12,0.11)),9.);
+U(sdE(pb-vec3(0.09,2.25,-0.02),vec3(0.06,0.045,0.05)),9.);
+U(sdRC(pb,vec3(0.25,2.155,0.),vec3(0.96,2.03,0.),0.052,0.012),11.);
+U(sdC(pb,vec3(0.27,2.10,0.),vec3(0.88,2.005,0.),0.018),12.);
+U(sdE(pb-vec3(0.55,2.03,0.),vec3(0.30,0.115,0.08)),12.);
+U(length(pb-vec3(0.20,2.175,0.10))-0.024,13.);
+U(length(pb-vec3(0.20,2.175,-0.10))-0.024,13.);
+vec3 q=pb-vec3(-0.70,1.68,0.);
+q.xy=rot(-0.45)*q.xy;
+U(sdE(q,vec3(0.17,0.06,0.11)),9.);
+float fl=0.10*sin(t*2.2);
+for(int i=0;i<2;i++){
+float s=i==0?1.:-1.;
+vec3 w=pb-vec3(-0.42,1.66,0.19*s);
+w.yz=rot(s*(0.10+fl))*w.yz;
+w.xy=rot(0.25)*w.xy;
+w.xz=rot(s*0.30)*w.xz;
+U(sdE(w,vec3(0.32,0.15,0.06)),10.);
+}
+return r;
+}
+vec3 calcN(vec3 p){
+vec2 e=vec2(0.0015,-0.0015);
+return normalize(e.xyy*map(p+e.xyy).x+e.yyx*map(p+e.yyx).x+e.yxy*map(p+e.yxy).x+e.xxx*map(p+e.xxx).x);
+}
+float softS(vec3 ro,vec3 rd){
+float r=1.,t=0.02;
+for(int i=0;i<40;i++){
+float h=map(ro+rd*t).x;
+if(h<0.0012)return 0.;
+r=min(r,8.*h/t);
+t+=clamp(h,0.015,0.30);
+if(t>4.5)break;
+}
+return r;
+}
+float aof(vec3 p,vec3 n){
+float o=0.,s=1.;
+for(int i=0;i<5;i++){
+float h=0.02+0.05*float(i);
+o+=(h-map(p+n*h).x)*s;
+s*=0.72;
+}
+return clamp(1.-1.8*o,0.,1.);
+}
+void matOf(float m,out vec3 alb,out float sp,out float sh){
+alb=vec3(0.8);sp=0.2;sh=24.;
+if(m<1.5){alb=vec3(0.09,0.09,0.10);sp=0.15;sh=10.;}
+else if(m<2.5){alb=vec3(0.72,0.73,0.75);sp=0.7;sh=48.;}
+else if(m<3.5){alb=vec3(0.85,0.10,0.08);sp=0.5;sh=40.;}
+else if(m<4.5){alb=vec3(0.30,0.16,0.08);sp=0.25;sh=16.;}
+else if(m<5.5){alb=vec3(0.78,0.79,0.82);sp=0.8;sh=64.;}
+else if(m<6.5){alb=vec3(0.10,0.10,0.11);sp=0.2;sh=12.;}
+else if(m<7.5){alb=vec3(0.20,0.20,0.22);sp=0.55;sh=40.;}
+else if(m<8.5){alb=vec3(0.12,0.12,0.13);sp=0.25;sh=16.;}
+else if(m<9.5){alb=vec3(0.97,0.96,0.93);sp=0.18;sh=20.;}
+else if(m<10.5){alb=vec3(0.90,0.90,0.87);sp=0.18;sh=20.;}
+else if(m<11.5){alb=vec3(0.99,0.56,0.13);sp=0.3;sh=28.;}
+else if(m<12.5){alb=vec3(0.98,0.48,0.36);sp=0.3;sh=24.;}
+else if(m<13.5){alb=vec3(0.02,0.02,0.03);sp=0.9;sh=90.;}
+else{alb=vec3(0.55,0.42,0.38);sp=0.2;sh=16.;}
+}
+void main(){
+vec2 uv=(2.*gl_FragCoord.xy-uRes)/uRes.y;
+vec3 ro=uPos,rd=normalize(uCam*vec3(uv,1.55)),L=normalize(vec3(0.55,0.75,0.45)),skyH=vec3(0.78,0.84,0.92);
+float tG=rd.y<-0.0001?-ro.y/rd.y:1e9;
+vec3 oc=ro-vec3(0.05,1.30,0.);
+float b=dot(oc,rd),c=dot(oc,oc)-3.42,h2=b*b-c,t=-1.,m=-1.;
+if(h2>0.){
+h2=sqrt(h2);
+float t0=max(-b-h2,0.001),t1=-b+h2;
+if(t1>0.&&t0<t1&&t0<tG){
+t=t0;
+for(int i=0;i<150;i++){
+if(t>t1||t>tG){t=-1.;break;}
+vec2 d=map(ro+rd*t);
+if(d.x<0.0007){m=d.y;break;}
+t+=d.x*0.88;
+}
+if(m<0.)t=-1.;
+}
+}
+vec3 col;
+if(t>0.){
+vec3 p=ro+rd*t,n=calcN(p),alb;
+float sp,shi;
+matOf(m,alb,sp,shi);
+float s=softS(p+n*0.012,L),ao=aof(p,n),dif=clamp(dot(n,L),0.,1.)*s;
+vec3 hv=normalize(L-rd);
+float spe=pow(clamp(dot(n,hv),0.,1.),shi)*sp*s;
+col=alb*(vec3(0.30,0.33,0.38)*(0.55+0.45*n.y)*ao+vec3(1.15,1.05,0.90)*dif)+vec3(spe);
+col+=alb*0.10*pow(1.-clamp(dot(n,-rd),0.,1.),3.)*ao;
+}else if(tG<1e8){
+vec3 p=ro+rd*tG;
+vec2 g=floor(p.xz);
+float ch=mod(g.x+g.y,2.);
+vec3 alb=mix(vec3(0.50,0.49,0.47),vec3(0.58,0.57,0.54),ch);
+alb=mix(alb,vec3(0.54,0.53,0.505),clamp(tG*0.05,0.,1.));
+float s=softS(p+vec3(0.,0.015,0.),L);
+col=alb*(vec3(0.30,0.33,0.38)+vec3(1.05,0.97,0.85)*0.9*s);
+col=mix(col,skyH,clamp(1.-exp(-0.0011*tG*tG),0.,1.));
+}else{
+float y=max(rd.y,0.),sg=clamp(dot(rd,L),0.,1.);
+col=mix(skyH,vec3(0.19,0.40,0.83),pow(y,0.55));
+col+=vec3(1.0,0.88,0.65)*pow(sg,180.)*1.2+vec3(1.0,0.9,0.7)*pow(sg,10.)*0.10;
+}
+O=vec4(pow(col,vec3(0.4545)),1.);
+}`;
+let prog=null,vs=null,fs=null,lost=false,disposed=false;
+let uRes,uTime,uPos,uCam;
+function compile(type,src){
+const s=gl.createShader(type);
+gl.shaderSource(s,src);
+gl.compileShader(s);
+if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw new Error("createPelicanSdf: shader compile failed: "+gl.getShaderInfoLog(s));
+return s;
+}
+function build(){
+vs=compile(gl.VERTEX_SHADER,VS);
+fs=compile(gl.FRAGMENT_SHADER,FS);
+prog=gl.createProgram();
+gl.attachShader(prog,vs);
+gl.attachShader(prog,fs);
+gl.linkProgram(prog);
+if(!gl.getProgramParameter(prog,gl.LINK_STATUS))throw new Error("createPelicanSdf: program link failed: "+gl.getProgramInfoLog(prog));
+gl.useProgram(prog);
+uRes=gl.getUniformLocation(prog,"uRes");
+uTime=gl.getUniformLocation(prog,"uTime");
+uPos=gl.getUniformLocation(prog,"uPos");
+uCam=gl.getUniformLocation(prog,"uCam");
+}
+build();
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+const PM=1.35,DMIN=0.7,DMAX=16,TY=1.25;
+let yaw=0.65,pitch=0.16,distance=4.4;
+function render(timeSeconds){
+if(disposed||lost||gl.isContextLost())return;
+const w=gl.drawingBufferWidth,h=gl.drawingBufferHeight;
+if(w<1||h<1)return;
+let pe=pitch;
+const sm=-1.15/distance;
+if(sm>-1&&Math.sin(pe)<sm)pe=Math.asin(sm);
+const cp=Math.cos(pe),sp=Math.sin(pe),cy=Math.cos(yaw),sy=Math.sin(yaw);
+const ex=distance*sy*cp,ey=TY+distance*sp,ez=distance*cy*cp;
+let fx=-ex,fy=TY-ey,fz=-ez;
+const fl2=Math.hypot(fx,fy,fz)||1;
+fx/=fl2;fy/=fl2;fz/=fl2;
+const rl=Math.hypot(fz,fx)||1,rx=-fz/rl,rz=fx/rl;
+const ux=-rz*fy,uy=rz*fx-rx*fz,uz=rx*fy;
+gl.viewport(0,0,w,h);
+gl.uniform2f(uRes,w,h);
+gl.uniform1f(uTime,timeSeconds);
+gl.uniform3f(uPos,ex,ey,ez);
+gl.uniformMatrix3fv(uCam,false,[rx,0,rz,ux,uy,uz,fx,fy,fz]);
+gl.drawArrays(gl.TRIANGLES,0,3);
+}
+function setView(y,p,d){yaw=y;pitch=clamp(p,-PM,PM);distance=clamp(d,DMIN,DMAX);}
+function getView(){return{yaw:yaw,pitch:pitch,distance:distance};}
+const listeners=[];
+function on(t,f,o){canvas.addEventListener(t,f,o);listeners.push([t,f,o]);}
+const pts=new Map();
+let pinch0=1,pinchD=distance;
+function resetPinch(){
+if(pts.size===2){
+const v=[...pts.values()];
+pinch0=Math.max(1,Math.hypot(v[0].x-v[1].x,v[0].y-v[1].y));
+pinchD=distance;
+}
+}
+on("pointerdown",function(e){
+e.preventDefault();
+canvas.focus();
+try{canvas.setPointerCapture(e.pointerId);}catch(_){}
+pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
+resetPinch();
+});
+on("pointermove",function(e){
+const p=pts.get(e.pointerId);
+if(!p)return;
+if(pts.size===1){
+yaw-=(e.clientX-p.x)*0.0055;
+pitch=clamp(pitch+(e.clientY-p.y)*0.0055,-PM,PM);
+p.x=e.clientX;p.y=e.clientY;
+}else if(pts.size===2){
+p.x=e.clientX;p.y=e.clientY;
+const v=[...pts.values()];
+const d=Math.max(1,Math.hypot(v[0].x-v[1].x,v[0].y-v[1].y));
+distance=clamp(pinchD*pinch0/d,DMIN,DMAX);
+}
+});
+function endP(e){pts.delete(e.pointerId);resetPinch();}
+on("pointerup",endP);
+on("pointercancel",endP);
+on("wheel",function(e){
+e.preventDefault();
+distance=clamp(distance*Math.exp(e.deltaY*0.0011),DMIN,DMAX);
+},{passive:false});
+on("keydown",function(e){
+let u=true;
+switch(e.key){
+case "ArrowLeft":yaw-=0.09;break;
+case "ArrowRight":yaw+=0.09;break;
+case "ArrowUp":pitch=clamp(pitch+0.06,-PM,PM);break;
+case "ArrowDown":pitch=clamp(pitch-0.06,-PM,PM);break;
+case "+":case "=":distance=clamp(distance/1.12,DMIN,DMAX);break;
+case "-":case "_":distance=clamp(distance*1.12,DMIN,DMAX);break;
+default:u=false;
+}
+if(u)e.preventDefault();
+});
+on("webglcontextlost",function(e){e.preventDefault();lost=true;});
+on("webglcontextrestored",function(){try{build();lost=false;}catch(_){lost=true;}});
+if(canvas.tabIndex<0)canvas.tabIndex=0;
+canvas.style.touchAction="none";
+function dispose(){
+if(disposed)return;
+disposed=true;
+for(let i=0;i<listeners.length;i++)canvas.removeEventListener(listeners[i][0],listeners[i][1],listeners[i][2]);
+listeners.length=0;
+pts.clear();
+if(prog)gl.deleteProgram(prog);
+if(vs)gl.deleteShader(vs);
+if(fs)gl.deleteShader(fs);
+const x=gl.getExtension("WEBGL_lose_context");
+if(x)x.loseContext();
+}
+return{render:render,setView:setView,getView:getView,dispose:dispose};
+}

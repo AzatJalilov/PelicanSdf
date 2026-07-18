@@ -1,0 +1,185 @@
+export function createPelicanSdf(canvas) {
+  const gl = canvas.getContext('webgl2');
+  if (!gl) throw new Error('WebGL2 unavailable');
+  canvas.tabIndex = 1;
+  let yaw = 0, pitch = 0.3, distance = 15;
+  let drag = false, lx = 0, ly = 0, td = 0;
+
+  const fs = `#version 300 es
+precision highp float;
+uniform float time, yaw, pitch, dist;
+uniform vec2 res;
+out vec4 c;
+const float PI=3.14159265359, MAX_DIST=200.0, SURF_DIST=0.0005;
+const int STEPS=300;
+float sph(vec3 p, float r){return length(p)-r;}
+float cap(vec3 p,vec3 a,vec3 b,float r){
+  vec3 pa=p-a,ba=b-a;
+  float h=clamp(dot(pa,ba)/dot(ba,ba),0.,1.);
+  return length(pa-ba*h)-r;
+}
+float tor(vec3 p,float R,float r){vec2 q=vec2(length(p.xz)-R,p.y);return length(q)-r;}
+float ell(vec3 p,vec3 r){float k0=length(p/r),k1=length(p/(r*r));return k0*(k0-1.)/k1;}
+float sdf(vec3 p){
+  float d=MAX_DIST;
+  d=min(d,tor(p-vec3(0,0,2.),2.,0.12));
+  d=min(d,tor(p-vec3(0,0,-2.),2.,0.12));
+  d=min(d,cap(p,vec3(0,1.2,1.8),vec3(0,-0.8,0.2),0.15));
+  d=min(d,cap(p,vec3(0,-0.8,0.2),vec3(0,-0.2,-1.8),0.15));
+  d=min(d,cap(p,vec3(0,1.2,1.8),vec3(0,-0.2,-1.8),0.12));
+  d=min(d,ell(p-vec3(0,1.3,0.8),vec3(0.35,0.12,0.65)));
+  d=min(d,cap(p,vec3(-0.5,2,1.8),vec3(0.5,2,1.8),0.08));
+  d=min(d,cap(p,vec3(0,2,1.8),vec3(0,2.4,1.8),0.08));
+  vec3 pc=p-vec3(0,-0.3,0.5);
+  float ca=time*2.;
+  d=min(d,cap(pc,vec3(0),vec3(sin(ca)*0.7,cos(ca)*0.3,0),0.1));
+  d=min(d,sph(pc+vec3(sin(ca)*0.7,cos(ca)*0.3,0),0.12));
+  d=min(d,ell(p-vec3(0,1.,1.3),vec3(0.65,0.55,0.85)));
+  d=min(d,sph(p-vec3(0,1.65,1.7),0.4));
+  d=min(d,sph(p-vec3(0.18,1.75,1.95),0.09));
+  d=min(d,cap(p,vec3(0,1.55,1.9),vec3(0.85,1.45,2.0),0.1));
+  d=min(d,ell(p-vec3(0,1.1,1.65),vec3(0.3,0.4,0.22)));
+  d=min(d,ell(p-vec3(-0.95,1.,1.3),vec3(0.2,0.35,0.7)));
+  d=min(d,ell(p-vec3(0.95,1.,1.3),vec3(0.2,0.35,0.7)));
+  d=min(d,cap(p,vec3(-0.25,0.4,1.3),vec3(-0.25,-0.8,1.3),0.07));
+  d=min(d,cap(p,vec3(0.25,0.4,1.3),vec3(0.25,-0.8,1.3),0.07));
+  return d;
+}
+vec3 norm(vec3 p){
+  float e=0.002,d=sdf(p);
+  return normalize(vec3(sdf(p+vec3(e,0,0))-d,sdf(p+vec3(0,e,0))-d,sdf(p+vec3(0,0,e))-d));
+}
+void main(){
+  vec2 uv=gl_FragCoord.xy/res;
+  vec2 ndc=(uv-0.5)*2.;
+  ndc.x*=res.x/res.y;
+  vec3 rd=normalize(vec3(ndc,1.));
+  float cy=cos(yaw),sy=sin(yaw),cp=cos(pitch),sp=sin(pitch);
+  rd=vec3(rd.x,rd.y*cp-rd.z*sp,rd.y*sp+rd.z*cp);
+  rd=vec3(rd.x*cy-rd.z*sy,rd.y,rd.x*sy+rd.z*cy);
+  vec3 ro=vec3(sy*cp*dist,sp*dist,cy*cp*dist);
+  float t=0.;bool hit=false;
+  for(int i=0;i<STEPS;i++){
+    float d=sdf(ro);
+    if(d<SURF_DIST){hit=true;break;}
+    if(t>MAX_DIST)break;
+    ro+=rd*max(d,0.002);
+    t+=d;
+  }
+  if(hit){
+    vec3 n=norm(ro);
+    vec3 ld=normalize(vec3(1.5,2.,1.5));
+    float diff=max(dot(n,ld),0.1);
+    vec3 col=vec3(0.85,0.65,0.35)*diff;
+    float spec=pow(max(dot(n,normalize(ld-rd)),0.),16.)*0.5;
+    c=vec4(col+spec,1.);
+  }else{
+    c=vec4(mix(vec3(0.05,0.1,0.15),vec3(0.15,0.2,0.25),uv.y),1.);
+  }
+}`;
+
+  const vs = `#version 300 es
+in vec4 position;
+void main(){gl_Position=position;}`;
+
+  function compileShader(src, type) {
+    const sh = gl.createShader(type);
+    gl.shaderSource(sh, src);
+    gl.compileShader(sh);
+    if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) throw new Error('Shader error: '+gl.getShaderInfoLog(sh));
+    return sh;
+  }
+
+  const prog = gl.createProgram();
+  gl.attachShader(prog, compileShader(vs, gl.VERTEX_SHADER));
+  gl.attachShader(prog, compileShader(fs, gl.FRAGMENT_SHADER));
+  gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error('Link error');
+  gl.useProgram(prog);
+
+  const vao = gl.createVertexArray();
+  gl.bindVertexArray(vao);
+  const buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,1,-1,-1,1,1,1]), gl.STATIC_DRAW);
+  const pos = gl.getAttribLocation(prog, 'position');
+  gl.enableVertexAttribArray(pos);
+  gl.vertexAttribPointer(pos, 2, gl.FLOAT, false, 0, 0);
+
+  const uTime = gl.getUniformLocation(prog, 'time');
+  const uYaw = gl.getUniformLocation(prog, 'yaw');
+  const uPitch = gl.getUniformLocation(prog, 'pitch');
+  const uDist = gl.getUniformLocation(prog, 'dist');
+  const uRes = gl.getUniformLocation(prog, 'res');
+
+  function onMouseDown(e) {drag=true;lx=e.clientX;ly=e.clientY;}
+  function onMouseMove(e) {
+    if(drag){
+      yaw+=(e.clientX-lx)*0.005;
+      pitch+=(e.clientY-ly)*0.005;
+      pitch=Math.max(-Math.PI/2,Math.min(Math.PI/2,pitch));
+      lx=e.clientX;ly=e.clientY;
+    }
+  }
+  function onMouseUp(){drag=false;}
+  function onWheel(e){e.preventDefault();distance*=Math.exp(e.deltaY*0.001);distance=Math.max(3,Math.min(50,distance));}
+  function onTouchStart(e){
+    if(e.touches.length===2){
+      const dx=e.touches[0].clientX-e.touches[1].clientX,dy=e.touches[0].clientY-e.touches[1].clientY;
+      td=Math.sqrt(dx*dx+dy*dy);
+    }else if(e.touches.length===1){drag=true;lx=e.touches[0].clientX;ly=e.touches[0].clientY;}
+  }
+  function onTouchMove(e){
+    e.preventDefault();
+    if(e.touches.length===2){
+      const dx=e.touches[0].clientX-e.touches[1].clientX,dy=e.touches[0].clientY-e.touches[1].clientY;
+      const nd=Math.sqrt(dx*dx+dy*dy);
+      if(td>0){distance*=nd/td;distance=Math.max(3,Math.min(50,distance));}
+      td=nd;
+    }else if(e.touches.length===1&&drag){
+      yaw+=(e.touches[0].clientX-lx)*0.005;
+      pitch+=(e.touches[0].clientY-ly)*0.005;
+      pitch=Math.max(-Math.PI/2,Math.min(Math.PI/2,pitch));
+      lx=e.touches[0].clientX;ly=e.touches[0].clientY;
+    }
+  }
+  function onKeyDown(e){
+    const step=0.08,zoom=1.15;
+    if(e.key==='ArrowLeft'){yaw-=step;e.preventDefault();}
+    else if(e.key==='ArrowRight'){yaw+=step;e.preventDefault();}
+    else if(e.key==='ArrowUp'){pitch=Math.min(Math.PI/2,pitch+step);e.preventDefault();}
+    else if(e.key==='ArrowDown'){pitch=Math.max(-Math.PI/2,pitch-step);e.preventDefault();}
+    else if(e.key==='+'||e.key==='='){distance/=zoom;distance=Math.max(3,distance);e.preventDefault();}
+    else if(e.key==='-'){distance*=zoom;distance=Math.min(50,distance);e.preventDefault();}
+  }
+
+  canvas.addEventListener('mousedown',onMouseDown);
+  canvas.addEventListener('mousemove',onMouseMove);
+  canvas.addEventListener('mouseup',onMouseUp);
+  canvas.addEventListener('wheel',onWheel,{passive:false});
+  canvas.addEventListener('touchstart',onTouchStart,{passive:false});
+  canvas.addEventListener('touchmove',onTouchMove,{passive:false});
+  canvas.addEventListener('keydown',onKeyDown);
+
+  return {
+    render(t){
+      gl.viewport(0,0,canvas.width,canvas.height);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      gl.uniform1f(uTime,t);gl.uniform1f(uYaw,yaw);gl.uniform1f(uPitch,pitch);
+      gl.uniform1f(uDist,distance);gl.uniform2f(uRes,canvas.width,canvas.height);
+      gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+    },
+    setView(y,p,d){yaw=y;pitch=p;distance=d;},
+    getView(){return{yaw,pitch,distance};},
+    dispose(){
+      canvas.removeEventListener('mousedown',onMouseDown);
+      canvas.removeEventListener('mousemove',onMouseMove);
+      canvas.removeEventListener('mouseup',onMouseUp);
+      canvas.removeEventListener('wheel',onWheel);
+      canvas.removeEventListener('touchstart',onTouchStart);
+      canvas.removeEventListener('touchmove',onTouchMove);
+      canvas.removeEventListener('keydown',onKeyDown);
+      gl.deleteProgram(prog);gl.deleteBuffer(buf);gl.deleteVertexArray(vao);
+    }
+  };
+}

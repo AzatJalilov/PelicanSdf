@@ -6,5 +6,4 @@ dist/
 *.log
 .vscode/
 .idea/
-artifacts/
-
+/artifacts/
