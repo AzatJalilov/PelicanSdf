@@ -77,6 +77,31 @@ test("public pages link to GitHub without contribution or license promos", async
   }
 });
 
+test("public pages reuse the Sol Max pelican-on-bicycle brand artwork", async () => {
+  const pages = await Promise.all([
+    readFile(new URL("../index.html", import.meta.url), "utf8"),
+    readFile(new URL("../results.html", import.meta.url), "utf8"),
+    readFile(new URL("../result.html", import.meta.url), "utf8"),
+  ]);
+  for (const page of pages) {
+    assert.equal(page.match(/src=["']\.\/assets\/pelican-bicycle-mark\.svg["']/g)?.length, 2);
+    assert.doesNotMatch(page, /<svg\s+class=["']brand-mark["']/);
+  }
+
+  const [mark, favicon] = await Promise.all([
+    readFile(new URL("../assets/pelican-bicycle-mark.svg", import.meta.url), "utf8"),
+    readFile(new URL("../assets/favicon.svg", import.meta.url), "utf8"),
+  ]);
+  assert.match(mark, /<title[^>]*>Pelican riding a bicycle<\/title>/);
+  assert.match(favicon, /<title[^>]*>Pelican cyclist<\/title>/);
+  for (const svg of [mark, favicon]) {
+    assert.match(svg, /role=["']img["']/);
+    assert.match(svg, /<desc\b/);
+    assert.ok((svg.match(/<circle\b/g) || []).length >= 4);
+    assert.doesNotMatch(svg, /<(?:image|script|filter|mask|foreignObject)\b/i);
+  }
+});
+
 function jpegDimensions(buffer) {
   assert.equal(buffer[0], 0xff);
   assert.equal(buffer[1], 0xd8);

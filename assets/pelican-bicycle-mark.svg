@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 64" role="img" aria-labelledby="pelican-bicycle-mark-title pelican-bicycle-mark-desc">
+  <title id="pelican-bicycle-mark-title">Pelican riding a bicycle</title>
+  <desc id="pelican-bicycle-mark-desc">A seated pelican grips the handlebar while both legs reach the pedals of a two-wheeled bicycle.</desc>
+  <g fill="none" stroke="#18212b" stroke-width="2.5" stroke-linecap="round">
+    <path d="M22 36.5v23M10.5 48h23M72 36.5v23M60.5 48h23"/>
+  </g>
+  <g fill="none" stroke="#18212b" stroke-width="3" stroke-linecap="round">
+    <circle cx="22" cy="48" r="12.5"/>
+    <circle cx="72" cy="48" r="12.5"/>
+  </g>
+  <path d="M22 48 38 31 45 48 22 48M38 31 61 35 45 48M61 35 72 48" fill="none" stroke="#0b6e75" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <g fill="none" stroke="#18212b" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M34 31h9M61 35 60 26 67 25"/>
+    <path d="M40 53 50 43"/>
+  </g>
+  <circle cx="45" cy="48" r="3" fill="#f3efe5" stroke="#18212b" stroke-width="2.5"/>
+  <g fill="none" stroke="#f26a3d" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M39 29 48 36 50 43M35 30 31 40 40 53"/>
+  </g>
+  <path d="M42 32C35 33 28 31 25 26c-3-5 0-10 5-12 6-2 13 1 17 7 0-5 1-10 4-13 3-3 8-3 12 0 4 3 4 7 1 10-2 3-3 7-2 10-4 4-12 6-20 4Z" fill="#f3efe5" stroke="#18212b" stroke-width="2.5" stroke-linejoin="round"/>
+  <path d="M30 19c6-2 13-1 18 3l9 3c2 1 4 0 6 0 2 0 3 2 1 4-2 2-6 0-10-1l-7-3c-3 4-7 6-11 4-3-2-5-6-6-10Z" fill="#0b6e75" stroke="#18212b" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M62 11c8 0 16 1 22 3 3 1 2 3-1 4l-19 0c2-3 1-5-2-7Z" fill="#f26a3d" stroke="#18212b" stroke-width="2.5" stroke-linejoin="round"/>
+  <path d="M64 18h19c-4 6-11 9-18 7-3-1-4-4-1-7Z" fill="#f26a3d" stroke="#18212b" stroke-width="2.5" stroke-linejoin="round"/>
+  <circle cx="59" cy="11.5" r="1.5" fill="#18212b"/>
+  <g fill="none" stroke="#18212b" stroke-width="2.5" stroke-linecap="round">
+    <path d="M36.5 53h7M46.5 43h7"/>
+  </g>
+</svg>

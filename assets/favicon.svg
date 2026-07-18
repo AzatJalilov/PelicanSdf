@@ -1,6 +1,28 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="14" fill="#17201d"/>
-  <circle cx="16" cy="43" r="11" fill="none" stroke="#f3efe5" stroke-width="4"/>
-  <circle cx="48" cy="43" r="11" fill="none" stroke="#f3efe5" stroke-width="4"/>
-  <path d="m16 43 15-23 8 23H16Zm15-23 17 23M31 20l9-7 14 4-14 4" fill="none" stroke="#f26a3d" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="pelican-favicon-title pelican-favicon-desc">
+  <title id="pelican-favicon-title">Pelican cyclist</title>
+  <desc id="pelican-favicon-desc">A pelican pedals a compact bicycle inside a dark rounded square.</desc>
+  <rect x="1" y="1" width="62" height="62" rx="13" fill="#18212b"/>
+  <g fill="none" stroke="#f3efe5" stroke-width="2.5" stroke-linecap="round">
+    <path d="M7.5 40.5l15 15M22.5 40.5l-15 15M41.5 40.5l15 15M56.5 40.5l-15 15"/>
+  </g>
+  <g fill="none" stroke="#f3efe5" stroke-width="3.2">
+    <circle cx="15" cy="48" r="10.5"/>
+    <circle cx="49" cy="48" r="10.5"/>
+  </g>
+  <path d="M15 48 26 34 32 48 15 48M26 34 41 37 32 48M41 37 49 48" fill="none" stroke="#f26a3d" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <g fill="none" stroke="#f3efe5" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M23 34h7M41 37 40 29 45 28M28 52 36 44"/>
+  </g>
+  <circle cx="32" cy="48" r="2.6" fill="#18212b" stroke="#f3efe5" stroke-width="2.5"/>
+  <g fill="none" stroke="#f26a3d" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M28 33 35 39 36 44M24 33 20 40 28 52"/>
+  </g>
+  <path d="M27 35c-5 0-10-3-10-8 0-4 3-7 7-7 5 0 9 3 10 7 0-5 0-10 2-14 2-4 7-4 10-1 2 2 2 5 0 8-2 2-2 6-1 9-4 5-10 7-18 6Z" fill="#f3efe5" stroke="#18212b" stroke-width="2.5" stroke-linejoin="round"/>
+  <path d="M21 25c4-3 9-2 13 2l8 1c3 0 4 2 1 4-3 2-6-1-9-2-3 0-5 3-8 2-3-1-5-4-5-7Z" fill="#0b6e75" stroke="#f3efe5" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M44 14c6 0 12 1 15 2 3 1 1 3-1 3l-12 1c2-3 1-5-2-6Z" fill="#f26a3d" stroke="#18212b" stroke-width="2.5" stroke-linejoin="round"/>
+  <path d="M46 20l12-1c-3 5-7 7-12 5-2-1-2-3 0-4Z" fill="#f26a3d" stroke="#18212b" stroke-width="2.5" stroke-linejoin="round"/>
+  <circle cx="42" cy="14" r="1.4" fill="#18212b"/>
+  <g fill="none" stroke="#f3efe5" stroke-width="2.5" stroke-linecap="round">
+    <path d="M25 52h6M33 44h6"/>
+  </g>
 </svg>

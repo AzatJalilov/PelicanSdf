@@ -198,13 +198,10 @@ pre {
 }
 
 .brand-mark {
-  width: 31px;
-  height: 22px;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.6;
+  display: block;
+  width: 42px;
+  height: 28px;
+  flex: 0 0 auto;
 }
 
 .site-nav {

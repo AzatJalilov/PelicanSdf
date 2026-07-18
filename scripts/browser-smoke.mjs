@@ -278,6 +278,9 @@ try {
       githubHref: document.querySelector('.site-nav .nav-action')?.href,
       removedPromos: document.querySelectorAll('.license-note, .contribute-section').length,
       payloadCopy: document.body.textContent.includes('Landing payload') || document.body.textContent.includes('artifact modules'),
+      brandMarksLoaded: [...document.querySelectorAll('img.brand-mark')].length === 2
+        && [...document.querySelectorAll('img.brand-mark')].every((image) => image.complete && image.naturalWidth > 0),
+      brandMarkBounds: document.querySelector('img.brand-mark').getBoundingClientRect().toJSON(),
       viewport: { width: innerWidth, height: innerHeight, scrollWidth: document.documentElement.scrollWidth },
       heroBounds: document.querySelector('.landing-hero').getBoundingClientRect().toJSON(),
       contractBounds: document.querySelector('.contract-card').getBoundingClientRect().toJSON(),
@@ -290,6 +293,9 @@ try {
     || landing.githubHref !== 'https://github.com/AzatJalilov/PelicanSdf'
     || landing.removedPromos
     || landing.payloadCopy
+    || !landing.brandMarksLoaded
+    || landing.brandMarkBounds.width !== 42
+    || landing.brandMarkBounds.height !== 28
     || landing.viewport.scrollWidth > landing.viewport.width) {
     throw new Error(`Landing page navigation or layout failed: ${JSON.stringify(landing)}`);
   }
@@ -318,6 +324,8 @@ try {
       artifactRequests: resources.filter((url) => url.includes('/data/artifacts/')),
       githubHref: document.querySelector('.site-nav .nav-action')?.href,
       removedPromos: document.querySelectorAll('.license-note, .contribute-section, #add-dialog').length,
+      brandMarksLoaded: [...document.querySelectorAll('img.brand-mark')].length === 2
+        && [...document.querySelectorAll('img.brand-mark')].every((image) => image.complete && image.naturalWidth > 0),
     };
   })()`);
   if (initial.cards !== publishedResultCount
@@ -329,7 +337,8 @@ try {
     || initial.visibleCanvases
     || initial.artifactRequests.length
     || initial.githubHref !== 'https://github.com/AzatJalilov/PelicanSdf'
-    || initial.removedPromos) {
+    || initial.removedPromos
+    || !initial.brandMarksLoaded) {
     throw new Error(`Initial state failed: ${JSON.stringify(initial)}`);
   }
   if (initial.viewport.scrollWidth > initial.viewport.width) throw new Error("Desktop page has horizontal overflow.");
@@ -443,9 +452,11 @@ try {
     requirements: document.querySelectorAll('#validation-requirements li').length,
     advisories: document.querySelectorAll('#validation-warnings li').length,
     compareHref: document.querySelector('#compare-run-link').href,
+    brandMarksLoaded: [...document.querySelectorAll('img.brand-mark')].length === 2
+      && [...document.querySelectorAll('img.brand-mark')].every((image) => image.complete && image.naturalWidth > 0),
     viewport: { width: innerWidth, scrollWidth: document.documentElement.scrollWidth },
   }))()`);
-  if (runDetail.id !== "gpt-5-6-sol-run-01" || runDetail.viewerError || runDetail.sourceLoaded < 1000 || runDetail.promptLoaded < 1000) {
+  if (runDetail.id !== "gpt-5-6-sol-run-01" || runDetail.viewerError || runDetail.sourceLoaded < 1000 || runDetail.promptLoaded < 1000 || !runDetail.brandMarksLoaded) {
     throw new Error(`Dedicated run record failed: ${JSON.stringify(runDetail)}`);
   }
   if (runDetail.invocationRows < 8 || runDetail.usageRows < 8 || runDetail.integrityRows < 6 || runDetail.checks < 1 || runDetail.requirements !== 0 || runDetail.advisories < 1) {
@@ -643,6 +654,9 @@ try {
       githubHref: document.querySelector('.site-nav .nav-action')?.href,
       removedPromos: document.querySelectorAll('.license-note, .contribute-section').length,
       payloadCopy: document.body.textContent.includes('Landing payload') || document.body.textContent.includes('artifact modules'),
+      brandMarksLoaded: [...document.querySelectorAll('img.brand-mark')].length === 2
+        && [...document.querySelectorAll('img.brand-mark')].every((image) => image.complete && image.naturalWidth > 0),
+      brandMarkBounds: document.querySelector('img.brand-mark').getBoundingClientRect().toJSON(),
     };
   })()`);
   if (mobileLanding.scrollWidth > mobileLanding.width
@@ -652,7 +666,10 @@ try {
     || !mobileLanding.ctaVisible
     || mobileLanding.githubHref !== 'https://github.com/AzatJalilov/PelicanSdf'
     || mobileLanding.removedPromos
-    || mobileLanding.payloadCopy) {
+    || mobileLanding.payloadCopy
+    || !mobileLanding.brandMarksLoaded
+    || mobileLanding.brandMarkBounds.width !== 42
+    || mobileLanding.brandMarkBounds.height !== 28) {
     throw new Error(`Mobile landing failed: ${JSON.stringify(mobileLanding)}`);
   }
   const mobileLandingScreenshot = await screenshot(client, "mobile-landing.jpg");
