@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pelicansdf.dev/schema/result-v1.json",
+  "title": "Pelican SDF benchmark result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "title", "model", "provider", "status", "track", "promptVersion", "promptSha256", "artifactSha256", "createdAt", "artifact", "description", "generationHarness", "generationUsage", "validation", "metrics", "visual", "provenance"],
+  "properties": {
+    "id": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+    "title": { "type": "string", "minLength": 2, "maxLength": 80 },
+    "model": { "type": "string", "minLength": 1, "maxLength": 120 },
+    "provider": { "type": "string", "minLength": 1, "maxLength": 80 },
+    "status": { "enum": ["reference", "unverified", "verified"] },
+    "track": { "enum": ["one-shot", "repair-2", "reference"] },
+    "promptVersion": { "const": "1.0.0" },
+    "promptSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "artifactSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "createdAt": { "type": "string", "format": "date" },
+    "artifact": { "type": "string", "pattern": "^\\.\\./artifacts/[a-z0-9-]+\\.js$" },
+    "description": { "type": "string", "minLength": 10, "maxLength": 280 },
+    "accent": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+    "generationHarness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "surface", "sandbox", "notes"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "version": { "type": ["string", "null"], "maxLength": 40 },
+        "surface": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "sandbox": { "type": ["string", "null"], "maxLength": 80 },
+        "notes": { "type": ["string", "null"], "maxLength": 240 }
+      }
+    },
+    "generationUsage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["inputTokens", "cachedInputTokens", "reasoningTokens", "outputTokens", "totalTokens", "apiCostUsd", "billingMode", "source", "notes"],
+      "properties": {
+        "inputTokens": { "type": ["integer", "null"], "minimum": 0 },
+        "cachedInputTokens": { "type": ["integer", "null"], "minimum": 0 },
+        "reasoningTokens": { "type": ["integer", "null"], "minimum": 0 },
+        "outputTokens": { "type": ["integer", "null"], "minimum": 0 },
+        "totalTokens": { "type": ["integer", "null"], "minimum": 0 },
+        "apiCostUsd": { "type": ["number", "null"], "minimum": 0 },
+        "billingMode": { "enum": ["api-metered", "subscription", "local", "unknown"] },
+        "source": { "type": ["string", "null"], "maxLength": 160 },
+        "notes": { "type": ["string", "null"], "maxLength": 280 }
+      }
+    },
+    "validation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "checks", "unmetRequirements", "warnings"],
+      "properties": {
+        "state": { "enum": ["untested", "passed", "warnings", "failed"] },
+        "checks": { "type": "array", "items": { "type": "string" } },
+        "unmetRequirements": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["requirement", "evidence"],
+            "properties": {
+              "requirement": { "type": "string", "minLength": 3, "maxLength": 120 },
+              "evidence": { "type": "string", "minLength": 3, "maxLength": 400 }
+            }
+          }
+        },
+        "warnings": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourceBytes", "initMs", "gpuMsMedian", "gpuMsP95", "throughputFps", "timingMethod", "environment"],
+      "properties": {
+        "sourceBytes": { "type": "integer", "minimum": 1, "maximum": 32768 },
+        "initMs": { "type": ["number", "null"], "minimum": 0 },
+        "gpuMsMedian": { "type": ["number", "null"], "exclusiveMinimum": 0 },
+        "gpuMsP95": { "type": ["number", "null"], "exclusiveMinimum": 0 },
+        "throughputFps": { "type": ["number", "null"], "exclusiveMinimum": 0 },
+        "timingMethod": { "enum": ["gpu-query", "wall-clock-finish", null] },
+        "environment": { "type": ["string", "null"], "maxLength": 220 },
+        "environmentKey": { "type": ["string", "null"], "maxLength": 300 },
+        "profile": { "type": ["string", "null"], "maxLength": 80 },
+        "sampleCount": { "type": ["integer", "null"], "minimum": 1 },
+        "trials": { "type": ["integer", "null"], "minimum": 1 },
+        "measuredAt": { "type": ["string", "null"] }
+      }
+    },
+    "visual": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["readability", "completeness", "coherence", "craft", "inspectability", "reviewers"],
+      "properties": {
+        "readability": { "type": ["number", "null"], "minimum": 0, "maximum": 5 },
+        "completeness": { "type": ["number", "null"], "minimum": 0, "maximum": 5 },
+        "coherence": { "type": ["number", "null"], "minimum": 0, "maximum": 5 },
+        "craft": { "type": ["number", "null"], "minimum": 0, "maximum": 5 },
+        "inspectability": { "type": ["number", "null"], "minimum": 0, "maximum": 5 },
+        "reviewers": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["generatorKind", "method", "rawResponse", "decoding"],
+      "properties": {
+        "generatorKind": { "enum": ["model-eval", "manual", "demo-fixture"] },
+        "method": { "type": "string", "minLength": 3, "maxLength": 160 },
+        "rawResponse": { "type": ["string", "null"] },
+        "decoding": { "type": ["string", "null"], "maxLength": 160 }
+      }
+    }
+  }
+}

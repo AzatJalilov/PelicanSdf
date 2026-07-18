@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "id": "gpt-5-6-luna-high-run-01",
+  "model": "gpt-5.6-luna",
+  "reasoningEffort": "high",
+  "harness": {
+    "name": "Codex CLI",
+    "version": "0.144.5",
+    "surface": "codex exec --json",
+    "sandbox": "read-only",
+    "ephemeral": true,
+    "userConfigLoaded": false,
+    "projectRulesLoaded": false
+  },
+  "prompt": {
+    "path": "benchmark/prompt.txt",
+    "bytes": 3387,
+    "sha256": "cd21d5a8bb3956d82ab5650304e7e491063eacdb27dad85be6b4a845512f5e6b"
+  },
+  "response": {
+    "path": "data/raw/gpt-5-6-luna-high-run-01/response.txt",
+    "bytes": 11571,
+    "sha256": "c2a8e2e29c02f74ebafd2e151036cbb5690d7bf7a80ca83dc8b11d0848560521"
+  },
+  "usage": {
+    "inputTokens": 11440,
+    "cachedInputTokens": 8960,
+    "reasoningTokens": null,
+    "outputTokens": 11179,
+    "totalTokens": 22619
+  },
+  "billing": {
+    "mode": "subscription",
+    "apiCostUsd": null,
+    "note": "Codex CLI subscription invocation; no per-call API charge was exposed."
+  },
+  "startedAt": "2026-07-18T10:59:31.763Z",
+  "completedAt": "2026-07-18T11:02:55.840Z",
+  "durationMs": 204077,
+  "exitCode": 0,
+  "eventCount": 4,
+  "files": {
+    "events": "data/raw/gpt-5-6-luna-high-run-01/events.jsonl",
+    "stderr": "data/raw/gpt-5-6-luna-high-run-01/stderr.txt"
+  }
+}

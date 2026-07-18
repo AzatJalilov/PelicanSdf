@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "id": "gpt-5-6-terra-low-run-01",
+  "model": "gpt-5.6-terra",
+  "reasoningEffort": "low",
+  "harness": {
+    "name": "Codex CLI",
+    "version": "0.144.5",
+    "surface": "codex exec --json",
+    "sandbox": "read-only",
+    "ephemeral": true,
+    "userConfigLoaded": false,
+    "projectRulesLoaded": false
+  },
+  "prompt": {
+    "path": "benchmark/prompt.txt",
+    "bytes": 3387,
+    "sha256": "cd21d5a8bb3956d82ab5650304e7e491063eacdb27dad85be6b4a845512f5e6b"
+  },
+  "response": {
+    "path": "data/raw/gpt-5-6-terra-low-run-01/response.txt",
+    "bytes": 11096,
+    "sha256": "66b0e48a9d107b0d2e063816624f8d87146a5291cc7b9cb537012a7f8a99b4e8"
+  },
+  "usage": {
+    "inputTokens": 12631,
+    "cachedInputTokens": 9472,
+    "reasoningTokens": null,
+    "outputTokens": 4659,
+    "totalTokens": 17290
+  },
+  "billing": {
+    "mode": "subscription",
+    "apiCostUsd": null,
+    "note": "Codex CLI subscription invocation; no per-call API charge was exposed."
+  },
+  "startedAt": "2026-07-18T10:59:30.168Z",
+  "completedAt": "2026-07-18T11:00:57.640Z",
+  "durationMs": 87472,
+  "exitCode": 0,
+  "eventCount": 4,
+  "files": {
+    "events": "data/raw/gpt-5-6-terra-low-run-01/events.jsonl",
+    "stderr": "data/raw/gpt-5-6-terra-low-run-01/stderr.txt"
+  }
+}

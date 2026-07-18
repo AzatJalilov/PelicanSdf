@@ -1,0 +1,81 @@
+{
+  "id": "gpt-5-6-terra-low-run-01",
+  "title": "Terra / low effort",
+  "model": "gpt-5.6-terra",
+  "provider": "OpenAI via Codex CLI",
+  "status": "unverified",
+  "track": "one-shot",
+  "promptVersion": "1.0.0",
+  "promptSha256": "cd21d5a8bb3956d82ab5650304e7e491063eacdb27dad85be6b4a845512f5e6b",
+  "artifactSha256": "36a83da778812160db767f662e3e0b63b884e736fadafa859796938441487dd2",
+  "createdAt": "2026-07-18",
+  "artifact": "../artifacts/gpt-5-6-terra-low-run-01.js",
+  "description": "A compact, cleanly framed SDF with a simplified pelican, tubular bicycle frame, solid tires, articulated riding pose, and blue-gray material palette.",
+  "accent": "#8a5a2b",
+  "generationHarness": {
+    "name": "Codex CLI",
+    "version": "0.144.5",
+    "surface": "codex exec --json",
+    "sandbox": "read-only",
+    "notes": "Fresh ephemeral invocation with user config and project rules disabled; orchestrated by Codex."
+  },
+  "generationUsage": {
+    "inputTokens": 12631,
+    "cachedInputTokens": 9472,
+    "reasoningTokens": null,
+    "outputTokens": 4659,
+    "totalTokens": 17290,
+    "apiCostUsd": null,
+    "billingMode": "subscription",
+    "source": "data/raw/gpt-5-6-terra-low-run-01/events.jsonl",
+    "notes": "Codex CLI subscription invocation; no per-call API charge was exposed."
+  },
+  "validation": {
+    "state": "warnings",
+    "checks": [
+      "JavaScript syntax",
+      "lifecycle contract",
+      "WebGL2 compilation",
+      "initial composition",
+      "pointer orbit",
+      "wheel zoom",
+      "two-finger pinch",
+      "keyboard camera",
+      "multi-angle camera response",
+      "close-range inspection",
+      "three-trial GPU timing"
+    ],
+    "unmetRequirements": [],
+    "warnings": [
+      "Context-restoration handler leaves the renderer in its lost state"
+    ]
+  },
+  "metrics": {
+    "sourceBytes": 11097,
+    "initMs": 2353.1,
+    "gpuMsMedian": 1.89436,
+    "gpuMsP95": 2.18036,
+    "throughputFps": 527.8828,
+    "timingMethod": "gpu-query",
+    "environment": "AMD Radeon(TM) Graphics / ANGLE D3D11; Headless Chrome 150; Windows; 960x540; 3 serial trials",
+    "environmentKey": "amd-15bf-angle-d3d11|headless-chrome-150|windows|960x540|pelican-canvas-v1",
+    "profile": "pelican-canvas-960x540-v1",
+    "sampleCount": 36,
+    "trials": 3,
+    "measuredAt": "2026-07-18T11:09:41.278Z"
+  },
+  "visual": {
+    "readability": null,
+    "completeness": null,
+    "coherence": null,
+    "craft": null,
+    "inspectability": null,
+    "reviewers": 0
+  },
+  "provenance": {
+    "generatorKind": "model-eval",
+    "method": "Fresh one-shot Codex CLI invocation; read-only ephemeral sandbox; no repair turn; only normalization was adding a trailing LF",
+    "rawResponse": "../raw/gpt-5-6-terra-low-run-01/response.txt",
+    "decoding": "reasoning effort: low; other decoding settings not exposed"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "name": "pelican-sdf",
+  "version": "0.1.0",
+  "private": true,
+  "description": "An open benchmark for model-generated 3D signed distance fields.",
+  "type": "module",
+  "scripts": {
+    "start": "node scripts/serve.mjs",
+    "eval:run": "node scripts/run-model-eval.mjs",
+    "eval:ingest": "node scripts/ingest-model-eval.mjs",
+    "eval:measure": "node scripts/measure-results.mjs",
+    "hash": "node scripts/hash-file.mjs",
+    "smoke": "node scripts/browser-smoke.mjs",
+    "validate": "node scripts/validate-results.mjs",
+    "test": "node --test && npm run validate",
+    "new-result": "node scripts/new-result.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT"
+}

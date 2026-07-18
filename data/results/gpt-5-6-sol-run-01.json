@@ -1,0 +1,67 @@
+{
+  "id": "gpt-5-6-sol-run-01",
+  "title": "Grand Tourer",
+  "model": "gpt-5.6-sol",
+  "provider": "OpenAI via Codex CLI",
+  "status": "unverified",
+  "track": "one-shot",
+  "promptVersion": "1.0.0",
+  "promptSha256": "cd21d5a8bb3956d82ab5650304e7e491063eacdb27dad85be6b4a845512f5e6b",
+  "artifactSha256": "cbb5aef39a25fda35de12314d2d61ba3e7db56b00df37248fadcc3a0ac06a3d7",
+  "createdAt": "2026-07-18",
+  "artifact": "../artifacts/gpt-5-6-sol-run-01.js",
+  "description": "A detailed one-shot canvas program with spoked wheels, layered plumage, articulated rider contacts, and a broad material palette.",
+  "accent": "#f26a3d",
+  "generationHarness": {
+    "name": "Codex CLI",
+    "version": "0.144.5",
+    "surface": "codex exec",
+    "sandbox": "read-only",
+    "notes": "Fresh ephemeral Codex agent session; model-selected output with the Codex runtime system context"
+  },
+  "generationUsage": {
+    "inputTokens": null,
+    "cachedInputTokens": null,
+    "reasoningTokens": null,
+    "outputTokens": null,
+    "totalTokens": null,
+    "apiCostUsd": null,
+    "billingMode": "subscription",
+    "source": null,
+    "notes": "The ephemeral Codex CLI run did not preserve a machine-readable usage receipt; ChatGPT subscription runs expose no per-call API charge"
+  },
+  "validation": {
+    "state": "warnings",
+    "checks": ["JavaScript syntax", "lifecycle contract", "WebGL2 compilation", "initial composition", "pointer orbit", "wheel zoom", "two-finger pinch", "keyboard camera", "multi-angle camera response"],
+    "unmetRequirements": [],
+    "warnings": ["Context-restoration handler leaves the renderer in its lost state"]
+  },
+  "metrics": {
+    "sourceBytes": 14792,
+    "initMs": 69.7,
+    "gpuMsMedian": 4.37478,
+    "gpuMsP95": 5.46636,
+    "throughputFps": 228.5829,
+    "timingMethod": "gpu-query",
+    "environment": "AMD Radeon(TM) Graphics / ANGLE D3D11 · Headless Chrome 150 · Windows · 960×540 · 3 serial trials",
+    "environmentKey": "amd-15bf-angle-d3d11|headless-chrome-150|windows|960x540|pelican-canvas-v1",
+    "profile": "pelican-canvas-960x540-v1",
+    "sampleCount": 36,
+    "trials": 3,
+    "measuredAt": "2026-07-18T08:50:31Z"
+  },
+  "visual": {
+    "readability": null,
+    "completeness": null,
+    "coherence": null,
+    "craft": null,
+    "inspectability": null,
+    "reviewers": 0
+  },
+  "provenance": {
+    "generatorKind": "model-eval",
+    "method": "Fresh one-shot Codex CLI invocation; read-only sandbox; no repair turn; line endings normalized only",
+    "rawResponse": "../artifacts/gpt-5-6-sol-run-01.js",
+    "decoding": null
+  }
+}

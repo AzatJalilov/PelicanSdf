@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Interactive Pelican SDF benchmark run, source code, metrics, and provenance.">
+    <meta name="theme-color" content="#f6f7f9">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+    <title>Run details — Pelican SDF</title>
+    <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="./src/styles.css">
+  </head>
+  <body class="result-page">
+    <a class="skip-link" href="#run-main">Skip to run details</a>
+
+    <header class="site-header">
+      <a class="brand" href="./index.html" aria-label="Pelican SDF home">
+        <svg class="brand-mark" viewBox="0 0 48 32" aria-hidden="true">
+          <circle cx="11" cy="22" r="8"></circle>
+          <circle cx="37" cy="22" r="8"></circle>
+          <path d="M11 22 22 9l6 13H11Zm11-13 15 13M22 9l-5 13m5-13 7-5 8 3-9 3"></path>
+        </svg>
+        <span>Pelican <b>SDF</b></span>
+      </a>
+      <nav class="site-nav" aria-label="Primary navigation">
+        <a href="./results.html">All results</a>
+        <a href="./index.html#method">Method</a>
+        <a class="nav-action run-nav-action" href="./index.html#contribute">Add a result <span aria-hidden="true">↗</span></a>
+      </nav>
+    </header>
+
+    <main id="run-main">
+      <div class="run-loading section-shell" id="run-loading" role="status">
+        <span></span>
+        <p>Loading benchmark record…</p>
+      </div>
+
+      <section class="run-error section-shell" id="run-error" hidden>
+        <p class="eyebrow">Record not found</p>
+        <h1>Run not found</h1>
+        <p id="run-error-message">Choose one of the published benchmark runs.</p>
+        <div class="run-error-links" id="run-error-links"></div>
+        <a class="button button-primary" href="./results.html">Browse all results</a>
+      </section>
+
+      <article id="run-page" hidden>
+        <section class="run-hero section-shell" aria-labelledby="run-title">
+          <nav class="breadcrumbs" aria-label="Breadcrumb">
+            <a href="./index.html">Pelican SDF</a><span aria-hidden="true">/</span>
+            <a href="./results.html">Results</a><span aria-hidden="true">/</span>
+            <span id="run-breadcrumb">Run</span>
+          </nav>
+
+          <div class="run-hero-grid">
+            <div class="run-identity">
+              <div class="run-status-line">
+                <span class="run-status" id="run-status">—</span>
+                <span id="run-index">SDF-000</span>
+                <span id="run-date">—</span>
+              </div>
+              <p class="eyebrow" id="run-model-kicker">Model run</p>
+              <h1 id="run-title">Loading run…</h1>
+              <p class="run-model" id="run-model">—</p>
+              <p class="run-description" id="run-description">—</p>
+              <div class="run-actions">
+                <button class="button button-primary" id="share-run" type="button">Copy run link</button>
+                <a class="button button-quiet" id="raw-artifact-link" href="#source">Jump to source</a>
+              </div>
+              <div class="run-compare-control">
+                <label for="compare-with">Compare with</label>
+                <select id="compare-with"></select>
+                <a class="text-link" id="compare-run-link" href="./results.html#compare">Open comparison <span aria-hidden="true">→</span></a>
+              </div>
+            </div>
+
+            <div class="viewer-card run-viewer-card">
+              <div class="viewer-topbar">
+                <div><span class="signal-dot" aria-hidden="true"></span><span id="run-viewer-label">Interactive artifact</span></div>
+                <div class="viewer-actions">
+                  <button class="icon-button" id="run-reset" type="button" title="Reset camera" aria-label="Reset camera">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11a8 8 0 1 1 2.3 6M4 5v6h6"></path></svg>
+                  </button>
+                  <button class="icon-button" id="run-pause" type="button" title="Pause preview" aria-label="Pause preview" aria-pressed="false">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14"></path></svg>
+                  </button>
+                </div>
+              </div>
+              <div class="canvas-stage run-canvas-stage">
+                <canvas id="run-canvas" tabindex="0" aria-label="Interactive 3D SDF run. Drag to orbit, use wheel or pinch to zoom, and arrow or plus and minus keys to inspect."></canvas>
+                <div class="canvas-grid" aria-hidden="true"></div>
+                <div class="viewer-loading" id="run-viewer-loading" role="status"><span></span>Compiling submitted canvas…</div>
+                <div class="canvas-error" id="run-viewer-error" hidden><strong>Artifact did not render</strong><span></span></div>
+                <div class="live-meter"><span>Live</span><strong id="run-live-fps">— fps</strong><small>display-capped</small></div>
+                <p class="orbit-hint"><span aria-hidden="true">↔</span> drag: orbit · wheel/pinch: zoom</p>
+              </div>
+              <div class="viewer-footer">
+                <div><span>Camera</span><strong id="run-view">yaw — · pitch — · zoom —</strong></div>
+                <button class="text-button" id="run-benchmark" type="button">Run on this device <span aria-hidden="true">→</span></button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <nav class="run-subnav" aria-label="Run detail sections">
+          <div class="section-shell">
+            <a href="#metrics">Metrics</a>
+            <a href="#generation">Generation</a>
+            <a href="#validation">Validation</a>
+            <a href="#prompt">Prompt</a>
+            <a href="#source">Source</a>
+          </div>
+        </nav>
+
+        <section class="run-section section-shell" id="metrics" aria-labelledby="metrics-title">
+          <div class="run-section-heading">
+            <div><p class="eyebrow">PERFORMANCE</p><h2 id="metrics-title">Stored measurements</h2></div>
+            <p>Equivalent FPS is uncapped GPU throughput, not display refresh. It is comparable only with runs carrying the same environment fingerprint.</p>
+          </div>
+          <div class="run-metric-grid">
+            <article><span>Equivalent throughput</span><strong id="metric-fps">—</strong><small>higher is faster</small></article>
+            <article><span>Median GPU frame</span><strong id="metric-median">—</strong><small>lower is faster</small></article>
+            <article><span>p95 GPU frame</span><strong id="metric-p95">—</strong><small>tail latency</small></article>
+            <article><span>Source module</span><strong id="metric-bytes">—</strong><small id="metric-lines">— lines</small></article>
+          </div>
+          <div class="environment-card">
+            <div><span>Profile</span><strong id="metric-profile">—</strong></div>
+            <div><span>Timing method</span><strong id="metric-method">—</strong></div>
+            <div><span>Environment</span><strong id="metric-environment">—</strong></div>
+            <div><span>Trials / samples</span><strong id="metric-samples">—</strong></div>
+            <div><span>Measured at</span><strong id="metric-measured-at">—</strong></div>
+            <div><span>Environment key</span><code id="metric-environment-key">—</code></div>
+          </div>
+          <div class="local-result" id="local-result" hidden>
+            <span>Just measured on this device</span>
+            <strong id="local-result-value">—</strong>
+            <small id="local-result-detail">—</small>
+          </div>
+        </section>
+
+        <section class="run-section run-section-tint" id="generation" aria-labelledby="generation-title">
+          <div class="section-shell">
+            <div class="run-section-heading">
+              <div><p class="eyebrow">PROVENANCE</p><h2 id="generation-title">Generation metadata</h2></div>
+              <p>The model and the surrounding harness are separate metadata. Unknown usage and costs remain explicitly unknown.</p>
+            </div>
+            <div class="record-columns">
+              <section class="record-card">
+                <h3>Invocation</h3>
+                <dl id="invocation-record"></dl>
+              </section>
+              <section class="record-card">
+                <h3>Token usage & cost</h3>
+                <dl id="usage-record"></dl>
+                <p class="record-note" id="usage-note"></p>
+              </section>
+              <section class="record-card record-card-wide">
+                <h3>Integrity</h3>
+                <dl id="integrity-record"></dl>
+              </section>
+            </div>
+          </div>
+        </section>
+
+        <section class="run-section section-shell" id="validation" aria-labelledby="validation-title">
+          <div class="run-section-heading">
+            <div><p class="eyebrow">VALIDATION</p><h2 id="validation-title">Checks and findings</h2></div>
+            <p id="validation-summary">Runtime outcome and requirement compliance are reported separately.</p>
+          </div>
+          <div class="validation-grid">
+            <section class="validation-panel validation-checks"><div class="validation-panel-title"><span>✓</span><h3>Checks completed</h3></div><ul id="validation-checks"></ul></section>
+            <section class="validation-panel validation-requirements" id="validation-requirements-panel" hidden><div class="validation-panel-title"><span>!</span><h3>Requirements unmet</h3></div><ul id="validation-requirements"></ul></section>
+            <section class="validation-panel validation-warnings" id="validation-advisories-panel" hidden><div class="validation-panel-title"><span>i</span><h3>Advisories</h3></div><ul id="validation-warnings"></ul></section>
+          </div>
+          <section class="visual-rubric">
+            <div><h3>Blind visual rubric</h3><p>Subjective scores stay separate from performance.</p></div>
+            <div id="visual-scores"></div>
+          </section>
+        </section>
+
+        <section class="run-section run-code-section" id="prompt" aria-labelledby="prompt-title">
+          <div class="section-shell">
+            <div class="run-section-heading code-heading">
+              <div><p class="eyebrow">EXACT INPUT</p><h2 id="prompt-title">Canonical prompt</h2></div>
+              <button class="button button-quiet button-on-dark" id="run-copy-prompt" type="button">Copy prompt</button>
+            </div>
+            <div class="run-code-card">
+              <header><span>benchmark/prompt.txt</span><span id="prompt-meta">v1.0.0</span></header>
+              <pre id="run-prompt-text" tabindex="0">Loading prompt…</pre>
+            </div>
+          </div>
+        </section>
+
+        <section class="run-section section-shell source-section" id="source" aria-labelledby="source-title">
+          <div class="run-section-heading code-heading-light">
+            <div><p class="eyebrow">FIRST RESPONSE</p><h2 id="source-title">Artifact source</h2></div>
+            <div class="code-actions"><button class="button button-quiet" id="copy-run-source" type="button">Copy source</button><button class="button button-primary" id="download-run-source" type="button">Download .js</button></div>
+          </div>
+          <div class="source-file-meta"><span id="source-filename">artifact.js</span><span id="source-size">—</span><span>Read-only · first response</span></div>
+          <pre class="full-source" id="run-source" tabindex="0">Loading artifact source…</pre>
+        </section>
+
+        <nav class="run-pagination section-shell" aria-label="Adjacent results">
+          <a id="previous-run" href="./results.html"><span>← Previous run</span><strong>All results</strong></a>
+          <a id="next-run" href="./results.html"><span>Next run →</span><strong>All results</strong></a>
+        </nav>
+      </article>
+    </main>
+
+    <footer class="site-footer section-shell">
+      <div class="brand footer-brand">
+        <svg class="brand-mark" viewBox="0 0 48 32" aria-hidden="true"><circle cx="11" cy="22" r="8"></circle><circle cx="37" cy="22" r="8"></circle><path d="M11 22 22 9l6 13H11Zm11-13 15 13M22 9l-5 13m5-13 7-5 8 3-9 3"></path></svg>
+        <span>Pelican <b>SDF</b></span>
+      </div>
+      <p>Run metadata, measurements, validation findings, prompt, and unmodified source.</p>
+      <div><a href="./results.html">All results</a><span>v0.1.0</span></div>
+    </footer>
+
+    <div class="benchmark-overlay" id="benchmark-overlay" hidden aria-live="polite">
+      <div class="benchmark-box">
+        <div class="benchmark-spinner" aria-hidden="true"></div>
+        <p class="eyebrow">Local benchmark</p>
+        <strong id="benchmark-status">Warming the GPU…</strong>
+        <p id="benchmark-detail">The canvas will resume after measurement.</p>
+        <div class="benchmark-progress"><span id="benchmark-progress"></span></div>
+      </div>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <noscript><p class="noscript">Pelican SDF needs JavaScript to show the artifact and its source record.</p></noscript>
+    <script type="module" src="./src/result.js"></script>
+  </body>
+</html>

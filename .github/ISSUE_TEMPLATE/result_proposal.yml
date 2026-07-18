@@ -1,0 +1,36 @@
+name: Result proposal
+description: Propose a new model-generated benchmark artifact
+title: "[Result]: "
+labels: [result]
+body:
+  - type: markdown
+    attributes:
+      value: Read CONTRIBUTING.md first. Preserve the first response and include generation-harness metadata.
+  - type: input
+    id: model
+    attributes:
+      label: Exact model identifier
+    validations:
+      required: true
+  - type: input
+    id: provider
+    attributes:
+      label: Provider
+    validations:
+      required: true
+  - type: input
+    id: harness
+    attributes:
+      label: Generation harness and version
+      placeholder: Codex CLI 0.144.5 / codex exec
+    validations:
+      required: true
+  - type: dropdown
+    id: provenance
+    attributes:
+      label: Can you publish the untouched raw response?
+      options:
+        - "Yes"
+        - "No"
+    validations:
+      required: true

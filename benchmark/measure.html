@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'">
+    <title>Pelican SDF measurement harness</title>
+    <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+    <style>
+      html, body { margin: 0; background: #0d1117; color: #c9d1d9; font: 12px/1.5 Consolas, monospace; }
+      main { width: 960px; margin: 20px auto; }
+      canvas { display: block; width: 960px; height: 540px; background: #080b10; }
+      pre { min-height: 4em; margin: 12px 0 0; white-space: pre-wrap; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <canvas id="measurement-canvas" width="960" height="540" aria-label="Artifact measurement canvas"></canvas>
+      <pre id="measurement-status">Initializing measurement harness...</pre>
+    </main>
+    <script type="module" src="../src/measure.js"></script>
+  </body>
+</html>

@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "id": "gpt-5-6-sol-medium-run-01",
+  "model": "gpt-5.6-sol",
+  "reasoningEffort": "medium",
+  "harness": {
+    "name": "Codex CLI",
+    "version": "0.144.5",
+    "surface": "codex exec --json",
+    "sandbox": "read-only",
+    "ephemeral": true,
+    "userConfigLoaded": false,
+    "projectRulesLoaded": false
+  },
+  "prompt": {
+    "path": "benchmark/prompt.txt",
+    "bytes": 3387,
+    "sha256": "cd21d5a8bb3956d82ab5650304e7e491063eacdb27dad85be6b4a845512f5e6b"
+  },
+  "response": {
+    "path": "data/raw/gpt-5-6-sol-medium-run-01/response.txt",
+    "bytes": 14691,
+    "sha256": "bfefea5087680946ad5761c9997054f8740b5c78e300fc7ec66b4823f90cff44"
+  },
+  "usage": {
+    "inputTokens": 12635,
+    "cachedInputTokens": 8960,
+    "reasoningTokens": null,
+    "outputTokens": 8278,
+    "totalTokens": 20913
+  },
+  "billing": {
+    "mode": "subscription",
+    "apiCostUsd": null,
+    "note": "Codex CLI subscription invocation; no per-call API charge was exposed."
+  },
+  "startedAt": "2026-07-18T10:59:32.839Z",
+  "completedAt": "2026-07-18T11:03:47.740Z",
+  "durationMs": 254901,
+  "exitCode": 0,
+  "eventCount": 4,
+  "files": {
+    "events": "data/raw/gpt-5-6-sol-medium-run-01/events.jsonl",
+    "stderr": "data/raw/gpt-5-6-sol-medium-run-01/stderr.txt"
+  }
+}

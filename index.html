@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Pelican SDF is an open benchmark for model-generated interactive 3D signed-distance-field art.">
+    <meta name="theme-color" content="#f6f7f9">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'">
+    <title>Pelican SDF benchmark</title>
+    <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="./src/styles.css">
+  </head>
+  <body class="landing-page" id="top">
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <header class="site-header">
+      <a class="brand" href="#top" aria-label="Pelican SDF home">
+        <svg class="brand-mark" viewBox="0 0 48 32" aria-hidden="true">
+          <circle cx="11" cy="22" r="8"></circle>
+          <circle cx="37" cy="22" r="8"></circle>
+          <path d="M11 22 22 9l6 13H11Zm11-13 15 13M22 9l-5 13m5-13 7-5 8 3-9 3"></path>
+        </svg>
+        <span>Pelican <b>SDF</b></span>
+      </a>
+      <nav class="site-nav" aria-label="Primary navigation">
+        <a href="./results.html">Results</a>
+        <a href="#method">Method</a>
+        <a class="nav-action" href="#contribute">Add a result <span aria-hidden="true">↗</span></a>
+      </nav>
+    </header>
+
+    <main id="main">
+      <section class="landing-hero section-shell" aria-labelledby="landing-title">
+        <div class="landing-copy">
+          <p class="eyebrow"><span>BENCHMARK</span><span>SPEC v1.0.0</span></p>
+          <h1 id="landing-title">Pelican SDF benchmark</h1>
+          <p class="hero-deck">A reproducible test for model-generated WebGL2 signed-distance-field scenes. The model receives one blank canvas and must implement the renderer, scene, camera, and controls in a single response.</p>
+          <div class="hero-actions">
+            <a class="button button-primary" href="./results.html">View results <span aria-hidden="true">→</span></a>
+            <a class="button button-quiet" href="#method">Methodology</a>
+          </div>
+          <dl class="hero-facts">
+            <div><dt>Input</dt><dd><code>HTMLCanvasElement</code></dd></div>
+            <div><dt>Output</dt><dd>Self-contained ES module</dd></div>
+            <div><dt>Evaluation</dt><dd>GPU timing + visual rubric</dd></div>
+          </dl>
+        </div>
+
+        <aside class="contract-card" aria-label="Benchmark contract overview">
+          <header class="contract-topbar">
+            <div><span class="signal-dot" aria-hidden="true"></span><span>Benchmark contract</span></div>
+            <span>ARTIFACTS NOT LOADED</span>
+          </header>
+          <div class="contract-spec" role="table" aria-label="Benchmark interface">
+            <div role="row"><span role="rowheader">Host input</span><code role="cell">HTMLCanvasElement</code></div>
+            <div role="row"><span role="rowheader">Module export</span><code role="cell">createPelicanSdf(canvas)</code></div>
+            <div role="row"><span role="rowheader">Rendering</span><span role="cell">WebGL2 · SDF · ray marching</span></div>
+            <div role="row"><span role="rowheader">Required input</span><span role="cell">pointer · wheel · pinch · keyboard</span></div>
+            <div role="row"><span role="rowheader">Reference viewport</span><code role="cell">960 × 540</code></div>
+            <div role="row"><span role="rowheader">Source ceiling</span><code role="cell">32 KiB</code></div>
+          </div>
+          <pre class="contract-call" aria-label="Expected module interface"><code>const run = createPelicanSdf(canvas)
+run.start()
+run.resize(width, height, dpr)
+run.destroy()</code></pre>
+          <footer><span>Landing payload</span><strong>0 artifact modules</strong></footer>
+        </aside>
+      </section>
+
+      <section class="calibration-strip" aria-label="Benchmark constants">
+        <div><span class="calibration-index">INPUT</span><strong>1</strong><small>blank canvas</small></div>
+        <div><span class="calibration-index">LIMIT</span><strong>32 KiB</strong><small>source module</small></div>
+        <div><span class="calibration-index">VIEWPORT</span><strong>960 × 540</strong><small>reference size</small></div>
+        <div><span class="calibration-index">CAPTURE</span><strong>12 views</strong><small>inspection set</small></div>
+      </section>
+
+      <section class="method-section" id="method" aria-labelledby="method-title">
+        <div class="section-shell method-grid">
+          <div class="method-copy">
+            <p class="eyebrow">METHOD</p>
+            <h2 id="method-title">Methodology</h2>
+            <p>The host provides no scene helpers. The submitted module owns all geometry, shaders, camera state, rendering, and interaction. The canonical prompt explicitly states that frame rate will be measured.</p>
+            <ol class="method-steps">
+              <li><span>01</span><div><strong>Generate</strong><p>Fresh conversation, byte-exact prompt, first response only, no repair pass.</p></div></li>
+              <li><span>02</span><div><strong>Validate</strong><p>Compile and render checks, twelve camera views, close zoom, and required input paths.</p></div></li>
+              <li><span>03</span><div><strong>Measure</strong><p>GPU timer queries where available; synchronized wall-clock timing otherwise.</p></div></li>
+            </ol>
+            <div class="method-links">
+              <a href="./benchmark/METHODOLOGY.md">Full methodology <span aria-hidden="true">↗</span></a>
+              <a href="./benchmark/result.schema.json">Result schema <span aria-hidden="true">↗</span></a>
+            </div>
+          </div>
+          <aside class="landing-prompt-card">
+            <header><span>benchmark/prompt.txt</span><a href="./benchmark/prompt.txt">Open exact prompt ↗</a></header>
+            <div class="landing-prompt-copy">
+              <p class="eyebrow">CANONICAL INPUT</p>
+              <blockquote>Build an interactive 3D signed-distance-field scene of a pelican riding a bicycle.</blockquote>
+              <dl>
+                <div><dt>Host provides</dt><dd>HTMLCanvasElement</dd></div>
+                <div><dt>Model provides</dt><dd>Everything else</dd></div>
+                <div><dt>Interactions</dt><dd>Orbit · zoom · touch · keys</dd></div>
+                <div><dt>Disclosure</dt><dd>FPS will be measured</dd></div>
+              </dl>
+            </div>
+            <footer><span>v1.0.0</span><span>Byte-exact prompt</span></footer>
+          </aside>
+        </div>
+      </section>
+
+      <section class="landing-results-cta" aria-labelledby="results-cta-title">
+        <div class="section-shell landing-results-grid">
+          <div>
+            <p class="eyebrow">RESULTS</p>
+            <h2 id="results-cta-title">Artifacts load on demand</h2>
+          </div>
+          <div>
+            <p>The landing page imports no run data or WebGL modules. Open the results catalog to inspect artifacts, compare two runs, or access source and provenance records.</p>
+            <a class="button button-primary" href="./results.html">Open results <span aria-hidden="true">→</span></a>
+          </div>
+        </div>
+      </section>
+
+      <section class="contribute-section section-shell" id="contribute" aria-labelledby="contribute-title">
+        <div class="contribute-card">
+          <p class="eyebrow">CONTRIBUTE</p>
+          <h2 id="contribute-title">Add a benchmark result</h2>
+          <p>Run the canonical prompt, preserve the unmodified first response, record provenance and usage metadata, validate the module, and submit a pull request.</p>
+          <div class="command-line"><code>npm run new-result -- my-model-run-01</code><a href="./CONTRIBUTING.md">Guide ↗</a></div>
+          <div class="contribute-actions">
+            <a class="button button-primary" href="./CONTRIBUTING.md">Submission guide</a>
+            <a class="button button-quiet" href="./benchmark/prompt.txt">Exact benchmark prompt</a>
+          </div>
+        </div>
+        <aside class="license-note">
+          <svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="27"></circle><path d="M21 42V22h6l5 9 5-9h6v20M17 47h30"></path></svg>
+          <div><strong>MIT licensed</strong><p>Benchmark code, harness, data schema, and site are available for reuse.</p><a href="./LICENSE">LICENSE</a></div>
+        </aside>
+      </section>
+    </main>
+
+    <footer class="site-footer section-shell">
+      <div class="brand footer-brand">
+        <svg class="brand-mark" viewBox="0 0 48 32" aria-hidden="true"><circle cx="11" cy="22" r="8"></circle><circle cx="37" cy="22" r="8"></circle><path d="M11 22 22 9l6 13H11Zm11-13 15 13M22 9l-5 13m5-13 7-5 8 3-9 3"></path></svg>
+        <span>Pelican <b>SDF</b></span>
+      </div>
+      <p>Inspired by <a href="https://simonwillison.net/2024/Oct/25/pelicans-on-a-bicycle/">Simon Willison’s original pelican-on-a-bicycle challenge</a>.</p>
+      <div><a href="#top">Back to top ↑</a><span>v0.1.0</span></div>
+    </footer>
+
+    <noscript><p class="noscript">The landing page is fully readable without JavaScript. Interactive benchmark runs are available in the results catalog.</p></noscript>
+  </body>
+</html>

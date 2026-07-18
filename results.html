@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Browse, inspect, and compare model-generated interactive Pelican SDF benchmark runs.">
+    <meta name="theme-color" content="#f6f7f9">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+    <title>Results — Pelican SDF</title>
+    <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="./src/styles.css">
+  </head>
+  <body class="results-page">
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <header class="site-header">
+      <a class="brand" href="./index.html" aria-label="Pelican SDF home">
+        <svg class="brand-mark" viewBox="0 0 48 32" aria-hidden="true">
+          <circle cx="11" cy="22" r="8"></circle>
+          <circle cx="37" cy="22" r="8"></circle>
+          <path d="M11 22 22 9l6 13H11Zm11-13 15 13M22 9l-5 13m5-13 7-5 8 3-9 3"></path>
+        </svg>
+        <span>Pelican <b>SDF</b></span>
+      </a>
+      <nav class="site-nav" aria-label="Primary navigation">
+        <a href="#results">Results</a>
+        <a href="#method">Method</a>
+        <button class="nav-action" type="button" data-open-add>Add a result <span aria-hidden="true">↗</span></button>
+      </nav>
+    </header>
+
+    <main id="main">
+      <section class="hero section-shell" id="top" aria-labelledby="hero-title">
+        <div class="hero-copy">
+          <p class="eyebrow"><span>RESULTS</span><span>WEBGL2 / SDF</span></p>
+          <h1 id="hero-title">Benchmark results</h1>
+          <p class="hero-deck">Interactive first-response artifacts, stored performance measurements, validation findings, generation metadata, and source. Select any two runs for a side-by-side comparison.</p>
+          <div class="hero-actions">
+            <a class="button button-primary" href="#results">Browse runs <span aria-hidden="true">↓</span></a>
+            <a class="button button-quiet" href="#method">Methodology</a>
+          </div>
+          <dl class="hero-facts" aria-label="Benchmark summary">
+            <div><dt>Host input</dt><dd><code>HTMLCanvasElement</code></dd></div>
+            <div><dt>Submission</dt><dd>First response · no repair</dd></div>
+            <div><dt>Prompt version</dt><dd>v1.0.0</dd></div>
+          </dl>
+        </div>
+
+        <div class="viewer-card" data-viewer-card>
+          <div class="viewer-topbar">
+            <div>
+              <span class="signal-dot" aria-hidden="true"></span>
+              <span id="hero-model">Loading artifact</span>
+            </div>
+            <div class="viewer-actions">
+              <button class="icon-button" id="hero-reset" type="button" title="Reset camera" aria-label="Reset camera">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11a8 8 0 1 1 2.3 6M4 5v6h6"></path></svg>
+              </button>
+              <button class="icon-button" id="hero-pause" type="button" title="Pause preview" aria-label="Pause preview">
+                <svg class="pause-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14"></path></svg>
+              </button>
+            </div>
+          </div>
+          <div class="canvas-stage" id="hero-stage">
+            <canvas id="hero-canvas" tabindex="0" aria-label="Interactive 3D SDF result. Drag to orbit, scroll to zoom, and use arrow or plus and minus keys."></canvas>
+            <div class="canvas-grid" aria-hidden="true"></div>
+            <div class="viewer-loading" id="hero-loading" role="status"><span></span>Compiling the model’s canvas…</div>
+            <div class="canvas-error" id="hero-error" hidden>
+              <strong>Artifact did not render</strong>
+              <span></span>
+            </div>
+            <div class="live-meter" aria-label="Live preview diagnostics">
+              <span>Live</span>
+              <strong id="hero-fps">— fps</strong>
+              <small>display-capped</small>
+            </div>
+            <p class="orbit-hint"><span aria-hidden="true">↔</span> drag: orbit · wheel/pinch: zoom</p>
+          </div>
+          <div class="viewer-footer">
+            <div><span>View</span><strong id="hero-view">yaw 0.0° · pitch 0.0°</strong></div>
+            <div class="viewer-footer-actions">
+              <a class="text-button" id="hero-details" href="./result.html">Full run record <span aria-hidden="true">→</span></a>
+              <button class="text-button" id="hero-benchmark" type="button">Run local benchmark <span aria-hidden="true">→</span></button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="calibration-strip" aria-label="Dataset statistics">
+        <div><span class="calibration-index">RUNS</span><strong id="result-count">—</strong><small>published records</small></div>
+        <div><span class="calibration-index">LIMIT</span><strong>32 KiB</strong><small>source module</small></div>
+        <div><span class="calibration-index">VIEWPORT</span><strong>960 × 540</strong><small>reference size</small></div>
+        <div><span class="calibration-index">PROMPT</span><strong id="prompt-hash">cd21d5a8…</strong><small>SHA-256</small></div>
+      </section>
+
+      <section class="results-section section-shell" id="results" aria-labelledby="results-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">RUN CATALOG</p>
+            <h2 id="results-title">Published runs</h2>
+          </div>
+          <p>Raw first responses are retained. Performance values are comparable only when environment keys match; visual scores and requirement findings are reported separately.</p>
+        </div>
+
+        <div class="result-toolbar" aria-label="Result controls">
+          <label class="search-field">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"></circle><path d="m16 16 4 4"></path></svg>
+            <span class="sr-only">Search results</span>
+            <input id="result-search" type="search" placeholder="Search model or run…" autocomplete="off">
+          </label>
+          <label class="select-field">Sort
+            <select id="result-sort">
+              <option value="newest">Newest first</option>
+              <option value="fps">Measured throughput</option>
+              <option value="size">Smallest source</option>
+              <option value="model">Model name</option>
+            </select>
+          </label>
+          <p class="toolbar-note"><span class="status-mark status-unverified"></span> Seed measurements: unverified</p>
+        </div>
+
+        <div class="result-grid" id="result-grid" aria-live="polite"></div>
+        <p class="empty-state" id="empty-state" hidden>No runs match this filter.</p>
+      </section>
+
+      <section class="compare-section section-shell" id="compare" aria-labelledby="compare-title" hidden>
+        <div class="section-heading compare-heading">
+          <div>
+            <p class="eyebrow">COMPARISON</p>
+            <h2 id="compare-title">Compare two runs</h2>
+          </div>
+          <p>Orbit, zoom, and inspect both artifacts. Stored deltas appear only when their environments match.</p>
+        </div>
+
+        <div class="compare-controls">
+          <label>A<select id="compare-left-select"></select></label>
+          <button class="swap-button" id="compare-swap" type="button" aria-label="Swap comparison sides">⇄</button>
+          <label>B<select id="compare-right-select"></select></label>
+          <label class="toggle-field"><input id="sync-view" type="checkbox" checked><span></span>Sync view</label>
+          <button class="button button-dark" id="copy-compare-link" type="button">Copy link</button>
+        </div>
+
+        <div class="compare-viewers">
+          <article class="compare-pane">
+            <header><span>A</span><strong id="compare-left-label">—</strong><small id="compare-left-live">— fps live</small></header>
+            <div class="compare-canvas-wrap">
+              <canvas id="compare-left-canvas" tabindex="0" aria-label="Left comparison artifact; drag to orbit and scroll to zoom."></canvas>
+              <div class="compare-error" id="compare-left-error" hidden></div>
+            </div>
+          </article>
+          <article class="compare-pane">
+            <header><span>B</span><strong id="compare-right-label">—</strong><small id="compare-right-live">— fps live</small></header>
+            <div class="compare-canvas-wrap">
+              <canvas id="compare-right-canvas" tabindex="0" aria-label="Right comparison artifact; drag to orbit and scroll to zoom."></canvas>
+              <div class="compare-error" id="compare-right-error" hidden></div>
+            </div>
+          </article>
+        </div>
+
+        <div class="comparison-report">
+          <div class="report-heading">
+            <div><p class="eyebrow">SAME-DEVICE TEST</p><h3>Comparison metrics</h3></div>
+            <button class="button button-primary" id="benchmark-both" type="button">Benchmark A, then B</button>
+          </div>
+          <p class="report-note" id="compare-note">Run the serial local test to produce a fair same-device comparison. The previews pause while each artifact is measured alone.</p>
+          <div class="metric-table" role="table" aria-label="Comparison metrics">
+            <div class="metric-row metric-head" role="row"><span role="columnheader">Metric</span><span role="columnheader">A</span><span role="columnheader">B</span><span role="columnheader">Delta</span></div>
+            <div class="metric-row" role="row" data-metric="throughput"><span role="cell">Equivalent throughput <small>higher is better</small></span><strong role="cell">—</strong><strong role="cell">—</strong><em role="cell">—</em></div>
+            <div class="metric-row" role="row" data-metric="median"><span role="cell">Median GPU / frame <small>lower is better</small></span><strong role="cell">—</strong><strong role="cell">—</strong><em role="cell">—</em></div>
+            <div class="metric-row" role="row" data-metric="p95"><span role="cell">p95 GPU / frame <small>lower is better</small></span><strong role="cell">—</strong><strong role="cell">—</strong><em role="cell">—</em></div>
+            <div class="metric-row" role="row" data-metric="source"><span role="cell">Source size <small>lower is leaner</small></span><strong role="cell">—</strong><strong role="cell">—</strong><em role="cell">—</em></div>
+            <div class="metric-row" role="row" data-metric="harness"><span role="cell">Generation harness</span><strong role="cell">—</strong><strong role="cell">—</strong><em role="cell">metadata</em></div>
+            <div class="metric-row" role="row" data-metric="tokens"><span role="cell">Generation tokens <small>provider-reported total</small></span><strong role="cell">—</strong><strong role="cell">—</strong><em role="cell">metadata</em></div>
+            <div class="metric-row" role="row" data-metric="cost"><span role="cell">API cost <small>USD per generation trial</small></span><strong role="cell">—</strong><strong role="cell">—</strong><em role="cell">metadata</em></div>
+            <div class="metric-row" role="row" data-metric="requirements"><span role="cell">Requirements unmet <small>named findings, not an overall score</small></span><strong role="cell" data-side="A">—</strong><strong role="cell" data-side="B">—</strong><em role="cell">reported separately</em></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="method-section" id="method" aria-labelledby="method-title">
+        <div class="section-shell method-grid">
+          <div class="method-copy">
+            <p class="eyebrow">METHOD</p>
+            <h2 id="method-title">Benchmark methodology</h2>
+            <p>The host supplies a blank canvas and no scene helpers. The submitted module owns geometry, shaders, camera state, rendering, and interaction. The canonical prompt explicitly states that frame rate will be measured.</p>
+            <ol class="method-steps">
+              <li><span>01</span><div><strong>Generate</strong><p>Fresh conversation, byte-exact prompt, first response only, no repair pass.</p></div></li>
+              <li><span>02</span><div><strong>Validate</strong><p>Compile and render checks, twelve camera views, close zoom, and required input paths.</p></div></li>
+              <li><span>03</span><div><strong>Measure</strong><p>GPU timer queries where available; synchronized wall-clock timing otherwise.</p></div></li>
+            </ol>
+            <div class="method-links">
+              <a href="./benchmark/METHODOLOGY.md">Full methodology <span aria-hidden="true">↗</span></a>
+              <a href="./benchmark/result.schema.json">Result schema <span aria-hidden="true">↗</span></a>
+            </div>
+          </div>
+          <div class="prompt-card">
+            <div class="prompt-topbar"><span>benchmark/prompt.txt</span><button id="copy-prompt" type="button">Copy exact prompt</button></div>
+            <pre id="prompt-text" tabindex="0">Loading the canonical prompt…</pre>
+            <div class="prompt-footer"><span>v1.0.0</span><span>SHA-256 <code>cd21d5a8bb39…</code></span></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="contribute-section section-shell" id="contribute" aria-labelledby="contribute-title">
+        <div class="contribute-card">
+          <p class="eyebrow">CONTRIBUTE</p>
+          <h2 id="contribute-title">Add a benchmark result</h2>
+          <p>Run the canonical prompt, preserve the unmodified first response, record provenance and usage metadata, validate the module, and submit a pull request.</p>
+          <div class="command-line"><code>npm run new-result -- my-model-run-01</code><button type="button" data-copy-command aria-label="Copy scaffold command">Copy</button></div>
+          <div class="contribute-actions">
+            <button class="button button-primary" type="button" data-open-add>Submission guide</button>
+            <a class="button button-quiet" href="./CONTRIBUTING.md">Read CONTRIBUTING.md</a>
+          </div>
+        </div>
+        <aside class="license-note">
+          <svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="27"></circle><path d="M21 42V22h6l5 9 5-9h6v20M17 47h30"></path></svg>
+          <div><strong>MIT licensed</strong><p>Benchmark code, harness, data schema, and site are available for reuse.</p><a href="./LICENSE">LICENSE</a></div>
+        </aside>
+      </section>
+    </main>
+
+    <footer class="site-footer section-shell">
+      <div class="brand footer-brand">
+        <svg class="brand-mark" viewBox="0 0 48 32" aria-hidden="true"><circle cx="11" cy="22" r="8"></circle><circle cx="37" cy="22" r="8"></circle><path d="M11 22 22 9l6 13H11Zm11-13 15 13M22 9l-5 13m5-13 7-5 8 3-9 3"></path></svg>
+        <span>Pelican <b>SDF</b></span>
+      </div>
+      <p>Inspired by <a href="https://simonwillison.net/2024/Oct/25/pelicans-on-a-bicycle/">Simon Willison’s original pelican-on-a-bicycle challenge</a>.</p>
+      <div><a href="#top">Back to top ↑</a><span>v0.1.0</span></div>
+    </footer>
+
+    <div class="compare-tray" id="compare-tray" hidden>
+      <div class="tray-selection" id="tray-selection"></div>
+      <button class="button button-primary" id="open-compare" type="button" disabled>Compare selected <span aria-hidden="true">→</span></button>
+      <button class="tray-clear" id="clear-compare" type="button">Clear</button>
+    </div>
+
+    <dialog class="modal add-modal" id="add-dialog">
+      <form method="dialog"><button class="modal-close" aria-label="Close submission guide">×</button></form>
+      <p class="eyebrow">Submit a run</p>
+      <h2>Add a benchmark result</h2>
+      <p>Use the exact prompt in a fresh conversation. Save the untouched response and record the model, provider, generation harness, decoding settings, date, tokens, and cost—even when the module does not render.</p>
+      <ol class="submit-list">
+        <li><span>1</span><div><strong>Scaffold</strong><code>npm run new-result -- your-run-id</code></div></li>
+        <li><span>2</span><div><strong>Add the raw module</strong><code>data/artifacts/your-run-id.js</code></div></li>
+        <li><span>3</span><div><strong>Validate</strong><code>npm test</code></div></li>
+        <li><span>4</span><div><strong>Open a pull request</strong><p>Include provenance; never invent missing values.</p></div></li>
+      </ol>
+      <div class="modal-actions"><button class="button button-primary" id="modal-copy-prompt" type="button">Copy exact prompt</button><a class="button button-quiet" href="./CONTRIBUTING.md">Full guide</a></div>
+    </dialog>
+
+    <div class="benchmark-overlay" id="benchmark-overlay" hidden aria-live="polite">
+      <div class="benchmark-box">
+        <div class="benchmark-spinner" aria-hidden="true"></div>
+        <p class="eyebrow">Local benchmark</p>
+        <strong id="benchmark-status">Warming the GPU…</strong>
+        <p id="benchmark-detail">The canvas will resume when measurement is complete.</p>
+        <div class="benchmark-progress"><span id="benchmark-progress"></span></div>
+      </div>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <noscript><p class="noscript">Pelican SDF needs JavaScript to run the interactive WebGL artifacts.</p></noscript>
+    <script type="module" src="./src/app.js"></script>
+  </body>
+</html>
