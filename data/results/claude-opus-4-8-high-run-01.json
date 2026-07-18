@@ -1,0 +1,79 @@
+{
+  "id": "claude-opus-4-8-high-run-01",
+  "title": "Claude Opus 4.8 / high effort",
+  "model": "claude-opus-4-8",
+  "provider": "Anthropic via Claude Code CLI",
+  "status": "unverified",
+  "track": "one-shot",
+  "promptVersion": "1.0.0",
+  "promptSha256": "cd21d5a8bb3956d82ab5650304e7e491063eacdb27dad85be6b4a845512f5e6b",
+  "artifactSha256": "2200ac0170b60b0627de0d513a133fe3a10d90d95b01036a264b74f1d41e0e61",
+  "createdAt": "2026-07-18",
+  "artifact": "../artifacts/claude-opus-4-8-high-run-01.js",
+  "description": "A textured pelican with striated feathers and a grooved pouch beak leans forward on a red bicycle with many-spoked wheels and treaded tires, mirrored faintly in the floor.",
+  "accent": "#b0762f",
+  "generationHarness": {
+    "name": "Claude Code CLI",
+    "version": "2.1.214 (Claude Code)",
+    "surface": "claude -p --tools \"\" --setting-sources \"\" --strict-mcp-config --system-prompt <minimal> --output-format json (prompt piped byte-exact via stdin)",
+    "sandbox": "n/a (no tools available)",
+    "notes": "Fresh non-interactive invocation with a minimal replacement system prompt; no tools, skills, hooks, MCP servers, CLAUDE.md, or memory in context (verified 253-token bare context probe)."
+  },
+  "generationUsage": {
+    "inputTokens": 1,
+    "cachedInputTokens": 0,
+    "reasoningTokens": null,
+    "outputTokens": 33137,
+    "totalTokens": 34481,
+    "apiCostUsd": 0.843246,
+    "billingMode": "subscription",
+    "source": "data/raw/claude-opus-4-8-high-run-01/events.jsonl",
+    "notes": "Claude subscription invocation; total_cost_usd is the CLI's pricing estimate, not a separate API charge."
+  },
+  "validation": {
+    "state": "passed",
+    "checks": [
+      "JavaScript syntax",
+      "lifecycle contract",
+      "WebGL2 compilation",
+      "initial composition",
+      "pointer orbit",
+      "wheel zoom",
+      "two-finger pinch",
+      "keyboard camera",
+      "multi-angle camera response",
+      "close-range inspection",
+      "three-trial GPU timing"
+    ],
+    "unmetRequirements": [],
+    "warnings": []
+  },
+  "metrics": {
+    "sourceBytes": 16544,
+    "initMs": 10135.8,
+    "gpuMsMedian": 3.1662,
+    "gpuMsP95": 3.6342,
+    "throughputFps": 315.832,
+    "timingMethod": "gpu-query",
+    "environment": "AMD Radeon(TM) Graphics / ANGLE D3D11; Headless Chrome 150; Windows; 960x540; 3 serial trials",
+    "environmentKey": "amd-15bf-angle-d3d11|headless-chrome-150|windows|960x540|pelican-canvas-v1",
+    "profile": "pelican-canvas-960x540-v1",
+    "sampleCount": 36,
+    "trials": 3,
+    "measuredAt": "2026-07-18T12:50:21.680Z"
+  },
+  "visual": {
+    "readability": null,
+    "completeness": null,
+    "coherence": null,
+    "craft": null,
+    "inspectability": null,
+    "reviewers": 0
+  },
+  "provenance": {
+    "generatorKind": "model-eval",
+    "method": "Fresh one-shot Claude Code CLI invocation; text-only with tools and skills disabled; added trailing LF",
+    "rawResponse": "../raw/claude-opus-4-8-high-run-01/response.txt",
+    "decoding": "reasoning effort: high; other decoding settings not exposed"
+  }
+}

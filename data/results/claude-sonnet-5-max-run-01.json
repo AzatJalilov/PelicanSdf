@@ -1,0 +1,76 @@
+{
+  "id": "claude-sonnet-5-max-run-01",
+  "title": "Claude Sonnet 5 / max effort",
+  "model": "claude-sonnet-5",
+  "provider": "Anthropic via Claude Code CLI",
+  "status": "unverified",
+  "track": "one-shot",
+  "promptVersion": "1.0.0",
+  "promptSha256": "cd21d5a8bb3956d82ab5650304e7e491063eacdb27dad85be6b4a845512f5e6b",
+  "artifactSha256": "2ba437d4530f6366f184b7d886b689bf2e0d34f164ef4002d092241206663c8e",
+  "createdAt": "2026-07-18",
+  "artifact": "../artifacts/claude-sonnet-5-max-run-01.js",
+  "description": "Does not render: the fragment shader names a variable 'flat', a GLSL ES 3.0 reserved word, so WebGL2 shader compilation fails and setup throws.",
+  "accent": "#3f7f5f",
+  "generationHarness": {
+    "name": "Claude Code CLI",
+    "version": "2.1.214 (Claude Code)",
+    "surface": "claude -p --tools \"\" --setting-sources \"\" --strict-mcp-config --system-prompt <minimal> --output-format json (prompt piped byte-exact via stdin); CLAUDE_CODE_MAX_OUTPUT_TOKENS=128000",
+    "sandbox": "n/a (no tools available)",
+    "notes": "Fresh non-interactive invocation with a minimal replacement system prompt; no tools, skills, hooks, MCP servers, CLAUDE.md, or memory in context (verified 253-token bare context probe)."
+  },
+  "generationUsage": {
+    "inputTokens": 5,
+    "cachedInputTokens": 3177,
+    "reasoningTokens": null,
+    "outputTokens": 371987,
+    "totalTokens": 376850,
+    "apiCostUsd": 5.5922401,
+    "billingMode": "subscription",
+    "source": "data/raw/claude-sonnet-5-max-run-01/events.jsonl",
+    "notes": "Claude subscription invocation; total_cost_usd is the CLI's pricing estimate, not a separate API charge."
+  },
+  "validation": {
+    "state": "failed",
+    "checks": [
+      "JavaScript syntax"
+    ],
+    "unmetRequirements": [
+      {
+        "requirement": "WebGL2 compilation",
+        "evidence": "Measurement harness aborted with: Shader compile error: ERROR: 0:41: 'flat' : syntax error — the fragment shader uses the GLSL ES 3.0 reserved word 'flat' as an identifier, so createPelicanSdf throws during setup."
+      }
+    ],
+    "warnings": [
+      "Setup throws: fragment shader uses the GLSL ES 3.0 reserved word 'flat' as an identifier (ERROR: 0:41: 'flat' : syntax error); the artifact never renders, so timing and screenshots are unavailable."
+    ]
+  },
+  "metrics": {
+    "sourceBytes": 18801,
+    "initMs": null,
+    "gpuMsMedian": null,
+    "gpuMsP95": null,
+    "throughputFps": null,
+    "timingMethod": null,
+    "environment": null,
+    "environmentKey": null,
+    "profile": "pelican-canvas-960x540-v1",
+    "sampleCount": null,
+    "trials": null,
+    "measuredAt": null
+  },
+  "visual": {
+    "readability": null,
+    "completeness": null,
+    "coherence": null,
+    "craft": null,
+    "inspectability": null,
+    "reviewers": 0
+  },
+  "provenance": {
+    "generatorKind": "model-eval",
+    "method": "Fresh one-shot Claude Code CLI invocation; text-only with tools and skills disabled; added trailing LF",
+    "rawResponse": "../raw/claude-sonnet-5-max-run-01/response.txt",
+    "decoding": "reasoning effort: max; other decoding settings not exposed"
+  }
+}

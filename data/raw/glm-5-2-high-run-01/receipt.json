@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "id": "glm-5-2-high-run-01",
+  "model": "z-ai/glm-5.2",
+  "provider": "OpenRouter via pi SDK",
+  "accent": "#2e7d4f",
+  "modelDisplayName": "GLM 5.2 (non-CN OpenRouter)",
+  "reasoningEffort": "high",
+  "maxOutputTokens": 32768,
+  "harness": {
+    "name": "pi SDK",
+    "version": "0.80.10",
+    "surface": "pi-coding-agent createAgentSession (in-memory, no tools)",
+    "sandbox": "n/a",
+    "ephemeral": true,
+    "userConfigLoaded": false,
+    "projectRulesLoaded": false
+  },
+  "prompt": {
+    "path": "benchmark/prompt.txt",
+    "bytes": 3387,
+    "sha256": "cd21d5a8bb3956d82ab5650304e7e491063eacdb27dad85be6b4a845512f5e6b"
+  },
+  "response": {
+    "path": "data/raw/glm-5-2-high-run-01/response.txt",
+    "bytes": 12582,
+    "sha256": "d39ef4b174ffcc8e7c0732b68e30db6e6580cd71f8391016e6b307affcf72dc9",
+    "source": "text"
+  },
+  "usage": {
+    "inputTokens": 26,
+    "cachedInputTokens": 704,
+    "reasoningTokens": null,
+    "outputTokens": 17585,
+    "totalTokens": 18315
+  },
+  "billing": {
+    "mode": "openrouter",
+    "apiCostUsd": 0.05167723104,
+    "note": "OpenRouter invocation via pi SDK; cost computed by pi from provider pricing (per-million-token rates)."
+  },
+  "startedAt": "2026-07-18T12:22:40.496Z",
+  "completedAt": "2026-07-18T12:27:08.974Z",
+  "durationMs": 268478,
+  "exitCode": 0,
+  "error": null,
+  "eventCount": 5976,
+  "files": {
+    "events": "data/raw/glm-5-2-high-run-01/events.jsonl",
+    "stderr": "data/raw/glm-5-2-high-run-01/stderr.txt"
+  },
+  "thinking": {
+    "path": "data/raw/glm-5-2-high-run-01/thinking.txt",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+}

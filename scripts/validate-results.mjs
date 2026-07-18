@@ -137,7 +137,8 @@ async function validateResult(entry, ids) {
   const exportMatches = sourceText.match(/export\s+function\s+createPelicanSdf\s*\(/g) || [];
   if (exportMatches.length !== 1) fail(scope, "artifact must export exactly one createPelicanSdf function declaration");
   for (const method of ["render", "setView", "getView", "dispose"]) {
-    if (!new RegExp(`\\b${method}\\s*\\(`).test(sourceText)) fail(scope, `artifact does not appear to implement ${method}()`);
+    // Method declarations, object-literal properties, and const/assignment arrow styles all satisfy the contract.
+    if (!new RegExp(`\\b${method}\\s*[(:=]`).test(sourceText)) fail(scope, `artifact does not appear to implement ${method}()`);
   }
   if (!/getContext\s*\(\s*["']webgl2["']/.test(sourceText)) fail(scope, "artifact does not request a WebGL2 context");
   for (const [pattern, name] of bannedArtifactPatterns) {

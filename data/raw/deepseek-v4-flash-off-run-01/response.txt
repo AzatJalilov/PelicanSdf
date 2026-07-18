@@ -1,0 +1,395 @@
+```javascript
+export function createPelicanSdf(canvas) {
+  const gl = canvas.getContext('webgl2', { antialias: false });
+  if (!gl) throw new Error('WebGL2 not available');
+
+  // --- Vertex shader (fullscreen quad) ---
+  const vsSrc = `#version 300 es
+    out vec2 uv;
+    const vec2[4] verts = vec2[4](vec2(-1,-1), vec2(1,-1), vec2(-1,1), vec2(1,1));
+    void main() {
+      gl_Position = vec4(verts[gl_VertexID], 0, 1);
+      uv = verts[gl_VertexID] * 0.5 + 0.5;
+    }`;
+
+  // --- Fragment shader (ray march SDF) ---
+  const fsSrc = `#version 300 es
+    precision highp float;
+    in vec2 uv;
+    out vec4 outCol;
+    uniform float uTime;
+    uniform vec3 uCamPos;
+    uniform mat3 uCamMat;
+
+    // --- Primitives ---
+    float sdBox(vec3 p, vec3 s) {
+      vec3 q = abs(p) - s;
+      return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0);
+    }
+    float sdSphere(vec3 p, float r) { return length(p) - r; }
+    float sdCylY(vec3 p, float r, float h) {
+      vec2 d = abs(vec2(length(p.xz), p.y)) - vec2(r, h);
+      return min(max(d.x, d.y), 0.0) + length(max(d, 0.0));
+    }
+    float sdTorus(vec3 p, vec2 t) {
+      vec2 q = vec2(length(p.xz) - t.x, p.y);
+      return length(q) - t.y;
+    }
+    float sdCapsule(vec3 p, vec3 a, vec3 b, float r) {
+      vec3 pa = p - a, ba = b - a;
+      float t = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
+      return length(pa - ba * t) - r;
+    }
+
+    // --- Operations ---
+    float opU(float a, float b) { return min(a, b); }
+    float opS(float a, float b) { return max(-b, a); }
+    float opI(float a, float b) { return max(a, b); }
+
+    // --- Scene SDF ---
+    float map(vec3 p) {
+      float d = 1e9;
+      // Ground plane
+      d = opU(d, p.y + 0.5);
+
+      // Bicycle frame constants
+      vec3 wc = vec3(0, -0.25, 0.7);  // rear wheel center
+      vec3 wc2 = vec3(0, -0.25, -0.7); // front wheel center
+      float wr = 0.45, wt = 0.06;
+      float spokes = 0.005;
+
+      // Rear wheel tire
+      d = opU(d, sdTorus(p - wc, vec2(wr, wt)));
+      // Front wheel tire
+      d = opU(d, sdTorus(p - wc2, vec2(wr, wt)));
+
+      // Spokes (8 per wheel)
+      for (int i = 0; i < 8; i++) {
+        float a = float(i) * 3.14159 / 4.0;
+        vec3 dir = vec3(sin(a), cos(a), 0.0);
+        vec3 sp = dir * wr;
+        d = opU(d, sdCapsule(p - wc, vec3(0), sp, spokes));
+        d = opU(d, sdCapsule(p - wc2, vec3(0), sp, spokes));
+      }
+
+      // Frame tubes (capsules)
+      // Seat tube (center to seat)
+      vec3 stA = vec3(0, -0.1, 0.0);
+      vec3 stB = vec3(0, 0.35, 0.0);
+      d = opU(d, sdCapsule(p, stA, stB, 0.04));
+      // Top tube (seat to head)
+      vec3 ttB = vec3(0, 0.3, -0.5);
+      d = opU(d, sdCapsule(p, stB, ttB, 0.04));
+      // Down tube (head to bottom bracket)
+      vec3 dtB = vec3(0, -0.1, -0.45);
+      d = opU(d, sdCapsule(p, vec3(0, -0.1, 0.0), dtB, 0.04));
+      // Chain stay (bottom bracket to rear hub)
+      d = opU(d, sdCapsule(p, vec3(0, -0.1, 0.0), wc + vec3(0,0.05,0), 0.03));
+      // Seat stay (seat to rear hub)
+      d = opU(d, sdCapsule(p, stA, wc + vec3(0,0.05,0), 0.03));
+      // Fork
+      d = opU(d, sdCapsule(p, vec3(0,0.3,-0.5), wc2 + vec3(0,0.05,0), 0.04));
+      // Handlebar
+      vec3 hb = vec3(0, 0.4, -0.55);
+      d = opU(d, sdCapsule(p, hb, hb + vec3(0.15,0,0), 0.03));
+      d = opU(d, sdCapsule(p, hb, hb + vec3(-0.15,0,0), 0.03));
+      // Seat
+      d = opU(d, sdBox(p - vec3(0, 0.38, 0.05), vec3(0.12, 0.03, 0.08)));
+      // Pedal crank
+      d = opU(d, sdCylY(p - vec3(0, -0.1, 0.0), 0.025, 0.15));
+      // Pedals
+      float pa = uTime * 3.0;
+      vec3 pdl = vec3(0.2*cos(pa), -0.1 + 0.2*sin(pa), 0.0);
+      d = opU(d, sdBox(p - pdl, vec3(0.06, 0.02, 0.04)));
+      pdl = vec3(-0.2*cos(pa), -0.1 - 0.2*sin(pa), 0.0);
+      d = opU(d, sdBox(p - pdl, vec3(0.06, 0.02, 0.04)));
+
+      // --- Pelican body ---
+      // Torso (ellipsoid stretch)
+      vec3 q = p - vec3(0, 0.45, 0.05);
+      vec3 sc = vec3(0.18, 0.22, 0.15);
+      d = opU(d, sdBox(q, sc) - 0.02);
+
+      // Head
+      vec3 hd = p - vec3(0, 0.72, -0.02);
+      d = opU(d, sdSphere(hd, 0.09));
+
+      // Beak (upper)
+      vec3 bk = p - vec3(0, 0.68, -0.15);
+      d = opU(d, sdBox(bk, vec3(0.02, 0.015, 0.1)));
+      // Beak lower
+      vec3 bk2 = p - vec3(0, 0.65, -0.15);
+      d = opU(d, sdBox(bk2, vec3(0.02, 0.01, 0.08)));
+      // Throat pouch (sacc)
+      vec3 th = p - vec3(0, 0.6, -0.1);
+      d = opU(d, sdSphere(th, 0.06) - 0.02);
+
+      // Eye
+      vec3 ey = p - vec3(0.05, 0.735, -0.04);
+      d = opU(d, sdSphere(ey, 0.025));
+
+      // Wing left
+      vec3 wl = p - vec3(0.2, 0.5, 0.03);
+      d = opU(d, sdBox(wl, vec3(0.12, 0.04, 0.06)));
+      // Wing right
+      vec3 wr2 = p - vec3(-0.2, 0.5, 0.03);
+      d = opU(d, sdBox(wr2, vec3(0.12, 0.04, 0.06)));
+
+      // Legs (to pedals)
+      vec3 leg1 = p - vec3(0.08, 0.25, 0.0);
+      d = opU(d, sdCapsule(leg1, vec3(0), vec3(0,-0.15,0), 0.025));
+      vec3 leg2 = p - vec3(-0.08, 0.25, 0.0);
+      d = opU(d, sdCapsule(leg2, vec3(0), vec3(0,-0.15,0), 0.025));
+
+      return d;
+    }
+
+    // --- Normal ---
+    vec3 norm(vec3 p) {
+      vec2 e = vec2(0.001, 0);
+      return normalize(vec3(
+        map(p + e.xyy) - map(p - e.xyy),
+        map(p + e.yxy) - map(p - e.yxy),
+        map(p + e.yyx) - map(p - e.yyx)
+      ));
+    }
+
+    // --- Ray march ---
+    void main() {
+      vec3 ro = uCamPos;
+      vec3 rd = normalize(uCamMat * vec3(uv * 2.0 - 1.0, -1.0));
+
+      float t = 0.0;
+      bool hit = false;
+      for (int i = 0; i < 120; i++) {
+        vec3 p = ro + rd * t;
+        float d = map(p);
+        if (d < 0.001) { hit = true; break; }
+        if (t > 20.0) break;
+        t += d;
+      }
+
+      vec3 col = vec3(0.4, 0.6, 0.9); // sky
+      if (hit) {
+        vec3 p = ro + rd * t;
+        vec3 n = norm(p);
+        vec3 lp = vec3(5, 8, 5);
+        vec3 ld = normalize(lp - p);
+        float diff = max(dot(n, ld), 0.0);
+        float amb = 0.3 + 0.5 * max(n.y, 0.0);
+        vec3 albedo = vec3(0.8, 0.3, 0.1);
+        // Color by position
+        if (p.y < -0.4) albedo = vec3(0.3, 0.3, 0.3);
+        else if (abs(p.z) > 0.45) albedo = vec3(0.2, 0.2, 0.2);
+        else if (p.y > 0.65 && p.z < -0.05) albedo = vec3(1.0, 0.5, 0.1); // beak
+        else if (p.y > 0.7) albedo = vec3(1.0, 1.0, 1.0); // head
+        else albedo = vec3(0.9, 0.7, 0.5); // body
+        col = albedo * (diff * 0.8 + amb * 0.4);
+        // Specular
+        vec3 v = normalize(ro - p);
+        vec3 h = normalize(ld + v);
+        float spec = pow(max(dot(n, h), 0.0), 32.0);
+        col += vec3(1) * spec * 0.3;
+      }
+
+      // Fog
+      col = mix(col, vec3(0.4, 0.6, 0.9), 1.0 - exp(-t * 0.05));
+      outCol = vec4(col, 1.0);
+    }`;
+
+  const vs = gl.createShader(gl.VERTEX_SHADER);
+  gl.shaderSource(vs, vsSrc);
+  gl.compileShader(vs);
+  if (!gl.getShaderParameter(vs, gl.COMPILE_STATUS)) {
+    const info = gl.getShaderInfoLog(vs);
+    gl.deleteShader(vs);
+    throw new Error('VS compile error: ' + info);
+  }
+
+  const fs = gl.createShader(gl.FRAGMENT_SHADER);
+  gl.shaderSource(fs, fsSrc);
+  gl.compileShader(fs);
+  if (!gl.getShaderParameter(fs, gl.COMPILE_STATUS)) {
+    const info = gl.getShaderInfoLog(fs);
+    gl.deleteShader(vs);
+    gl.deleteShader(fs);
+    throw new Error('FS compile error: ' + info);
+  }
+
+  const prog = gl.createProgram();
+  gl.attachShader(prog, vs);
+  gl.attachShader(prog, fs);
+  gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+    const info = gl.getProgramInfoLog(prog);
+    gl.deleteShader(vs);
+    gl.deleteShader(fs);
+    gl.deleteProgram(prog);
+    throw new Error('Link error: ' + info);
+  }
+
+  gl.useProgram(prog);
+
+  const uTimeLoc = gl.getUniformLocation(prog, 'uTime');
+  const uCamPosLoc = gl.getUniformLocation(prog, 'uCamPos');
+  const uCamMatLoc = gl.getUniformLocation(prog, 'uCamMat');
+
+  // Camera state
+  let yaw = 0.8;
+  let pitch = 0.3;
+  let distance = 2.2;
+  const center = vec3(0, 0.3, 0);
+
+  function vec3(x, y, z) { return [x, y, z]; }
+
+  function cameraMatrix(yaw, pitch) {
+    const cy = Math.cos(yaw), sy = Math.sin(yaw);
+    const cp = Math.cos(pitch), sp = Math.sin(pitch);
+    // Right, Up, Forward (in view space)
+    const forward = [-cy * cp, sp, -sy * cp];
+    const right = [-sy, 0, cy];
+    const up = [cy * sp, cp, sy * sp];
+    return [
+      right[0], right[1], right[2],
+      up[0], up[1], up[2],
+      forward[0], forward[1], forward[2]
+    ];
+  }
+
+  function updateCamera() {
+    const mat = cameraMatrix(yaw, pitch);
+    gl.uniformMatrix3fv(uCamMatLoc, false, mat);
+    const pos = [
+      center[0] + mat[6] * distance,
+      center[1] + mat[7] * distance,
+      center[2] + mat[8] * distance
+    ];
+    gl.uniform3fv(uCamPosLoc, pos);
+  }
+
+  // VAO (dummy)
+  const vao = gl.createVertexArray();
+  gl.bindVertexArray(vao);
+
+  // Event handlers
+  let isDown = false, lastX = 0, lastY = 0;
+  let pinchDist = 0;
+
+  function onPointerDown(e) {
+    canvas.setPointerCapture(e.pointerId);
+    isDown = true;
+    lastX = e.clientX;
+    lastY = e.clientY;
+    if (e.touches && e.touches.length === 2) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      pinchDist = Math.sqrt(dx*dx + dy*dy);
+    }
+  }
+
+  function onPointerMove(e) {
+    if (!isDown) return;
+    e.preventDefault();
+    if (e.touches && e.touches.length === 2) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const nd = Math.sqrt(dx*dx + dy*dy);
+      if (pinchDist > 0) {
+        distance *= pinchDist / nd;
+        distance = Math.max(0.5, Math.min(8, distance));
+      }
+      pinchDist = nd;
+    } else {
+      const dx = e.clientX - lastX;
+      const dy = e.clientY - lastY;
+      yaw += dx * 0.01;
+      pitch += dy * 0.01;
+      pitch = Math.max(-1.3, Math.min(1.3, pitch));
+      lastX = e.clientX;
+      lastY = e.clientY;
+    }
+    updateCamera();
+  }
+
+  function onPointerUp(e) {
+    isDown = false;
+    canvas.releasePointerCapture(e.pointerId);
+  }
+
+  function onWheel(e) {
+    e.preventDefault();
+    distance *= 1 + e.deltaY * 0.001;
+    distance = Math.max(0.5, Math.min(8, distance));
+    updateCamera();
+  }
+
+  function onKey(e) {
+    if (e.key === 'ArrowLeft') { yaw -= 0.08; e.preventDefault(); }
+    else if (e.key === 'ArrowRight') { yaw += 0.08; e.preventDefault(); }
+    else if (e.key === 'ArrowUp') { pitch += 0.08; e.preventDefault(); }
+    else if (e.key === 'ArrowDown') { pitch -= 0.08; e.preventDefault(); }
+    else if (e.key === '+' || e.key === '=') { distance *= 0.9; e.preventDefault(); }
+    else if (e.key === '-') { distance *= 1.1; e.preventDefault(); }
+    pitch = Math.max(-1.3, Math.min(1.3, pitch));
+    distance = Math.max(0.5, Math.min(8, distance));
+    updateCamera();
+  }
+
+  canvas.addEventListener('pointerdown', onPointerDown);
+  canvas.addEventListener('pointermove', onPointerMove);
+  canvas.addEventListener('pointerup', onPointerUp);
+  canvas.addEventListener('pointercancel', onPointerUp);
+  canvas.addEventListener('wheel', onWheel, { passive: false });
+  canvas.addEventListener('keydown', onKey);
+  canvas.tabIndex = 0;
+  canvas.style.outline = 'none';
+
+  // Prevent context menu
+  canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+  // Initial camera
+  updateCamera();
+
+  // Handle context loss
+  const lostHandler = (e) => { e.preventDefault(); };
+  canvas.addEventListener('webglcontextlost', lostHandler);
+
+  // Resize viewport
+  function resize() {
+    const w = canvas.width;
+    const h = canvas.height;
+    gl.viewport(0, 0, w, h);
+  }
+  resize();
+
+  // Exported object
+  return {
+    render(timeSeconds) {
+      resize();
+      gl.uniform1f(uTimeLoc, timeSeconds);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    },
+    setView(y, p, d) {
+      yaw = y;
+      pitch = p;
+      distance = d;
+      updateCamera();
+    },
+    getView() { return { yaw, pitch, distance }; },
+    dispose() {
+      canvas.removeEventListener('pointerdown', onPointerDown);
+      canvas.removeEventListener('pointermove', onPointerMove);
+      canvas.removeEventListener('pointerup', onPointerUp);
+      canvas.removeEventListener('pointercancel', onPointerUp);
+      canvas.removeEventListener('wheel', onWheel);
+      canvas.removeEventListener('keydown', onKey);
+      canvas.removeEventListener('contextmenu', e => e.preventDefault());
+      canvas.removeEventListener('webglcontextlost', lostHandler);
+      gl.deleteShader(vs);
+      gl.deleteShader(fs);
+      gl.deleteProgram(prog);
+      gl.deleteVertexArray(vao);
+    }
+  };
+}
+```

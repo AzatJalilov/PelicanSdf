@@ -18,8 +18,10 @@ new version of the protocol. Please follow the [Code of Conduct](CODE_OF_CONDUCT
    version, surface, sandbox, and relevant system context when known.
 5. Save the provider's token-usage receipt and per-invocation API cost. Record
    input, cached-input, reasoning, output, and total tokens when exposed. State
-   whether billing was API-metered, subscription, or local. Subscription access
-   with no per-call price is `null`, not `$0`.
+   whether billing was API-metered, subscription, or local. For subscription
+   runs, an API-equivalent estimate may be recorded only from captured token
+   counts and a cited published price; label it as an estimate. Otherwise the
+   unavailable per-call price is `null`, not `$0`.
 6. Never guess missing metadata or benchmark measurements. Use `null` and explain
    why usage or cost was unavailable.
 
@@ -35,6 +37,7 @@ exact model slug, and an explicit supported reasoning effort:
 npm run eval:run -- provider-model-effort-run-01 gpt-model-slug medium
 npm run eval:ingest -- provider-model-effort-run-01
 npm run eval:measure -- provider-model-effort-run-01
+npm run thumbnails -- provider-model-effort-run-01
 ```
 
 The runner reads `benchmark/prompt.txt` as bytes, starts a fresh ephemeral
@@ -48,6 +51,17 @@ Markdown-fence, CRLF, or trailing-LF normalization. It never repairs generated
 code. Measurement writes three-trial metrics and inspection images to
 `artifacts/evals/<id>/`; review those outputs and transfer the accepted metrics
 and validation findings into the result record before publishing it.
+
+For GPT-5.6 Sol, the runner captures Codex JSON token usage and records an
+API-equivalent standard-price estimate from OpenAI's published uncached-input,
+cached-input, and output rates. Recalculate an existing receipt and result with:
+
+```bash
+npm run eval:price -- gpt-5-6-sol-medium-run-01
+```
+
+This estimate is not a separate charge to the subscription. The receipt keeps
+the price source and rates used for the calculation.
 
 For a different generation harness, create the draft manually:
 
@@ -97,7 +111,8 @@ reference-machine process was completed.
 - [ ] Raw first response is preserved; normalization is documented.
 - [ ] Exact model and provider are recorded without marketing aliases.
 - [ ] Generation harness name, version, surface, and context are recorded.
-- [ ] Token usage, billing mode, API cost, and receipt/source are recorded or explicitly `null` with a reason.
+- [ ] Token usage, billing mode, actual API cost or clearly labeled API-equivalent estimate, and receipt/source are recorded or explicitly `null` with a reason.
+- [ ] Every renderable published result has an SDF-generated thumbnail.
 - [ ] Unknown values are `null`.
 - [ ] Artifact stays within 32,768 UTF-8 bytes and uses no external resources.
 - [ ] `npm test` passes.

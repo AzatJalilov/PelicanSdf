@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "id": "gemini-3-1-pro-low-run-01",
+  "model": "google/gemini-3.1-pro-preview",
+  "provider": "OpenRouter via pi SDK",
+  "accent": "#0b6e75",
+  "modelDisplayName": "Google: Gemini 3.1 Pro Preview",
+  "reasoningEffort": "low",
+  "maxOutputTokens": 131072,
+  "harness": {
+    "name": "pi SDK",
+    "version": "0.80.10",
+    "surface": "pi-coding-agent createAgentSession (in-memory, no tools)",
+    "sandbox": "n/a",
+    "ephemeral": true,
+    "userConfigLoaded": false,
+    "projectRulesLoaded": false
+  },
+  "prompt": {
+    "path": "benchmark/prompt.txt",
+    "bytes": 3387,
+    "sha256": "cd21d5a8bb3956d82ab5650304e7e491063eacdb27dad85be6b4a845512f5e6b"
+  },
+  "response": {
+    "path": "data/raw/gemini-3-1-pro-low-run-01/response.txt",
+    "bytes": 15708,
+    "sha256": "8f109515145d2b2de2b5ddcdf06173dc130a40cdc437bc445787b6b46783758b",
+    "source": "text"
+  },
+  "thinking": {
+    "path": "data/raw/gemini-3-1-pro-low-run-01/thinking.txt",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "usage": {
+    "inputTokens": 757,
+    "cachedInputTokens": 0,
+    "reasoningTokens": null,
+    "outputTokens": 6378,
+    "totalTokens": 7135
+  },
+  "billing": {
+    "mode": "openrouter",
+    "apiCostUsd": 0.07805000000000001,
+    "note": "OpenRouter invocation via pi SDK; cost computed by pi from provider pricing (per-million-token rates)."
+  },
+  "startedAt": "2026-07-18T16:39:19.345Z",
+  "completedAt": "2026-07-18T16:39:58.415Z",
+  "durationMs": 39070,
+  "exitCode": 0,
+  "error": null,
+  "eventCount": 264,
+  "files": {
+    "events": "data/raw/gemini-3-1-pro-low-run-01/events.jsonl",
+    "stderr": "data/raw/gemini-3-1-pro-low-run-01/stderr.txt",
+    "thinking": "data/raw/gemini-3-1-pro-low-run-01/thinking.txt"
+  }
+}

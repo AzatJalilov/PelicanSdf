@@ -1,0 +1,77 @@
+{
+  "id": "grok-4-5-low-run-01",
+  "title": "xAI: Grok 4.5 / low effort",
+  "model": "x-ai/grok-4.5",
+  "provider": "OpenRouter via pi SDK",
+  "status": "unverified",
+  "track": "one-shot",
+  "promptVersion": "1.0.0",
+  "promptSha256": "cd21d5a8bb3956d82ab5650304e7e491063eacdb27dad85be6b4a845512f5e6b",
+  "artifactSha256": "346701ad5c4ab13dc2ffc9bccf0daea98a254a178eb62a74deb6951b6e1b27f8",
+  "createdAt": "2026-07-18",
+  "artifact": "../artifacts/grok-4-5-low-run-01.js",
+  "description": "Unreviewed one-shot SDF artifact generated at low reasoning effort.",
+  "accent": "#0b6e75",
+  "generationHarness": {
+    "name": "pi SDK",
+    "version": "0.80.10",
+    "surface": "pi-coding-agent createAgentSession (in-memory, no tools)",
+    "sandbox": "n/a",
+    "notes": "Fresh ephemeral invocation with user config and project rules disabled; orchestrated by Codex."
+  },
+  "generationUsage": {
+    "inputTokens": 810,
+    "cachedInputTokens": 128,
+    "reasoningTokens": null,
+    "outputTokens": 6048,
+    "totalTokens": 6986,
+    "apiCostUsd": 0.037972,
+    "billingMode": "api-metered",
+    "source": "data/raw/grok-4-5-low-run-01/events.jsonl",
+    "notes": "OpenRouter invocation via pi SDK; cost computed by pi from provider pricing (per-million-token rates)."
+  },
+  "validation": {
+    "state": "untested",
+    "checks": [],
+    "unmetRequirements": [],
+    "warnings": [
+      "Draft; runtime and visual validation have not run."
+    ]
+  },
+  "metrics": {
+    "sourceBytes": 14340,
+    "initMs": 1349.9000000059605,
+    "gpuMsMedian": 12.29696,
+    "gpuMsP95": 13.61212,
+    "throughputFps": 81.32091183512023,
+    "timingMethod": "gpu-query",
+    "environment": {
+      "gpu": "ANGLE (AMD, AMD Radeon(TM) Graphics (0x000015BF) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "browser": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/150.0.0.0 Safari/537.36",
+      "platform": "Windows",
+      "resolution": [
+        960,
+        540
+      ]
+    },
+    "environmentKey": "ANGLE (AMD, AMD Radeon(TM) Graphics (0x000015BF) Direct3D11 vs_5_0 ps_5_0, D3D11)|Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/150.0.0.0 Safari/537.36|960x540",
+    "profile": "pelican-canvas-960x540-v1",
+    "sampleCount": 36,
+    "trials": 3,
+    "measuredAt": "2026-07-18T16:51:10.344Z"
+  },
+  "visual": {
+    "readability": null,
+    "completeness": null,
+    "coherence": null,
+    "craft": null,
+    "inspectability": null,
+    "reviewers": 0
+  },
+  "provenance": {
+    "generatorKind": "model-eval",
+    "method": "Fresh one-shot pi SDK invocation; text-only with tools and skills disabled; added trailing LF",
+    "rawResponse": "../raw/grok-4-5-low-run-01/response.txt",
+    "decoding": "reasoning effort: low; other decoding settings not exposed"
+  }
+}

@@ -41,7 +41,7 @@
         "reasoningTokens": { "type": ["integer", "null"], "minimum": 0 },
         "outputTokens": { "type": ["integer", "null"], "minimum": 0 },
         "totalTokens": { "type": ["integer", "null"], "minimum": 0 },
-        "apiCostUsd": { "type": ["number", "null"], "minimum": 0 },
+        "apiCostUsd": { "type": ["number", "null"], "minimum": 0, "description": "Actual metered API charge or a documented API-equivalent estimate; billingMode and notes identify which." },
         "billingMode": { "enum": ["api-metered", "subscription", "local", "unknown"] },
         "source": { "type": ["string", "null"], "maxLength": 160 },
         "notes": { "type": ["string", "null"], "maxLength": 280 }

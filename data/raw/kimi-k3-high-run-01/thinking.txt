@@ -1,0 +1,2039 @@
+We need to build a complete WebGL2 raymarched SDF scene of a pelican riding a bicycle, single ES module, <= 32768 bytes UTF-8. Export `createPelicanSdf(canvas)` returning {render, setView, getView, dispose}.
+
+Key design decisions:
+
+- Fragment shader raymarches an SDF scene. Scene: ground plane (maybe checkered or soft), bicycle (two wheels with tires, frame tubes, seat, handlebar, cranks/pedals), pelican (body, head, eyes, beak with pouch, wings, legs).
+- Materials via color ID returned from map function.
+- Lighting: simple diffuse + specular + soft shadows maybe (soft shadows cost perf; maybe use cheap shadow ray with few steps). Ambient occlusion maybe cheap.
+- Performance: bounded raymarch steps (~128-160), bounding sphere early exit, relaxed marching.
+
+Camera: orbit around target (0, ~1, 0). yaw, pitch, distance. setView(0,0,d) shows bicycle from its right side. Bicycle should face along +X or -X? Let's define bicycle moving along +X direction (front wheel at +X). Right side of bicycle is the side facing... If bike faces +X, right side is at -Z? Right hand of rider facing forward (+X): right is... forward +X, up +Y, right = forward × up? Actually right = cross(forward, up)? Let's compute: forward=(1,0,0), up=(0,1,0), right = forward × up = (1,0,0)×(0,1,0) = (0*0-0*1, 0*0-1*0, 1*1-0*0) = (0,0,1)? Cross product (a2b3-a3b2, a3b1-a1b3, a1b2-a2b1): a=(1,0,0), b=(0,1,0): (0*0-0*1, 0*0-1*0, 1*1-0*0)=(0,0,1). So right is +Z. Hmm but conventionally screen-right with right-handed coordinate: right = cross(forward, up) gives (0,0,1). So bicycle right side faces +Z. Camera at yaw=0, pitch=0 should be on +Z axis looking toward origin. Let's set camera position = target + distance * (sin(yaw)*cos(pitch), sin(pitch), cos(yaw)*cos(pitch)). At yaw=0, pitch=0: camera at (0,0,distance) looking at target — sees the +Z side, i.e., right side. 
+
+Positive yaw orbits around world-up: yaw increases → camera moves toward +X. Fine.
+
+Animation: wheels spin, cranks/pedals rotate, legs pedal, pelican bobs slightly, wings flap gently maybe. Time-driven deterministic via timeSeconds. render() deterministic given time.
+
+Controls: pointer drag orbits (pointerdown/move/up with setPointerCapture), wheel zooms, pinch via two pointers (track distance). Arrow keys orbit, +/- zoom. Canvas focusable: set tabIndex=0. preventDefault on wheel and touch to prevent scrolling: add touch-action none style? We can set canvas.style.touchAction='none'. Also preventDefault on wheel listener with {passive:false}. Keydown: handle arrows, +, -, =, _ keys; preventDefault for arrows to avoid scroll.
+
+Dispose: remove listeners, lose context via WEBGL_lose_context extension? "release WebGL resources" — delete program, buffers, and optionally lose context. Handle context loss without throwing: listen webglcontextlost, set flag, render() returns silently if lost; restore maybe re-init? Just guard.
+
+Structure of shader:
+
+SDF primitives:
+- sdSphere, sdEllipsoid, sdCapsule, sdRoundBox, sdTorus, sdCappedCylinder, maybe sdCone.
+
+Scene construction (units: meters-ish; bike wheel radius ~0.55; total height ~1.8).
+
+Bicycle along X: rear wheel at x=-0.85, front wheel at x=0.85, wheel radius 0.55, axle height y=0.55.
+
+Wheels: torus in X? Wheel rotates about Z axis (axle along Z). Torus: major radius R- tire tube. sdTorus with axis Z: length(p.xy)-R etc. Actually torus in XY plane: p.xy. Tire: torus major 0.5, minor 0.06. Rim: torus 0.44, minor 0.02. Spokes: few thin cylinders — could do angular repetition cylinders in XY plane. Spokes cost; do maybe 8 spokes per wheel via angular domain repetition on segment from center to rim. Hub: small cylinder along Z.
+
+Wheel rotation animation: rotate p.xy by angle = time*speed + offset, for spokes only (tire is symmetric). Pedals rotate too.
+
+Frame: capsules between points:
+- Rear axle A=(-0.85,0.55,0)
+- Bottom bracket B=(-0.15,0.42,0) (crank center)
+- Seat tube top S=(-0.45,1.25,0)
+- Head tube bottom H0=(0.62,0.85,0), head tube top H1=(0.72,1.35,0)
+- Front axle F=(0.85,0.55,0)
+Tubes: chain stays A-B (both sides z=±0.06), seat stays A-S, seat tube B-S, down tube B-H0, top tube S-H1, fork H0-F (z=±0.05), handlebar stem up from H1 to (0.78,1.5,0), handlebar bar along Z with grips curving back.
+
+Seat: rounded box / ellipsoid at S+(-0.05,0.06,0) scaled (0.16,0.05,0.09).
+
+Crank: at B, rotating about Z with angle θ=t*2. Crank arms along direction in XY plane, pedals at ends, z=±0.12. Pedal boxes.
+
+Pelican: seated on saddle, body above seat around (-0.45, 1.5, 0), leaning forward toward handlebars. Body: ellipsoid scaled (0.42,0.3,0.26) centered ~(-0.4,1.55,0), maybe tilted. Neck from front-top of body up-forward to head at ~(0.15,2.05,0)? Hmm the head should be above handlebars. Let's place: body center (-0.42,1.55,0). Neck: capsule chain curving from ( -0.15,1.7,0) to (0.12,2.0,0). Head sphere r=0.14 at (0.16,2.06,0). Beak: long tapered shape pointing forward +X, slightly down: from (0.28,2.05,0) to (0.95,1.88,0). Use cone/capsule with varying radius; pouch: ellipsoid under beak from (0.35,1.95) to (0.8,1.8) sagging down — ellipsoid centered (0.58,1.82,0) scaled (0.28,0.12,0.1), maybe subtract? Just union in orange/pink. Eyes: two small spheres at head sides (0.2,2.12,±0.1).
+
+Wings: ellipsoids flattened on sides of body, angled back: center (-0.5,1.6,±0.24), scale (0.34,0.18,0.06), rotated. Maybe animate slight flap. Keep static-ish with gentle rotation around x-axis by sin(t)*0.1 for charm.
+
+Legs: from body bottom (-0.35,1.3,±0.12) down to pedals which move. Pedals at B + 0.16*(cos θ, sin θ) in XY at z=±0.13, opposing. Legs as two capsules: hip→knee→ankle(pedal). Knee computed roughly forward. To keep simple: capsule from hip to pedal position with slight outward bulge — use two segments with fixed knee offset forward. Compute in shader per-frame from uniform time — but map is in shader, so we can compute pedal positions in shader with sin/cos of time uniform. Fine.
+
+Tail feathers: small flattened ellipsoid at back of body (-0.8,1.62,0).
+
+Ground: plane y=0 with checker or soft color; maybe a disk road. Materials: ground checker subtle.
+
+Material ID mapping: use vec2 return (dist, matId). Colors in shading switch.
+
+Lighting: key directional light, sky ambient, specular; soft shadow (maybe 32 steps) — cost. Could use hard-ish shadow with 24 steps. AO via 5 taps.
+
+Background: sky gradient by ray direction + sun glow.
+
+Performance considerations: evaluator measures uncapped frame throughput calling render directly. Keep steps ~140 max, epsilon scaled, bounding sphere: scene fits in sphere radius ~2.6 around (0,1.1,0). If ray misses bounding sphere, render sky immediately. Also ground plane intersection: can march anyway; ground plane included in map; bounding sphere would exclude ground... Instead: compute analytic intersection with ground plane for shading? Simpler: treat ground as plane in map but bounding volume as a big box? Alternative: if ray doesn't hit bounding sphere and points downward, still need ground. Could intersect ground plane analytically: if rd.y<0, t=(0-ro.y)/rd.y, then shade checker with shadow. That saves marching ground. Then bounding sphere only around subject. Let's do: raymarch subject within bounding sphere interval [t0,t1]; separately compute ground hit; combine nearest.
+
+Shadow: from shading point cast to light, march subject only (plus ground gets shadow of subject), and subject shading gets shadow including ground? Subject above ground so fine. Soft shadow factor k*min(h/t).
+
+AO: 5-tap.
+
+This is a decent amount of code. Byte budget 32KB — fine, aim for ~20-28KB.
+
+Camera: standard orbit. Compute in JS, pass ray origin + camera basis matrix as uniforms; construct rays in shader from gl_FragCoord and resolution.
+
+Interaction:
+- pointerdown: capture, track. If two pointers, pinch mode: record distance between pointers and initial camera distance.
+- pointermove: single → yaw -= dx*0.005, pitch clamped [-1.4,1.4]. Pinch → distance *= ratio.
+- wheel: distance *= exp(deltaY*0.001), clamp [1.2, 12]. preventDefault, passive false.
+- keydown: ArrowLeft/Right yaw ±0.08, ArrowUp/Down pitch ±0.05, +/- or =/_ zoom. preventDefault.
+- dblclick? not needed.
+- style.touchAction = 'none'; tabIndex = 0 (if not set). Also add 'contextmenu' prevent? Not necessary.
+
+Distance clamp: min ~0.9 for close beak inspection (beak at ~ (0.9,1.9), target (0,1.2,0); camera distance 1.2 gives decent close view). Let's clamp [0.8, 14]. Also allow target offset? Evaluator uses setView with distance; target fixed at (0,1.15,0).
+
+Zoom "to a close inspection of the beak" — with target center, distance 0.9 and fov ~45° gives view width ~0.75 at subject — close enough to inspect details. Could allow min 0.6.
+
+Default view: appealing three-quarter: yaw ~ -0.6 or 0.7, pitch 0.15, distance 4.2. Right side is +Z; front is +X. Three-quarter from front-right: yaw ~ 0.6 (camera toward +X+Z), pitch 0.12, distance 4.5.
+
+getView returns current.
+
+setView(yaw,pitch,distance): assign, clamp pitch and distance.
+
+render(timeSeconds): if context lost return; set uniforms; draw fullscreen triangle.
+
+Deterministic: uniform time.
+
+Shader details — let me draft the scene map carefully.
+
+Constants: wheel angle wA = time * 3.0 (radians), wheel radius 0.55, distance between axles 1.7 → rolling consistent: wheels rotate as if moving? Since bike static in place, just spin. Crank angle cA = time*1.5. Pedal positions: P1 = B + 0.17*(cos cA, sin cA, 0), z=+0.14; P2 opposite phase, z=-0.14.
+
+Wait crank z: cranks on opposite sides. Right crank z=+0.13 at angle cA, left z=-0.13 at angle cA+π.
+
+Legs: right leg hip HR=(-0.4,1.42,0.13), ankle at P1 (z 0.16 maybe). Knee: midpoint + forward offset (0.18,0.05,0.03). Two capsules r=0.045 upper, 0.04 lower. Foot: small ellipsoid at pedal.
+
+Chain: maybe skip or add torus-ish? Could add chain as capsule from B to A at z=0.09, thin r=0.012, two (top/bottom). Cheap: two capsules. Chainring: cylinder disk at B radius 0.09 thickness 0.02. Nice detail.
+
+Spokes: per wheel: rotate point around Z by wheel angle, then angular repetition 8 sectors, capsule from hub to rim in XY plane. Implementation: p2 = p - center; rotate by -wA; angle fold: a = atan(p2.y,p2.x); sector = round(a/ (π/4))... Standard: r = length(p2.xy); a folded into [0, π/8] symmetric: a = mod(a, π/4) - π/8? For spokes as radial lines, distance to segment along x-axis at radius in [0.05, 0.46]: q = vec2(r*cos(a_fold), abs(r*sin(a_fold)))... Actually simpler: after folding, spoke is along +x axis: d = distance from point to segment (0.05→0.46 on x axis): sdSegment(vec2(r cos a', r sin a'), (0.05,0),(0.46,0)) with a' folded to [-π/16, π/16]. radius 0.008. 8 spokes per wheel fine.
+
+Alternatively skip spokes to save perf? Wheels look better with spokes; include. Spokes add cost only inside wheels.
+
+Map function: returns vec2(d, m). Union via helper.
+
+Materials:
+1 ground (handled separately analytic)
+2 tires (dark gray)
+3 metal frame (color red/teal?) Let's pick frame color cheerful red (0.8,0.15,0.12) or teal. Pelican white body, beak orange, pouch pink-orange, legs dark, seat brown, spokes/hub gray metal, crank dark metal, handlebar grip dark.
+
+Let me define material ids:
+- 1: tire
+- 2: rim/spoke/hub (silver)
+- 3: frame paint (red)
+- 4: seat (dark brown)
+- 5: handlebar metal + grips? grips separate: 5 chrome, 6 grip black
+- 7: chain/chainring dark metal
+- 8: pedal dark
+- 9: pelican body white
+- 10: wing (light gray-white slightly darker)
+- 11: beak (orange)
+- 12: pouch (salmon pink)
+- 13: eye (black with white? just black, add spec highlight)
+- 14: legs/feet (dark gray/pinkish)
+- 15: head white (same as body, use 9)
+
+Shading: base color per id, plus specular strength per id (metal shinier).
+
+Geometry list in map:
+
+```
+vec2 map(vec3 p){
+  // wheels at C1=(-0.85,.55,0), C2=(.85,.55,0)
+  // for each: q=p-C; rotate q.xy by -wA for spokes
+  tire: torus(q, R=0.5, r=0.055) → but wheel radius total 0.555; ground at 0 → 0.55-0.555 = -0.005 touch. axle height 0.55, outer radius 0.5+0.055=0.555 → slight sink; fine visually with tire flatten? acceptable, or axle 0.56.
+```
+
+Set axle height 0.56. Ground contact: 0.56-0.555=0.005. ok.
+
+Rim torus (0.45, 0.018). Hub cylinder along z: |q.xy|<0.03 && |q.z|<0.05 → capsule (0,0,-0.05)-(0,0,0.05) r0.03. Spokes as described. Axle: capsule z -0.09..0.09 r 0.015 maybe part of frame.
+
+Frame tubes (capsule list, radius 0.03):
+- down tube B( -0.15,0.42,0) → H0(0.58,0.82,0)
+- top tube S(-0.42,1.22,0) → H1(0.68,1.28,0)
+- seat tube B → S
+- head tube H0' (0.56,0.78,0) → H1 (0.70,1.32,0) radius 0.04
+- chain stays: B→A at z=±0.07 r 0.02: capsules (-0.15,0.42,±0.07)→(-0.85,0.56,±0.07)
+- seat stays: S→A z=±0.06 r 0.018
+- fork: H0→F z=±0.05 r 0.02: (0.58,0.82,±0.05)→(0.85,0.56,±0.05)
+- stem: H1top (0.70,1.32,0) → (0.72,1.48,0) r 0.025
+- handlebar: (0.72,1.48,-0.22)→(0.72,1.48,0.22) r 0.02 chrome; grips: extend capsules at ends angled back: (0.72,1.48,±0.2)→(0.62,1.47,±0.28)? Simplify: grip capsule from (0.72,1.48,±0.16) to (0.66,1.47,±0.27) radius 0.028 black.
+- seat post S→(-0.44,1.30,0) r0.02; saddle: ellipsoid center (-0.46,1.33,0) scale (0.16,0.045,0.085) mat 4.
+
+Crank: center B=(-0.15,0.42,0). chainring: cylinder along z radius 0.09, half-thickness 0.012 at z=0.075 (right side). cranks: for side s=±1: angle a = cA + (s>0?0:π); end E = B + 0.17*(cos a, sin a,0); crank arm capsule B(z=0.10*s)→E(z=0.16*s)? Crank arm from axle to pedal: capsule (B.x,B.y,0.09*s)→(E.x,E.y,0.15*s) r 0.02. Pedal: spindle capsule (E.x,E.y,0.13*s)→(E.x,E.y,0.20*s) r 0.012; pedal body: rounded box at (E.x, E.y+0.01, 0.19*s) size (0.09,0.02,0.07) — axis-aligned box ok (pedals stay horizontal due to free rotation, keep axis aligned). r 0.008.
+
+Chain: capsules top: (-0.15,0.42+0.09? no—chainring radius 0.09, rear cog radius 0.04 at A z=0.075. Top chain: (-0.15,0.51,0.075)→(-0.85,0.60,0.075) r 0.01; bottom: (-0.15,0.33,0.075)→(-0.85,0.52,0.075). Rear cog: cylinder r 0.045 at A z 0.075 th 0.01. Good enough.
+
+Pelican:
+Body: ellipsoid center PB=(-0.38,1.62,0), radii (0.34,0.26,0.22), tilted slightly (rotate around z by -0.15? front down). Use rotated ellipsoid: rotate p by 0.2 about z then ellipsoid. Simpler: sdEllipsoid with p rotated by small angle. Keep unrotated to save code; tilt by offsetting neck.
+
+Actually charming: body round sitting on saddle. Saddle at y≈1.33; body center 1.62 with radius y 0.26 → bottom at 1.36 ≈ saddle. 
+
+Chest forward: neck base at (-0.12,1.72,0). Neck: two capsules r 0.085: (-0.12,1.72,0)→(0.05,1.95,0); (0.05,1.95,0)→(0.16,2.10,0) taper — use round cone for taper: sdRoundCone(r1=0.09,r2=0.07). Head: ellipsoid center (0.18,2.14,0) radii (0.13,0.115,0.105). Crest tuft? small.
+
+Beak: upper: round cone from (0.28,2.16,0) r0.055 to (0.92,2.02,0) r0.015 — long orange beak slightly descending. Actually pelican beak ~ straight. Lower beak/pouch: pouch as ellipsoid: center (0.55,2.02,0) radii (0.30,0.10,0.075) — union salmon; maybe also lower beak line: capsule (0.30,2.09,0)→(0.90,2.00,0) r0.02 salmon. The pouch hangs below: center y 1.99, radii y 0.09 → down to 1.90, upper beak at ~2.16→2.02. Gap shows mouth — okay charming.
+
+Eyes: spheres r 0.022 at (0.22,2.18,±0.095) black; plus tiny white? skip.
+
+Wings: each side: ellipsoid centered (-0.42,1.66,±0.20) radii (0.30,0.16,0.07), rotated: rotate around z by 0.5 (tips back-down) and slight y-rotation. Implementation: q = p - c; rotate q.xy by angle s*? For both wings same droop: rotate q.xy by -0.45 (tip toward back-down? wing spans x mostly). Let's define wing as ellipsoid with long axis x; rotate around z by 0.35 so back end lower: q.xy rotation by -0.3? Then also flare: rotate around y by s*0.25 so tips angle backward-outward. Add gentle flap: rotate around x by s*sin(t)*0.08 (tips up/down). Careful with rotation order; simple: 
+q=p-c; q.xz? Let me do: rotate q.yz? no.
+Flap is rotation about body-long axis (x): affects y,z: ang = s*0.15*sin(t*2)+ s*0.1; q.yz rotated. Then droop rotate q.xy by -0.25. Fine.
+
+Wing tips: maybe taper via scaling q.x? Keep ellipsoid.
+
+Tail: ellipsoid center (-0.70,1.66,0) radii (0.16,0.07,0.10), rotated xy by 0.5 (points up-back)? rotate by 0.4.
+
+Legs: hips at (-0.34,1.45,±0.10). Thigh capsule hip→knee r 0.05 mat body? pelican legs dark. Knee position: for each side, ankle = pedal pos (z ±0.19). Knee = mix(hip,ankle,0.45)+ (0.16,0.06,0.0) forward bulge. Shin capsule knee→ankle r 0.035. Foot: ellipsoid at ankle + (0.03,0.0,0) radii (0.07,0.02,0.05) on pedal. mat dark gray-pink.
+
+Total map ops ~ 45 primitives. Each raymarch step evaluates all → heavy but okay for typical GPU at e.g. 800x600. Add bounding sphere to skip marching sky. Steps 128 with early eps 0.0008 and maxdist. Should be fine.
+
+Optimization: precompute per-frame constants in shader from time uniform (sin/cos). Fine.
+
+Normal: tetrahedron 4-tap.
+
+Shadow: march from p + n*0.01 toward light, 32 steps, soft k=8, only subject SDF (map includes everything except ground). Also subject gets shadow from itself.
+
+AO: 5 taps along normal.
+
+Sky: gradient + sun.
+
+Ground shading: checker with two grays (or subtle warm tiles), grid lines maybe. Analytic intersection, then shadowed by subject via shadow ray (same function). Also add soft radial darkening (fake contact AO) — the shadow ray handles it.
+
+Also reflection? skip.
+
+Fog: slight distance fog toward sky color for ground far away.
+
+Now byte budget: GLSL ~ 6-8KB, JS ~ 6KB. Under 32KB comfortably.
+
+Edge cases:
+- getContext('webgl2') null → throw Error.
+- Shader compile fail → throw with info log.
+- contextlost: preventDefault? We can allow restore: on 'webglcontextlost' set lost=true; render checks gl.isContextLost() and returns. dispose: remove listeners, delete program/buffer, getExtension('WEBGL_lose_context')?.loseContext()? Careful: dispose then render shouldn't throw — guard with disposed flag.
+- Respect drawing buffer size: use gl.drawingBufferWidth/Height each render, set viewport. Don't resize canvas.
+- Fullscreen: single triangle via gl.drawArrays with buffer of 3 verts, or use no attributes and gl_VertexID (WebGL2 supports gl_VertexID). Use gl_VertexID trick — no buffers needed! positions: vec2((gl_VertexID<<1)&2, gl_VertexID&2)*2-1. Great, fewer resources.
+
+Uniforms: uRes (vec2), uTime, uCamPos (vec3), uCamMat (mat3) or pass uRight,uUp,uFwd. Use mat3 uniform.
+
+FOV: tanHalf = 0.7 (~35° half). Ray dir = normalize(fwd + (uv.x*right + uv.y*up)*tan... uv in [-1,1] with aspect.
+
+Camera math JS: 
+cp=cos(pitch), sp=sin(pitch), cy=cos(yaw), sy=sin(yaw).
+eye = target + d*(sy*cp, sp, cy*cp).
+fwd = normalize(target-eye); right = normalize(cross(fwd, [0,1,0])); up = cross(right,fwd).
+Pitch clamp ±1.45 to avoid gimbal flip.
+
+Pinch: track pointers map id→{x,y}. On move with 2 pointers compute ratio vs initial pinch distance: distance = clamp(d0 * pinch0/pinch).
+
+Also "prevent interaction gestures from scrolling while active": touch-action none + preventDefault wheel + keydown arrows preventDefault. Pointer events with touchAction none handle touch scrolling.
+
+Focus: canvas.tabIndex = 0 if not set (attribute may exist). Set outline none? Changing style okay-ish; keep minimal: style.touchAction='none'.
+
+"respond crisply after input" — render is called by evaluator loop; nothing to do.
+
+No rAF/timers.
+
+Now write GLSL carefully. Let me write helper SDFs:
+
+```
+float sdS(vec3 p, vec3 c, float r){return length(p-c)-r;}
+float sdE(vec3 p, vec3 c, vec3 r){vec3 q=p-c; float k0=length(q/r); float k1=length(q/(r*r)); return k0*(k0-1.0)/k1;}
+float sdC(vec3 p, vec3 a, vec3 b, float r){vec3 pa=p-a, ba=b-a; float h=clamp(dot(pa,ba)/dot(ba,ba),0.,1.); return length(pa-ba*h)-r;}
+float sdT(vec3 p, vec3 c, vec2 t){vec3 q=p-c; vec2 w=vec2(length(q.xy)-t.x, q.z); return length(w)-t.y;} // torus around z-axis
+float sdRC(vec3 p, vec3 a, vec3 b, float r1, float r2){ // round cone
+ vec3 ba=b-a; float l2=dot(ba,ba); float rr=r1-r2; float a2=l2-rr*rr; float il2=1.0/l2;
+ vec3 pa=p-a; float y=dot(pa,ba); float z=y-l2; float x2=dot(pa*l2-ba*y, pa*l2-ba*y); float y2=y*y*l2; float z2=z*z*l2;
+ float k=sign(rr)*rr*rr*x2;
+ if(sign(z)*a2*z2>k) return sqrt(x2+z2)*il2-r2;
+ if(sign(y)*a2*y2<k) return sqrt(x2+y2)*il2-r1;
+ return (sqrt(x2*a2*il2)+y*rr)*il2-r1;
+}
+float sdRB(vec3 p, vec3 c, vec3 b, float r){vec3 q=abs(p-c)-b; return length(max(q,0.))+min(max(q.x,max(q.y,q.z)),0.)-r;}
+float sdCylZ(vec3 p, vec3 c, float r, float h){vec3 q=p-c; vec2 d=abs(vec2(length(q.xy),q.z))-vec2(r,h); return min(max(d.x,d.y),0.)+length(max(d,0.));}
+```
+
+Rotation: mat2 rot(float a){float c=cos(a),s=sin(a);return mat2(c,-s,s,c);} — note GLSL mat2 columns: mat2(c,-s,s,c) → columns (c,-s),(s,c) → rotation by a? vec2 v' = (c*x + s*y, -s*x + c*y)? Column-major: m[0]=(c,-s), m[1]=(s,c). v' = m*v = (c*v.x + s*v.y, -s*v.x + c*v.y) = rotation by -a. Whatever, consistent use.
+
+Map with material:
+
+```
+vec2 res; dmin helper:
+void un(inout vec2 r, float d, float m){ if(d<r.x) r=vec2(d,m); }
+```
+
+Wheel function:
+
+```
+void wheel(vec3 p, vec3 c, float wA, inout vec2 r){
+ vec3 q=p-c;
+ un(r, sdT(q, vec2(0.50,0.055)), 1.0);      // tire
+ un(r, sdT(q, vec2(0.45,0.018)), 2.0);      // rim
+ un(r, sdCylZ(q, 0.032, 0.055), 2.0);       // hub
+ // spokes
+ vec2 sp2 = rot(-wA)*q.xy;
+ float a=atan(sp2.y,sp2.x);
+ float sect=3.14159265/4.0;
+ a=mod(a+sect*0.5, sect)-sect*0.5;
+ float rr=length(sp2);
+ vec2 sq=vec2(rr*cos(a), rr*sin(a));
+ float d=length(sq-clamp(vec2? ...
+```
+
+spoke segment from x=0.04 to 0.44 along +x: h=clamp(sq.x,0.04,0.44); d=length(sq-vec2(h,0))-0.008. But folding with mod gives 8 spokes. Good.
+
+Actually atan+mod+length: fine.
+
+Frame, etc. as planned. Let me assign exact constants.
+
+A=(-0.85,0.56,0), F=(0.85,0.56,0), B=(-0.15,0.42,0), S=(-0.44,1.22,0), H0=(0.58,0.80,0), H1=(0.70,1.30,0).
+
+Wheel centers y=0.56, outer radius 0.555 → clearance 0.005. OK.
+
+Frame tubes:
+- down: B→(0.56,0.78,0) r .032 mat3
+- top: (-0.42,1.20,0)→(0.68,1.28,0) r .03
+- seat tube: B→S r .03
+- head tube: (0.56,0.76,0)→(0.71,1.33,0) r .042
+- chain stays: (B.x,B.y,±.07)→(-0.85,0.56,±.07) r .02
+- seat stays: (S.x,S.y,±.055)→(-0.85,0.56,±.055) r .016
+- fork: (0.60,0.82,±.05)→(0.85,0.56,±.05) r .022
+- stem: (0.71,1.30,0)→(0.74,1.46,0) r .024
+- bar: (0.74,1.46,-.21)→(0.74,1.46,.21) r .018 (chrome mat 5)
+- grips: (0.74,1.46,±.15)→(0.68,1.45,±.27) r .028 mat 6? Hmm grips angle backward: from z ±0.15 to z ±0.27 and x 0.74→0.64. ok.
+
+Wait handlebar position vs pelican hands... pelican wings rest near body; fine. Beak passes near handlebar: beak tip (0.92, 2.02) far above bar (1.46). Good.
+
+Seat: post (-0.44,1.18,0)→(-0.45,1.30,0) r .022; saddle ellipsoid c=(-0.47,1.33,0) r=(0.17,0.05,0.09) mat 4.
+
+Crank area:
+- axle: capsule B z -0.10..0.10 r .018 mat 7
+- chainring: sdCylZ(p-(B+vec3(0,0,0.075)), 0.095, 0.010) mat 7. Note cylinder axis z.
+- rear cog: sdCylZ(p-(-0.85,0.56,0.075), 0.05, 0.008)
+- chain top: capsule (-0.15,0.515,0.075)→(-0.85,0.61,0.075) r .012 mat 7 — wait cog radius .05 at y .56 → top at .61; chainring r .095 top .515. ok.
+- chain bottom: (-0.15,0.325,0.075)→(-0.85,0.51,0.075) r .012.
+
+Cranks animated:
+```
+float ca=t*1.6;
+for side s in {1,-1}:
+ float a=ca + (s<0.?3.14159:0.);
+ vec2 e=B.xy + 0.17*vec2(cos(a),sin(a));
+ capsule (B.x,B.y,.09*s)→(e.x,e.y,.15*s) r .02 mat 7
+ pedal: spindle (e, .13*s)→(e,.20*s) r .012 mat7; body sdRB c=(e.x,e.y,.185*s) b=(.085,.018,.055) r .008 mat 8
+```
+Pedal top at e.y+0.018. Foot sits above.
+
+Legs animated (compute in map since ankles depend on ca):
+```
+for s in ±1:
+ float a=ca+(s<0.?π:0);
+ vec2 e=B.xy+.17*vec2(cos(a),sin(a));
+ vec3 ank=vec3(e.x, e.y+0.05, 0.185*s);
+ vec3 hip=vec3(-0.36,1.48,0.10*s);
+ vec3 knee=vec3(mix(hip.x,ank.x,0.4)+0.14, mix(hip.y,ank.y,0.4)+0.05, mix(hip.z,ank.z,0.4)+0.03*s);
+ thigh capsule hip→knee r .05 mat 14
+ shin capsule knee→ank r .035 mat 14
+ foot: ellipsoid c=(ank.x+0.03, ank.y-0.01, ank.z) r=(.075,.022,.05) mat 14
+```
+Hips inside body (body center (-0.38,1.62) r y .26 → bottom 1.36; hip y 1.48 inside). Good.
+
+Body: ellipsoid c=(-0.40,1.62,0) r=(0.34,0.27,0.23) mat 9.
+Breast maybe slightly forward: fine.
+
+Neck: round cone (-0.14,1.74,0)→(0.10,2.02,0) r1 .10 r2 .075 mat 9. And head ellipsoid c=(0.16,2.13,0) r=(.135,.12,.11).
+
+Hmm gap between body front (-0.06 at center height) and neck base — capsule covers.
+
+Beak upper: round cone (0.26,2.15,0) r .05 → (0.95,2.03,0) r .012 mat 11. Length .7 long pelican beak.
+Lower beak: capsule (0.28,2.10,0)→(0.88,2.01,0) r .018 mat 12.
+Pouch: ellipsoid c=(0.55,2.03,0) r=(.30,.115,.08) mat 12 — intersects lower beak, hangs to 1.915.
+
+Eyes: spheres c=(0.20,2.17,±.10) r .024 mat 13. Head half-width at eye height ~.105, so eyes at surface. Good. Maybe add tiny brow? skip.
+
+Wings with flap:
+```
+float fl=sin(t*2.2)*0.10;
+for s:
+ vec3 c=vec3(-0.44,1.66,0.20*s);
+ vec3 q=p-c;
+ q.yz=rot(s*(0.12+fl))*q.yz; // flap
+ q.xy=rot(0.35)*q.xy; // droop back? 
+ d=sdE at origin r=(.32,.15,.065)
+```
+Hmm rotating q.xy by 0.35 tilts the long x-axis: x-axis points up-forward? Rotation of q by 0.35: q' = R q; ellipsoid axis-aligned in q' space. x' axis corresponds to world direction R^T x' = (cos.35, -sin.35,0)·? With our rot convention earlier, fine — either way tilted, visually okay. Let me instead rotate by -0.4 so wing tip (back, -x) goes down: not critical.
+
+Also slight backward sweep: q.xz=rot(s*0.3)*q.xz.
+
+Wing mat 10.
+
+Tail: ellipsoid c=(-0.72,1.70,0) r=(.17,.06,.11) with q.xy rotated by -0.5 (tip up). mat 9.
+
+Small details: helmet? skip. A little tuft on head: sphere c=(0.10,2.24,0) r .04 scaled? skip or add small ellipsoid (.06,.05,.05). Add — charm.
+
+Ground: analytic. Checker:
+```
+vec2 g=floor(hit.xz); float ch=mod(g.x+g.y,2.);
+col = mix(c1,c2,ch)
+```
+with subtle colors (0.62,0.60,0.58) vs (0.55,0.53,0.51), maybe warm path. Plus radial fade. Add shadow via shadow march of subject. Also grid lines? keep checker.
+
+Raymarch subject bounding sphere: center BC=(0.05,1.30,0), radius 2.15 (covers beak tip x0.95 dist ~1.1, tail -0.89, top 2.29, wheel bottom 0, pedals z .24... max from center: beak tip (0.95,2.03): d=sqrt(0.9²+0.73²)=1.16; wheels bottom (−0.85,0.005): sqrt(0.9²+1.3²)=1.58. radius 1.75 safe. Set 1.8.
+
+Sphere intersect: standard. If hit, march from max(t0,0) to t1; else sky (and ground plane if applicable).
+
+March: 
+```
+float t=t0; for i<160 { p=ro+rd*t; vec2 h=map(p); if(h.x<0.0008*t?) use eps=0.0006+0.0005*t? Keep simple eps .0007; if hit break; t+=h.x*0.9; if t>t1 break }
+```
+Use relaxation 0.8 for safety with ellipsoid approximations. Actually sdE is not exact SDF (can overestimate?) — ellipsoid approximation can underestimate? The standard iq ellipsoid is conservative-ish; with relaxation 0.85 fine. Thin features (spokes r .008, chain .012) need small eps and not too big steps near: marching with d*0.9 of true SDF fine, but thin torus etc. SDF exact. eps 0.0008.
+
+Pixel at distance 4.5, resolution 600: pixel angular size ~ 2*0.7/600 ≈ 0.0023 rad → world ~0.01 at subject. Spokes 0.008 radius may alias/miss occasionally but acceptable; could thicken spokes to 0.01.
+
+Shadow: 
+```
+float shadow(vec3 ro, vec3 rd){ float res=1.; float t=0.02; for 40 { float h=map(ro+rd*t).x; if(h<0.001) return 0.; res=min(res, 10*h/t); t+=clamp(h,0.01,0.25);} return res;}
+```
+map calls heavy; 40 steps × map(~45 prims) — acceptable.
+
+Could separate map without animated legs? no, fine.
+
+AO:
+```
+float ao(vec3 p, vec3 n){ float occ=0., sca=1.; for i<5 { float h=0.02+0.05*i; float d=map(p+n*h).x; occ+=(h-d)*sca; sca*=0.7;} return clamp(1.-2.*occ,0.,1.);}
+```
+
+Lighting:
+```
+vec3 L=normalize(vec3(0.6,0.8,0.4));
+diff = clamp(dot(n,L),0,1)*sh
+spec = pow(clamp(dot(reflect(-L? ...)),shin)
+sky ambient: 0.5+0.5*n.y
+back/fill light.
+```
+
+Material colors (linear-ish, final gamma):
+1 tire: vec3(0.10,0.10,0.11), spec low, shininess 8
+2 rim: vec3(0.75) metal spec 0.6 shiny 32
+3 frame: red vec3(0.85,0.12,0.10) spec .5 shiny 48 — cheerful. Maybe teal (0.05,0.55,0.55)? Red pops against sky. Choose coral red.
+4 saddle: vec3(0.25,0.13,0.07)
+5 chrome: .8 spec .8
+6 grips: vec3(0.12)
+7 chain/crank: vec3(0.18,0.18,0.2) spec .5
+8 pedal: vec3(0.15)
+9 body: vec3(0.96,0.95,0.92)
+10 wing: vec3(0.88,0.88,0.86)
+11 beak: vec3(0.98,0.55,0.15)
+12 pouch: vec3(0.98,0.45,0.35)
+13 eye: vec3(0.02) spec high
+14 legs: vec3(0.45,0.35,0.33)? pelican legs grayish pink: (0.55,0.42,0.38)
+
+Sky: 
+```
+vec3 sky(vec3 rd){ float h=clamp(rd.y,0.,1.); vec3 c=mix(vec3(0.75,0.82,0.90), vec3(0.25,0.45,0.85), pow(h,0.7)); sun glow: s=pow(clamp(dot(rd,L),0.,1.),40.)*vec3(1.,0.9,0.7)*0.6; + horizon haze }
+```
+
+Gamma: pow(col, 1/2.2). Also tonemap col/(1+col)? mild.
+
+Ground shading with fog by distance: mix(col, skyish, 1-exp(-0.02*t)).
+
+Now JS side.
+
+Vertex shader:
+```
+#version 300 es
+void main(){ vec2 v=vec2(float((gl_VertexID<<1)&2), float(gl_VertexID&2)); gl_Position=vec4(v*2.-1.,0.,1.); }
+```
+
+Fragment shader begins `#version 300 es\nprecision highp float;` uniforms: uRes, uTime, uPos(vec3), uCam(mat3). out vec4 O.
+
+main:
+```
+vec2 uv=(2.*gl_FragCoord.xy-uRes)/uRes.y;
+vec3 rd=normalize(uCam*vec3(uv, 1.6)); // 1.6 = focal length
+vec3 ro=uPos;
+... march, shade, O=vec4(pow(col,vec3(0.4545)),1);
+```
+
+uCam columns: right, up, fwd — uCam*vec3(uv,fl) = right*uv.x+up*uv.y+fwd*fl. In JS use gl.uniformMatrix3fv with column-major array [r.x,r.y,r.z, u.x..., f.x...].
+
+JS skeleton:
+
+```js
+export function createPelicanSdf(canvas){
+ const gl=canvas.getContext('webgl2',{antialias:false,alpha:false,depth:false,stencil:false,powerPreference:'high-performance'});
+ if(!gl) throw new Error('WebGL2 is not available');
+ ...compile...
+ if lost initially? proceed.
+ state: yaw=-0.65? Choose start: three-quarter front-right: yaw=0.65, pitch=0.18, dist=4.6. Hmm which looks best: see beak in profile + body. Front-right view: camera at +X+Z. yaw 0.6 → eye (sin .6 *4.6≈2.6, ..., cos .6*4.6≈3.8). Good.
+
+ target=[0,1.25,0].
+
+ render(t){
+   if(disposed||lost||gl.isContextLost()) return;
+   const w=gl.drawingBufferWidth,h=gl.drawingBufferHeight;
+   gl.viewport(0,0,w,h);
+   compute cam, set uniforms, drawArrays(TRIANGLES,0,3);
+ }
+```
+
+Events with bound handlers stored for removal.
+
+Pointer handling:
+```
+const pts=new Map();
+let lastX,lastY, pinchD=0, pinchDist=0;
+down(e){ canvas.focus(); canvas.setPointerCapture(e.pointerId); pts.set(id,{x,y}); if(pts.size===2){ const [a,b]=[...pts.values()]; pinchD=Math.hypot(...); pinchDist=dist; } }
+move(e){ if(!pts.has(id))return; if(pts.size===1){ yaw += (e.clientX-p.x)*0.005? direction: dragging right should rotate scene... yaw -= dx*0.005 feels like grab. Let's do yaw -= dx*0.0055; pitch += dy*0.0055 (drag down → look from above? dragging down typically moves camera up? Convention: drag down rotates object down, camera up → pitch increases. Use pitch += dy*0.005.) clamp. update stored. } else if size===2 { update point, compute new pinch, dist=clamp(pinchDist*pinchD/newD) } }
+up/cancel: delete; if remaining 1, reset its stored pos.
+```
+
+Wheel: e.preventDefault(); dist*=Math.exp(e.deltaY*0.0011); clamp.
+
+Keys: keydown: switch(e.key): ArrowLeft yaw-=0.07? positive yaw orbits around up; left arrow typically rotate left: yaw+=? whatever, choose ArrowLeft: yaw+=0.08 (scene rotates right?) Fine: ArrowLeft → yaw -= 0.08; ArrowRight → +=; ArrowUp pitch+=; Down -=; '+'/'=' → dist*=0.9; '-'/'_' → *=1.1. preventDefault when handled.
+
+Clamp pitch [-1.35,1.35], dist [0.7,15].
+
+dispose: remove all listeners (keep array of [target,type,fn,opts]), pts.clear, delete program & shaders, lose context ext.
+
+Note: "Make the canvas focusable": if(canvas.tabIndex<0) canvas.tabIndex=0; — reading tabIndex property is fine (not reading other DOM elements; canvas itself allowed).
+
+setView: yaw=yaw; pitch=clamp; distance=clamp.
+
+Now count bytes. I'll write compact but readable code, maybe ~14-18KB. Fine.
+
+Determinism: everything from uniforms; no Math.random.
+
+Let me now write the final fragment shader string carefully with all pieces. Watch GLSL syntax errors meticulously.
+
+Write helper functions:
+
+```glsl
+float sdE(vec3 p,vec3 r){float k0=length(p/r);float k1=length(p/(r*r));return k0*(k0-1.0)/k1;}
+```
+with p pre-translated.
+
+mat2 rot.
+
+Torus around Z: sdTz(vec3 p, vec2 t){vec2 q=vec2(length(p.xy)-t.x,p.z);return length(q)-t.y;}
+
+CylZ: capped cylinder axis z centered origin: 
+```
+float sdCz(vec3 p,float r,float h){vec2 d=abs(vec2(length(p.xy),p.z))-vec2(r,h);return min(max(d.x,d.y),0.)+length(max(d,0.));}
+```
+
+Capsule sdC, round cone sdRC, box sdRB.
+
+Map:
+
+```glsl
+vec2 map(vec3 p){
+ vec2 r=vec2(1e9,0.);
+ float t=uTime;
+ // wheels
+ float wa=t*2.6;
+ for(int i=0;i<2;i++){
+   vec3 c=vec3(i==0?-0.85:0.85,0.56,0.);
+   vec3 q=p-c;
+   U(sdTz(q,vec2(0.50,0.055)),1.);
+   U(sdTz(q,vec2(0.448,0.017)),2.);
+   U(sdCz(q,0.034,0.05),2.);
+   vec2 sp=rot(-wa)*q.xy;
+   float a=atan(sp.y,sp.x);
+   a=mod(a+0.3927,0.7854)-0.3927;
+   float rr=length(sp);
+   vec2 sq=vec2(rr*cos(a),rr*sin(a));
+   U(length(sq-vec2(clamp(sq.x,0.04,0.44),0.))-0.009,2.);
+ }
+```
+
+Wait spokes with fold: after mod, sq.x = rr cos a ≥ ~0.92 rr >0, clamp fine.
+
+Also add fender? skip.
+
+Frame:
+```
+ vec3 B=vec3(-0.15,0.42,0.);
+ U(sdC(p,B,vec3(0.56,0.78,0.),0.032),3.);
+ U(sdC(p,vec3(-0.42,1.20,0.),vec3(0.68,1.28,0.),0.030),3.);
+ U(sdC(p,B,vec3(-0.44,1.22,0.),0.030),3.);
+ U(sdC(p,vec3(0.55,0.75,0.),vec3(0.71,1.33,0.),0.042),3.);
+ U(sdC(p,vec3(-0.15,0.42,0.07),vec3(-0.85,0.56,0.07),0.020),3.);
+ U(sdC(p,vec3(-0.15,0.42,-0.07),vec3(-0.85,0.56,-0.07),0.020),3.);
+ U(sdC(p,vec3(-0.44,1.20,0.055),vec3(-0.85,0.56,0.055),0.016),3.);
+ U(sdC(p,vec3(-0.44,1.20,-0.055),vec3(-0.85,0.56,-0.055),0.016),3.);
+ U(sdC(p,vec3(0.60,0.84,0.05),vec3(0.85,0.56,0.05),0.022),3.);
+ U(sdC(p,vec3(0.60,0.84,-0.05),vec3(0.85,0.56,-0.05),0.022),3.);
+ U(sdC(p,vec3(0.71,1.30,0.),vec3(0.74,1.46,0.),0.024),3.);
+ U(sdC(p,vec3(0.74,1.46,-0.21),vec3(0.74,1.46,0.21),0.018),5.);
+ U(sdC(p,vec3(0.74,1.46,0.15),vec3(0.66,1.45,0.27),0.028),6.);
+ U(sdC(p,vec3(0.74,1.46,-0.15),vec3(0.66,1.45,-0.27),0.028),6.);
+ // saddle
+ U(sdC(p,vec3(-0.44,1.16,0.),vec3(-0.46,1.30,0.),0.022),5.);
+ U(sdE(p-vec3(-0.48,1.335,0.),vec3(0.17,0.05,0.09)),4.);
+```
+
+Crank + chain:
+```
+ U(sdC(p,vec3(-0.15,0.42,-0.10),vec3(-0.15,0.42,0.10),0.018),7.);
+ U(sdCz(p-vec3(-0.15,0.42,0.078),0.095,0.010),7.);
+ U(sdCz(p-vec3(-0.85,0.56,0.078),0.050,0.008),7.);
+ U(sdC(p,vec3(-0.15,0.515,0.078),vec3(-0.85,0.61,0.078),0.011),7.);
+ U(sdC(p,vec3(-0.15,0.325,0.078),vec3(-0.85,0.51,0.078),0.011),7.);
+ float ca=t*1.4;
+```
+
+Pedals & legs loop:
+```
+ for(int i=0;i<2;i++){
+  float s=i==0?1.:-1.;
+  float a=ca+(i==0?0.:3.14159265);
+  vec2 e=B.xy+0.17*vec2(cos(a),sin(a));
+  U(sdC(p,vec3(B.xy,0.09*s),vec3(e,0.15*s)),0.020),7.);
+```
+Careful: vec3(B.xy, z) valid constructor. 
+```
+  U(sdC(p,vec3(e,0.13*s),vec3(e,0.205*s),0.012),7.);
+  U(sdRB(p-vec3(e.x,e.y,0.185*s),vec3(0.085,0.018,0.055),0.008),8.);
+```
+Pedal axis-aligned box — but when crank rotates, pedal goes around; box stays axis aligned — pedal should remain horizontal: yes real pedals do. Good.
+
+Legs:
+```
+  vec3 ank=vec3(e.x,e.y+0.055,0.185*s);
+  vec3 hip=vec3(-0.36,1.50,0.11*s);
+  vec3 kn=mix(hip,ank,0.42)+vec3(0.15,0.06,0.02*s);
+  U(sdC(p,hip,kn,0.052),14.);
+  U(sdC(p,kn,ank,0.036),14.);
+  U(sdE(p-vec3(ank.x+0.035,ank.y-0.005,ank.z),vec3(0.075,0.024,0.05)),14.);
+ }
+```
+
+Pelican body bob: small bob: bodyY = 0.008*sin(t*2.8)? Adds life. Keep tiny, or skip for simplicity — add by offsetting p for body parts: float bob=0.01*sin(t*2.2); apply to pelican group via pb=p-vec3(0,bob,0). Fine.
+
+```
+ vec3 pb=p-vec3(0.,0.012*sin(t*2.2),0.);
+ U(sdE(pb-vec3(-0.40,1.62,0.),vec3(0.34,0.27,0.23)),9.);
+ U(sdRC(pb,vec3(-0.16,1.72,0.),vec3(0.10,2.04,0.),0.105,0.075),9.);
+ U(sdE(pb-vec3(0.16,2.14,0.),vec3(0.135,0.12,0.11)),9.);
+ U(sdE(pb-vec3(0.09,2.25,-0.02),vec3(0.06,0.045,0.05)),9.); // tuft
+ U(sdRC(pb,vec3(0.25,2.155,0.),vec3(0.96,2.03,0.),0.052,0.012),11.);
+ U(sdC(pb,vec3(0.27,2.10,0.),vec3(0.88,2.005,0.),0.018),12.);
+ U(sdE(pb-vec3(0.55,2.03,0.),vec3(0.30,0.115,0.08)),12.);
+ U(sdS(pb-vec3(0.20,2.175,0.10)),0.024),13.);
+ U(sdS(pb-vec3(0.20,2.175,-0.10)),0.024),13.);
+ // tail
+ vec3 q=pb-vec3(-0.70,1.68,0.); q.xy=rot(-0.45)*q.xy;
+ U(sdE(q,vec3(0.17,0.06,0.11)),9.);
+ // wings
+ float fl=0.10*sin(t*2.2);
+ for(int i=0;i<2;i++){
+  float s=i==0?1.:-1.;
+  vec3 w=pb-vec3(-0.42,1.66,0.19*s);
+  w.yz=rot(s*(0.10+fl))*w.yz;
+  w.xy=rot(0.30)*w.xy;
+  w.xz=rot(-s*0.25)*w.xz;
+  U(sdE(w,vec3(0.32,0.15,0.06)),10.);
+ }
+ return r;
+}
+```
+
+Check wing rotations: w.yz=rot(...) rotates about x — flap. w.xy rot(0.3): tilts so that +x end goes... rot(0.3)*v with our matrix: mat2(c,-s,s,c) applied: x'=c*x+s*y? Wait earlier determined v' = m*v with columns (c,-s),(s,c) gives (c x + s y, -s x + c y). So vector (1,0) → (c,-s) = tilts down-forward. So wing front edge down slightly — wing tip at back (-x) goes up? Vector (-1,0) → (-c, s): up-back. Hmm wings raised at back like a V? Slight; use rot(-0.25) instead so back dips down: vector (-1,0) → (-c,-s) down. Use w.xy=rot(-0.25). Wait sign: v'=(c x + s y, -s x + c y) with s=sin(-0.25)<0. v=(-1,0) → (-c, +s?) -s*x = -s*(-1)=s <0. Yes down. Good: w.xy=rot(-0.25).
+
+Also with flap rotation about x for left wing s=-1 mirrored. OK.
+
+Eye position: head center (0.16,2.14), radii (0.135,0.12,0.11). Eyes at (0.20,2.175,±0.10): offset from center (0.04,0.035,±0.10) → normalized (0.296,0.29,0.909) → len ~1.0 on surface. sphere r .024 → half embedded. Good.
+
+Beak upper from (0.25,2.155) r .052 — starts inside head (head front at x=0.16+0.135=0.295). Good. tip (0.96,2.03) r .012.
+
+Pouch ellipsoid center (0.55,2.03) — upper beak line at x 0.55 has y≈2.155 - (0.3/0.71)*0.125 ≈ 2.102; pouch top 2.03+0.115=2.145 → overlaps upper beak region slightly, fine (pouch wraps). Lower beak capsule y at 0.55 ≈ 2.10-... from (0.27,2.10) to (0.88,2.005): at 0.55 y≈2.056, pouch center 2.03 r y .115 → covers. ok.
+
+Neck cone from (-0.16,1.72) r .105 — body ellipsoid front at x=-0.40+0.34=-0.06 at y 1.62; neck base at (-0.16,1.72) inside body. Good.
+
+Now lighting/shading code:
+
+```glsl
+vec3 nrm(vec3 p){ const float e=0.0012; vec2 k=vec2(1.,-1.); return normalize(k.xyy*map(p+k.xyy*e).x + k.yyx*map(p+k.yyx*e).x + k.yxy*map(p+k.yxy*e).x + k.xxx*map(p+k.xxx*e).x); }
+float shad(vec3 ro, vec3 rd){ float r=1.,t=0.02; for(int i=0;i<48;i++){ float h=map(ro+rd*t).x; if(h<0.0015){return 0.;} r=min(r,9.*h/t); t+=clamp(h,0.015,0.30); if(t>4.)break;} return r; }
+float aoc(vec3 p, vec3 n){ float o=0.,s=1.; for(int i=0;i<5;i++){ float h=0.02+0.05*float(i); o+=(h-map(p+n*h).x)*s; s*=0.72;} return clamp(1.-1.8*o,0.,1.); }
+```
+
+Material function:
+```glsl
+void mat(float m, out vec3 alb, out float sp, out float sh){
+ alb=vec3(0.8); sp=0.2; sh=24.;
+ if(m<1.5){alb=vec3(0.09,0.09,0.10);sp=0.15;sh=10.;}
+ else if(m<2.5){alb=vec3(0.72,0.73,0.75);sp=0.7;sh=48.;}
+ else if(m<3.5){alb=vec3(0.85,0.10,0.08);sp=0.5;sh=40.;}
+ else if(m<4.5){alb=vec3(0.30,0.16,0.08);sp=0.25;sh=16.;}
+ else if(m<5.5){alb=vec3(0.78,0.79,0.82);sp=0.8;sh=64.;}
+ else if(m<6.5){alb=vec3(0.10,0.10,0.11);sp=0.2;sh=12.;}
+ else if(m<7.5){alb=vec3(0.20,0.20,0.22);sp=0.55;sh=40.;}
+ else if(m<8.5){alb=vec3(0.12,0.12,0.13);sp=0.25;sh=16.;}
+ else if(m<9.5){alb=vec3(0.97,0.96,0.93);sp=0.18;sh=20.;}
+ else if(m<10.5){alb=vec3(0.90,0.90,0.88);sp=0.18;sh=20.;}
+ else if(m<11.5){alb=vec3(0.99,0.56,0.13);sp=0.3;sh=28.;}
+ else if(m<12.5){alb=vec3(0.98,0.48,0.36);sp=0.3;sh=24.;}
+ else if(m<13.5){alb=vec3(0.02,0.02,0.03);sp=0.9;sh=90.;}
+ else {alb=vec3(0.55,0.42,0.38);sp=0.2;sh=16.;}
+}
+```
+
+Main:
+```glsl
+void main(){
+ vec2 uv=(2.*gl_FragCoord.xy-uRes)/uRes.y;
+ vec3 ro=uPos;
+ vec3 rd=normalize(uCam*vec3(uv,1.55));
+ vec3 L=normalize(vec3(0.55,0.75,0.45));
+ vec3 col;
+ float tG = rd.y<-0.0001 ? -ro.y/rd.y : 1e9;  // ground at y=0
+ // bounding sphere
+ vec3 BC=vec3(0.05,1.30,0.); float BR=1.85;
+ vec3 oc=ro-BC; float b=dot(oc,rd); float c=dot(oc,oc)-BR*BR;
+ float h=b*b-c;
+ float t0=0.,t1=0.; bool bs=h>0.;
+ if(bs){ h=sqrt(h); t0=-b-h; t1=-b+h; }
+ float t=-1.; float m=0.;
+ if(bs && t1>0.){
+   t=max(t0,0.001);
+   float tt=t;
+   bool hit=false;
+   for(int i=0;i<170;i++){
+     vec3 p=ro+rd*tt;
+     vec2 d=map(p);
+     if(d.x<0.0008){ hit=true; break; }
+     tt+=d.x*0.9;
+     if(tt>t1 || tt>tG) break;
+   }
+   if(hit){ t=tt; m=dLast?? }
+```
+
+Problem: need material id after loop — store d in variable outside. Let me restructure:
+
+```glsl
+ float t=max(t0,0.001); float m=-1.;
+ if(bs&&t1>0.){
+  for(int i=0;i<170;i++){
+   vec2 d=map(ro+rd*t);
+   if(d.x<0.0008){m=d.y;break;}
+   t+=d.x*0.9;
+   if(t>t1||t>tG){t=-1.;break;}
+  }
+  if(m<0.) t=-1.;
+ }
+```
+
+Hmm if loop ends because hit → t valid, m set. If breaks due to bounds → set t=-1. But if loop finishes 170 iters without hit (unlikely) t remains — acceptable.
+
+Wait: t0 might be > tG (ground in front of sphere) — then t starts beyond ground; ground hit wins anyway since we compare tG<t. In loop break when t>tG. fine. Also if camera inside sphere (close zoom), t0<0 → start 0.001. Good. If !bs or t1<0 (sphere behind camera) → skip march. But camera close (dist 0.7) — sphere center (0.05,1.30), BR 1.85, camera distance min 0.7 from target (0,1.25,0) → camera inside sphere → bs true (c<0 → h> b²... h = b²-c, c negative → h>0). ok.
+
+Then:
+
+```glsl
+ if(t>0. && t<tG){
+   vec3 p=ro+rd*t; vec3 n=nrm(p);
+   vec3 alb; float sp,sh2; mat(m,alb,sp,sh2);
+   float sh=shad(p+n*0.01,L);
+   float ao=aoc(p,n);
+   float dif=clamp(dot(n,L),0.,1.)*sh;
+   vec3 hv=normalize(L-rd);
+   float spe=pow(clamp(dot(n,hv),0.,1.),sh2)*sp*sh;
+   float amb=0.55+0.45*n.y;
+   col=alb*(0.25*amb*ao*vec3(0.9,0.95,1.05)+1.15*dif*vec3(1.0,0.95,0.85))+spe*vec3(1.);
+   // rim light
+   col+=alb*0.12*pow(1.-clamp(dot(n,-rd),0.,1.),3.)*ao;
+ } else if(tG<1e8){
+   vec3 p=ro+rd*tG;
+   vec2 g=floor(p.xz);
+   float ch=mod(g.x+g.y,2.);
+   vec3 alb=mix(vec3(0.55,0.54,0.52),vec3(0.62,0.61,0.58),ch);
+   float sh=shad(p+vec3(0.,0.01,0.),L);
+   float dif=clamp(L.y,0.,1.)*sh;
+   col=alb*(0.35*vec3(0.9,0.95,1.05)+0.9*dif*vec3(1.,0.95,0.85));
+   col=mix(col, vec3(0.70,0.78,0.88), clamp(1.-exp(-0.012*tG*tG*0.01?),...));
+```
+
+Fog: use factor f=1.-exp(-0.0006*tG*tG)? At tG 20 → 1-exp(-0.24)=0.21. ok. Also fade checker with distance to reduce aliasing: blend alb toward average by factor smoothstep(10.,40.,tG). Let's: float f2=clamp(tG*0.03,0.,1.); alb=mix(alb,vec3(0.585,0.575,0.55),f2); plus exponential fog to horizon color.
+
+Ground normal is (0,1,0) — n.y=1.
+
+Else sky:
+```glsl
+ } else {
+   float y=clamp(rd.y,-0.05,1.);
+   col=mix(vec3(0.78,0.84,0.92),vec3(0.20,0.42,0.85),pow(max(y,0.),0.6));
+   col+=vec3(1.,0.85,0.6)*pow(clamp(dot(rd,L),0.,1.),60.)*0.8;
+   col+=vec3(1.,0.9,0.75)*pow(clamp(dot(rd,L),0.,1.),8.)*0.12;
+ }
+ // gamma + vignette
+ col=pow(col,vec3(0.4545));
+ O=vec4(col,1.);
+}
+```
+
+Also for subject maybe slight fog no.
+
+Determinism ok.
+
+One concern: shadow function calls map with animated content — consistent within frame. Good.
+
+Performance: map has loops unrolled by compiler (constant bounds). ~50 primitives. 170 steps max but early termination typical 40-80. Shadow 48. Should hit decent fps at typical sizes. Maybe reduce march to 150 and shadow to 40. Fine.
+
+Precision of eps at close zoom: eps 0.0008 fixed; at distance 0.7, features ~0.001 resolvable. Good. Could scale eps with t: eps = 0.0004 + 0.0006*t? Slight. Keep fixed 0.0007.
+
+Potential visual bug: torus sdTz around z-axis — wheel plane is XY (axle along Z) — correct since bike along X, wheels vertical in XY plane. 
+
+The right side of the bike (+Z) has chainring/chain — nice detail for right-side view (setView(0,0,d)).
+
+Crank initial: right crank (z=+0.09..0.15, i==0 s=1, a=ca) at angle ca; left opposite. Legs follow. At t=0, right pedal at angle 0 → e=B+(0.17,0) → forward position. Fine.
+
+Wings: pelican "hands" on handlebar? Charming to have wing tips reach toward handlebar. Our wings droop at sides — like pedaling pose. Acceptable; maybe rotate wings forward a bit: center z ±0.19, x -0.42, ellipsoid x-radius .32 → front tip at -0.10 — not touching bar (0.74). It reads as riding pose with legs on pedals and body leaning forward. OK.
+
+Add small tail and head tuft — charm.
+
+Also maybe add a front basket? skip bytes.
+
+Now check "setView(0,0,distance) must show the bicycle from its right side": camera at (0, target.y, d) looking -Z at bike; bike's right (+Z with chain) faces camera. Yes.
+
+"positive yaw orbits around world-up": yaw increases → eye x = sin(yaw)... moves toward +X; rotation about Y. Yes.
+
+Arrow keys + drag orbit full 360: yaw unbounded. Good.
+
+Now JS compile helper:
+
+```js
+function sh(type,src){const s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)){const log=gl.getShaderInfoLog(s);throw new Error('PelicanSdf shader compile failed: '+log);}return s;}
+```
+
+Program link check similarly.
+
+Uniform locations cached.
+
+Event listeners: store remover functions.
+
+```js
+const on=(t,f,o)=>{canvas.addEventListener(t,f,o);listeners.push([t,f,o]);};
+```
+
+dispose:
+```js
+for(const [t,f,o] of listeners) canvas.removeEventListener(t,f,o);
+gl.deleteProgram(prog); gl.deleteShader(vs); ...
+const ext=gl.getExtension('WEBGL_lose_context'); if(ext) ext.loseContext();
+disposed=true;
+```
+
+contextlost listener: e.preventDefault() (allows restore), lost=true; contextrestored → lost=false... but program would be lost; simplest: don't preventDefault, just set lost=true; render guards via isContextLost. But dispose after lost: getExtension may return null — guard.
+
+Guard render: if(disposed) return; if(gl.isContextLost()) return;
+
+Also 'webglcontextlost' handler without preventDefault — fine "without throwing".
+
+Keyboard: canvas focused needed; we call canvas.focus() on pointerdown. tabindex set.
+
+Prevent default on keydown only for handled keys.
+
+Also prevent default on 'pointerdown'? Might prevent focus; we call focus manually. touch-action none handles touch. Also add `on('pointerdown', ...)` with e.preventDefault()? That prevents mouse focus but we manually focus. Also prevents text selection. I'll preventDefault on pointerdown.
+
+Wheel listener passive:false.
+
+Now byte counting — I'll write reasonably minified-but-readable. Let me now write out the whole module.
+
+Also note: evaluator may call render before any setView — use initial yaw/pitch/dist.
+
+getView returns {yaw, pitch, distance}.
+
+Let me be careful: uniform names & locations; use gl.getUniformLocation.
+
+One more check: gl_VertexID available in GLSL ES 3.00 vertex shader — yes.
+
+mat3 uniform: pass Float32Array(9) or array — uniformMatrix3fv accepts array.
+
+Draw: gl.drawArrays(gl.TRIANGLES,0,3). Need a VAO bound in WebGL2? In WebGL2, if no VAO and no buffers, drawing with no attributes: WebGL2 has a default VAO? Actually WebGL2 requires a VAO? WebGL2 has default vertex array object like desktop GL? In WebGL2, the default VAO exists and attribute-less rendering with gl_VertexID works (commonly used). Yes, drawArrays with no enabled attributes is allowed in WebGL2.
+
+Now assemble GLSL string. I'll write it as a template literal. Careful with backticks/${} — none inside.
+
+Let me write the final code.
+
+Also small detail: `U` macro — GLSL ES 3.0 supports #define macros. `#define U(d,m) if(d<r.x) r=vec2(d,m)` — careful with commas in vec2 inside macro args — macro args separated by commas, so `U(sdE(...),9.)` fine since inner commas are inside parens. Yes macro arg parsing respects parentheses.
+
+Define vec2 r at top of map.
+
+Shadow of thin parts could produce speckle; k=9 moderate.
+
+AO on ground? skip.
+
+Alright, also consider horizon: when rd.y between -0.0001 and small positive, sky shows horizon color — good.
+
+Ground fog color match horizon (0.78,0.84,0.92)ish.
+
+Let me also add subtle sun disk.
+
+Check round cone formula correctness (iq's sdRoundCone):
+```glsl
+float sdRC(vec3 p, vec3 a, vec3 b, float r1, float r2){
+ vec3 ba=b-a;
+ float l2=dot(ba,ba);
+ float rr=r1-r2;
+ float a2=l2-rr*rr;
+ float il2=1.0/l2;
+ vec3 pa=p-a;
+ float y=dot(pa,ba);
+ float z=y-l2;
+ vec3 x=pa*l2-ba*y;
+ float x2=dot(x,x);
+ float y2=y*y*l2;
+ float z2=z*z*l2;
+ float k=sign(rr)*rr*rr*x2;
+ if(sign(z)*a2*z2>k) return sqrt(x2+z2)*il2-r2;
+ if(sign(y)*a2*y2<k) return sqrt(x2+y2)*il2-r1;
+ return (sqrt(x2*a2*il2)+y*rr)*il2-r1;
+}
+```
+Correct per iq.
+
+Beak direction descending: a=(0.25,2.155,0) r1 .052, b=(0.96,2.03,0) r2 .012. fine.
+
+Neck: a=(-0.16,1.72,0) r1 .105, b=(0.10,2.04,0) r2 .075. a2=l2-rr² must be positive: l2 = 0.26²+0.32²=0.0676+0.1024=0.17; rr=-0.03 → rr²=.0009. ok.
+
+Ellipsoid approx: can slightly under-estimate distances? The iq approx is not a perfect bound but works with step factor 0.9. To be safer use 0.85. Fine.
+
+Now the ground shadow: shad() starts t=0.02; from ground point p+(0,0.01,0). Wheels touch ground → shadow start inside? h small → dark — fine (contact shadow).
+
+Specular on ground skip.
+
+Now potential compile pitfalls: ternary with vec constructors fine; `i==0?-0.85:0.85` fine.
+
+`vec3(B.xy,0.09*s)` valid.
+
+U macro used with expressions containing commas only within parentheses — ok.
+
+`float m=-1.;` after march: m may stay -1 if t0>t1? Guarded by if(bs&&t1>0.). If bs false → t stays max(t0..) hmm initialize t=-1 before; structure:
+
+```glsl
+float t=-1.,m=-1.;
+if(bs&&t1>0.){
+ t=max(t0,0.001);
+ for(int i=0;i<160;i++){
+   vec2 d=map(ro+rd*t);
+   if(d.x<0.0007){m=d.y;break;}
+   t+=d.x*0.88;
+   if(t>t1||t>tG){t=-1.;break;}
+ }
+ if(m<0.)t=-1.;
+}
+```
+
+Then `if(t>0.&&t<tG){...}else if(tG<1e8){...}else{sky}`.
+
+Edge: t0>tG handled by loop break first iteration? t starts >tG; map evaluated once unnecessarily then break: `if(t>t1||t>tG)` after stepping — evaluate map at t beyond ground once — wasteful but harmless; add pre-check `if(t<tG)` before loop: `if(t<min(t1,tG)){...loop...}`. I'll include condition in if: `if(bs&&t1>0.){ t=max(t0,0.001); if(t>min(t1,tG)) t=-1.; else { for... } }`. Simpler: inside for first check `if(t>t1||t>tG){t=-1.;break;}` before map. Do that ordering:
+
+```glsl
+for(int i=0;i<160;i++){
+ if(t>t1||t>tG){t=-1.;break;}
+ vec2 d=map(ro+rd*t);
+ if(d.x<0.0007){m=d.y;break;}
+ t+=d.x*0.88;
+}
+```
+
+Good.
+
+Compute tG: `float tG=rd.y<-1e-4?-ro.y/rd.y:1e9;` If camera below ground? Never (pitch clamped, target y 1.25, dist max 15, pitch 1.35 → eye y = 1.25+15*sin(1.35)=15.9 above; min fine.
+
+Sky when rd.y>=-1e-4 OR ground beyond... ground plane infinite: any downward ray hits ground. ok.
+
+Normal epsilon: 0.0015.
+
+Let me now also handle high-DPI? Evaluator sets drawing buffer; we respect it. antialias false (we raymarch; could do MSAA via antialias:true but fullscreen triangle with gl_FragCoord — MSAA works on edges only of triangle covering screen → no benefit). Set antialias:false for perf.
+
+Alpha:false, depth:false.
+
+gl.clearColor not needed since triangle covers.
+
+Now finalize numbers for camera: FOV focal 1.55 (~33° half vertical) — at dist 4.6 vertical coverage ~2*4.6/1.55=5.9 — subject 2.3 tall fits with margin. Good full-subject view; min dist 0.7 → beak inspection (coverage 0.9 world). Good.
+
+Distance clamp [0.7,16]. Wheel zoom exp factor: deltaY 100 → *1.116 per notch. ok.
+
+Arrow key step 0.09 rad; +/- factor 1.12.
+
+Pitch clamp [-1.3,1.35].
+
+Initial: yaw 0.65, pitch 0.16, distance 4.6.
+
+Target (0,1.25,0). Beak at (0.96,2.03) — for close beak inspection user orbits front: fine.
+
+Now, total code. Let me write it.
+
+```js
+export function createPelicanSdf(canvas){
+"use strict";
+const gl=canvas.getContext("webgl2",{antialias:false,alpha:false,depth:false,stencil:false,powerPreference:"high-performance"});
+if(!gl)throw new Error("createPelicanSdf: WebGL2 is not available");
+const VS=`#version 300 es
+void main(){vec2 v=vec2(float((gl_VertexID<<1)&2),float(gl_VertexID&2));gl_Position=vec4(v*2.-1.,0.,1.);}`;
+const FS=`#version 300 es
+precision highp float;
+uniform vec2 uRes;uniform float uTime;uniform vec3 uPos;uniform mat3 uCam;
+out vec4 O;
+...
+`;
+```
+
+Full FS — write it out:
+
+```glsl
+mat2 rot(float a){float c=cos(a),s=sin(a);return mat2(c,-s,s,c);}
+float sdE(vec3 p,vec3 r){float k0=length(p/r);float k1=length(p/(r*r));return k0*(k0-1.)/k1;}
+float sdC(vec3 p,vec3 a,vec3 b,float r){vec3 pa=p-a,ba=b-a;float h=clamp(dot(pa,ba)/dot(ba,ba),0.,1.);return length(pa-ba*h)-r;}
+float sdTz(vec3 p,vec2 t){return length(vec2(length(p.xy)-t.x,p.z))-t.y;}
+float sdCz(vec3 p,float r,float h){vec2 d=abs(vec2(length(p.xy),p.z))-vec2(r,h);return min(max(d.x,d.y),0.)+length(max(d,0.));}
+float sdRB(vec3 p,vec3 b,float r){vec3 q=abs(p)-b;return length(max(q,0.))+min(max(q.x,max(q.y,q.z)),0.)-r;}
+float sdRC(vec3 p,vec3 a,vec3 b,float r1,float r2){vec3 ba=b-a;float l2=dot(ba,ba),rr=r1-r2,a2=l2-rr*rr,il2=1./l2;vec3 pa=p-a;float y=dot(pa,ba),z=y-l2;vec3 x=pa*l2-ba*y;float x2=dot(x,x),y2=y*y*l2,z2=z*z*l2,k=sign(rr)*rr*rr*x2;if(sign(z)*a2*z2>k)return sqrt(x2+z2)*il2-r2;if(sign(y)*a2*y2<k)return sqrt(x2+y2)*il2-r1;return (sqrt(x2*a2*il2)+y*rr)*il2-r1;}
+#define U(d,m) if(d<r.x)r=vec2(d,m)
+vec2 map(vec3 p){
+ vec2 r=vec2(1e9,0.);
+ float t=uTime;
+ float wa=t*2.6;
+ for(int i=0;i<2;i++){
+  vec3 q=p-vec3(i==0?-0.85:0.85,0.56,0.);
+  U(sdTz(q,vec2(0.500,0.055)),1.);
+  U(sdTz(q,vec2(0.448,0.017)),2.);
+  U(sdCz(q,0.034,0.050),2.);
+  vec2 sp=rot(-wa)*q.xy;
+  float a=mod(atan(sp.y,sp.x)+0.3927,0.7854)-0.3927;
+  vec2 sq=length(sp)*vec2(cos(a),sin(a));
+  U(length(sq-vec2(clamp(sq.x,0.04,0.44),0.))-0.009,2.);
+ }
+ vec3 B=vec3(-0.15,0.42,0.);
+ U(sdC(p,B,vec3(0.56,0.78,0.),0.032),3.);
+ U(sdC(p,vec3(-0.42,1.20,0.),vec3(0.68,1.28,0.),0.030),3.);
+ U(sdC(p,B,vec3(-0.44,1.22,0.),0.030),3.);
+ U(sdC(p,vec3(0.55,0.75,0.),vec3(0.71,1.33,0.),0.042),3.);
+ U(sdC(p,vec3(-0.15,0.42,0.07),vec3(-0.85,0.56,0.07),0.020),3.);
+ U(sdC(p,vec3(-0.15,0.42,-0.07),vec3(-0.85,0.56,-0.07),0.020),3.);
+ U(sdC(p,vec3(-0.44,1.20,0.055),vec3(-0.85,0.56,0.055),0.016),3.);
+ U(sdC(p,vec3(-0.44,1.20,-0.055),vec3(-0.85,0.56,-0.055),0.016),3.);
+ U(sdC(p,vec3(0.60,0.84,0.05),vec3(0.85,0.56,0.05),0.022),3.);
+ U(sdC(p,vec3(0.60,0.84,-0.05),vec3(0.85,0.56,-0.05),0.022),3.);
+ U(sdC(p,vec3(0.71,1.30,0.),vec3(0.74,1.46,0.),0.024),3.);
+ U(sdC(p,vec3(0.74,1.46,-0.21),vec3(0.74,1.46,0.21),0.018),5.);
+ U(sdC(p,vec3(0.74,1.46,0.15),vec3(0.66,1.45,0.27),0.028),6.);
+ U(sdC(p,vec3(0.74,1.46,-0.15),vec3(0.66,1.45,-0.27),0.028),6.);
+ U(sdC(p,vec3(-0.44,1.16,0.),vec3(-0.46,1.30,0.),0.022),5.);
+ U(sdE(p-vec3(-0.48,1.335,0.),vec3(0.17,0.05,0.09)),4.);
+ U(sdC(p,vec3(-0.15,0.42,-0.10),vec3(-0.15,0.42,0.10),0.018),7.);
+ U(sdCz(p-vec3(-0.15,0.42,0.078),0.095,0.010),7.);
+ U(sdCz(p-vec3(-0.85,0.56,0.078),0.050,0.008),7.);
+ U(sdC(p,vec3(-0.15,0.515,0.078),vec3(-0.85,0.610,0.078),0.011),7.);
+ U(sdC(p,vec3(-0.15,0.325,0.078),vec3(-0.85,0.510,0.078),0.011),7.);
+ float ca=t*1.4;
+ for(int i=0;i<2;i++){
+  float s=i==0?1.:-1.;
+  float a=ca+(i==0?0.:3.14159);
+  vec2 e=B.xy+0.17*vec2(cos(a),sin(a));
+  U(sdC(p,vec3(B.xy,0.09*s),vec3(e,0.15*s),0.020),7.);
+  U(sdC(p,vec3(e,0.13*s),vec3(e,0.205*s),0.012),7.);
+  U(sdRB(p-vec3(e.x,e.y,0.185*s),vec3(0.085,0.018,0.055),0.008),8.);
+  vec3 ank=vec3(e.x,e.y+0.055,0.185*s);
+  vec3 hip=vec3(-0.36,1.50,0.11*s);
+  vec3 kn=mix(hip,ank,0.42)+vec3(0.15,0.06,0.02*s);
+  U(sdC(p,hip,kn,0.052),14.);
+  U(sdC(p,kn,ank,0.036),14.);
+  U(sdE(p-vec3(ank.x+0.035,ank.y-0.005,ank.z),vec3(0.075,0.024,0.05)),14.);
+ }
+ vec3 pb=p-vec3(0.,0.012*sin(t*2.2),0.);
+ U(sdE(pb-vec3(-0.40,1.62,0.),vec3(0.34,0.27,0.23)),9.);
+ U(sdRC(pb,vec3(-0.16,1.72,0.),vec3(0.10,2.04,0.),0.105,0.075),9.);
+ U(sdE(pb-vec3(0.16,2.14,0.),vec3(0.135,0.12,0.11)),9.);
+ U(sdE(pb-vec3(0.09,2.25,-0.02),vec3(0.06,0.045,0.05)),9.);
+ U(sdRC(pb,vec3(0.25,2.155,0.),vec3(0.96,2.03,0.),0.052,0.012),11.);
+ U(sdC(pb,vec3(0.27,2.10,0.),vec3(0.88,2.005,0.),0.018),12.);
+ U(sdE(pb-vec3(0.55,2.03,0.),vec3(0.30,0.115,0.08)),12.);
+ U(length(pb-vec3(0.20,2.175,0.10))-0.024,13.);
+ U(length(pb-vec3(0.20,2.175,-0.10))-0.024,13.);
+ vec3 q2=pb-vec3(-0.70,1.68,0.);
+ q2.xy=rot(-0.45)*q2.xy;
+ U(sdE(q2,vec3(0.17,0.06,0.11)),9.);
+ float fl=0.10*sin(t*2.2);
+ for(int i=0;i<2;i++){
+  float s=i==0?1.:-1.;
+  vec3 w=pb-vec3(-0.42,1.66,0.19*s);
+  w.yz=rot(s*(0.10+fl))*w.yz;
+  w.xy=rot(-0.25)*w.xy;
+  w.xz=rot(-s*0.25)*w.xz;
+  U(sdE(w,vec3(0.32,0.15,0.06)),10.);
+ }
+ return r;
+}
+```
+
+Wait `vec3 q2` conflicts with earlier `vec3 q` inside for-loop scope (loop scope separate) fine.
+
+But `q2.xy=rot(-0.45)*q2.xy;` — tail tip up: tail extends -x; vector (-1,0) rotated by -0.45: v'=(c*x+s*y, -s*x+c*y) with s=sin(-0.45)=-0.435: (-1,0)→(c*(-1), -(-0.435)*(-1))=(-0.90, -0.435) — points down. Want tail up: rot(+0.45): s=0.435: (-1,0)→(-0.9, +0.435)? -s*x = -0.435*(-1)=+0.435. Yes rot(0.45).
+
+Hmm wait earlier I derived v'=(c x + s y, -s x + c y) from mat2(c,-s,s,c). Let me recheck: mat2(a,b,c,d) constructs columns: first column (a,b), second (c,d). So M=mat2(c,-s,s,c) has columns (c,-s) and (s,c). M*v = v.x*(c,-s)+v.y*(s,c) = (c v.x + s v.y, -s v.x + c v.y). Yes as derived.
+
+So rotation by angle a with this matrix maps (1,0)→(c,-s): clockwise in standard xy. Fine.
+
+Tail: q2.xy=rot(0.45)*q2.xy — ellipsoid's local x-axis... careful: we rotate the query point, so the shape rotates oppositely. If we want shape's long axis (local x) to point up-back in world: world direction of local x-axis = R^{-1} applied... ugh. Shape defined as sdE(q2,...) with q2=R*(p-c). The shape in world is points where R*(p-c) inside ellipsoid, i.e., p-c = R^{-1}*localPoint. Local x-axis maps to R^{-1}*(1,0). R=rot(0.45): R^{-1}=rot(-0.45): (1,0)→(c, -s with s=sin(-0.45)=-0.435 → (0.90, 0.435)) — up-forward?? x positive direction up. Local +x is the tail's... ellipsoid symmetric, so axis line through world direction (0.90,0.435) and (-0.90,-0.435): the axis tilts up-forward/down-back. Tail centered behind body at x=-0.70; its extent along that axis: tip toward down-back. Hmm I want tip up-back. So use R=rot(-0.45): R^{-1}=rot(0.45): (1,0)→(0.90,-0.435): axis down-forward/up-back. Tail tip (local -x side) → up-back. Yes so q2.xy=rot(-0.45)*q2.xy gives tip up-back. Wait let me double check: local point (-1,0) maps to world R^{-1}*(-1,0)= -(0.90,-0.435)=(-0.90,+0.435): up-back. Tail local ±x both exist; the far tip from body is at world (-0.70,1.68)+(-0.9*0.17,0.435*0.17)≈(-0.85,1.75): up-back. 
+
+Earlier wing droop: w.xy=rot(-0.25)*w.xy → local x-axis world dir R^{-1}(1,0)=rot(0.25)(1,0)=(0.97,-0.247): front tip down-forward, back tip up-back. Wings swept up at back... I wanted drooping back-down. Use rot(0.25) instead: R^{-1}=rot(-0.25): (1,0)→(0.97,0.247): axis up-forward, so back tip down-back. Yes: w.xy=rot(0.25)*w.xy. Hmm but wings attached at front shoulder, fanning back-down — natural. Use +0.25.
+
+Wing sweep w.xz=rot(-s*0.25): local x world dir: R=rot(-s*0.25) in xz-plane; R^{-1}=rot(s*0.25) applied (1,0): in xz coords (x,z): (c, -sin(s*0.25)*? using formula (c v.x + s2 v.z, -s2 v.x + c v.z) with v=(1,0): (c,-s2), s2=sin(s*0.25)=s*0.247 → (0.97, -s*0.247): for right wing s=1: front tip points toward -z i.e., inward?? front tip +x local maps world (0.97,0,-0.247): forward and inward — wings sweep slightly inward at front — that's odd; we want tips swept outward-back or backward. Flip sign: w.xz=rot(s*0.25) → R^{-1}=rot(-s*0.25): (1,0)→(c, s*0.247): front tip outward. Then back tip inward-down... Actually typical bird wing folded: elbow out, tip back along body. Either fine visually. I'll use w.xz=rot(s*0.30) so wings flare slightly outward at front, tips tuck toward tail inward. OK.
+
+Honestly these subtle rotations just need to look plausible; fine.
+
+Lighting main — write now.
+
+```glsl
+vec3 calcN(vec3 p){
+ vec2 e=vec2(0.0015,-0.0015);
+ return normalize(e.xyy*map(p+e.xyy).x+e.yyx*map(p+e.yyx).x+e.yxy*map(p+e.yxy).x+e.xxx*map(p+e.xxx).x);
+}
+float softS(vec3 ro,vec3 rd){
+ float r=1.,t=0.02;
+ for(int i=0;i<44;i++){
+  float h=map(ro+rd*t).x;
+  if(h<0.0012)return 0.;
+  r=min(r,8.*h/t);
+  t+=clamp(h,0.015,0.30);
+  if(t>4.5)break;
+ }
+ return r;
+}
+float aof(vec3 p,vec3 n){
+ float o=0.,s=1.;
+ for(int i=0;i<5;i++){
+  float h=0.02+0.05*float(i);
+  o+=(h-map(p+n*h).x)*s;
+  s*=0.72;
+ }
+ return clamp(1.-1.8*o,0.,1.);
+}
+```
+
+material via function with if-chain as above.
+
+main:
+
+```glsl
+void main(){
+ vec2 uv=(2.*gl_FragCoord.xy-uRes)/uRes.y;
+ vec3 ro=uPos;
+ vec3 rd=normalize(uCam*vec3(uv,1.55));
+ vec3 L=normalize(vec3(0.55,0.75,0.45));
+ vec3 skyH=vec3(0.78,0.84,0.92);
+ float tG=rd.y<-0.0001?-ro.y/rd.y:1e9;
+ vec3 BC=vec3(0.05,1.30,0.);
+ vec3 oc=ro-BC;
+ float b=dot(oc,rd),c=dot(oc,oc)-3.42;
+ float hh=b*b-c;
+ float t=-1.,m=-1.;
+ if(hh>0.){
+  hh=sqrt(hh);
+  float t0=max(-b-hh,0.001),t1=-b+hh;
+  if(t1>0.&&t0<t1&&t0<tG){
+   t=t0;
+   for(int i=0;i<160;i++){
+    if(t>t1||t>tG){t=-1.;break;}
+    vec2 d=map(ro+rd*t);
+    if(d.x<0.0007){m=d.y;break;}
+    t+=d.x*0.88;
+   }
+   if(m<0.)t=-1.;
+  }
+ }
+ vec3 col;
+ if(t>0.){
+  vec3 p=ro+rd*t;
+  vec3 n=calcN(p);
+  vec3 alb;float sp,shi;
+  matOf(m,alb,sp,shi);
+  float s=softS(p+n*0.012,L);
+  float ao=aof(p,n);
+  float dif=clamp(dot(n,L),0.,1.)*s;
+  vec3 hv=normalize(L-rd);
+  float spe=pow(clamp(dot(n,hv),0.,1.),shi)*sp*s;
+  col=alb*(vec3(0.30,0.33,0.38)*(0.55+0.45*n.y)*ao+vec3(1.15,1.05,0.90)*dif)+vec3(spe);
+  col+=alb*0.10*pow(1.-clamp(dot(n,-rd),0.,1.),3.)*ao;
+ }else if(tG<1e8){
+  vec3 p=ro+rd*tG;
+  vec2 g=floor(p.xz);
+  float ch=mod(g.x+g.y,2.);
+  vec3 alb=mix(vec3(0.50,0.49,0.47),vec3(0.58,0.57,0.54),ch);
+  alb=mix(alb,vec3(0.54,0.53,0.505),clamp(tG*0.05,0.,1.));
+  float s=softS(p+vec3(0.,0.015,0.),L);
+  col=alb*(vec3(0.30,0.33,0.38)+vec3(1.05,0.97,0.85)*0.9*s);
+  col=mix(col,skyH,clamp(1.-exp(-0.0011*tG*tG),0.,1.));
+ }else{
+  float y=max(rd.y,0.);
+  col=mix(skyH,vec3(0.19,0.40,0.83),pow(y,0.55));
+  float sd=clamp(dot(rd,L),0.,1.);
+  col+=vec3(1.0,0.88,0.65)*pow(sd,180.)*1.2+vec3(1.0,0.9,0.7)*pow(sd,10.)*0.10;
+ }
+ col=pow(col,vec3(0.4545));
+ O=vec4(col,1.);
+}
+```
+
+matOf function:
+```glsl
+void matOf(float m,out vec3 alb,out float sp,out float sh){
+ alb=vec3(0.8);sp=0.2;sh=24.;
+ if(m<1.5){alb=vec3(0.09,0.09,0.10);sp=0.15;sh=10.;}
+ else if(m<2.5){alb=vec3(0.72,0.73,0.75);sp=0.7;sh=48.;}
+ else if(m<3.5){alb=vec3(0.85,0.10,0.08);sp=0.5;sh=40.;}
+ else if(m<4.5){alb=vec3(0.30,0.16,0.08);sp=0.25;sh=16.;}
+ else if(m<5.5){alb=vec3(0.78,0.79,0.82);sp=0.8;sh=64.;}
+ else if(m<6.5){alb=vec3(0.10,0.10,0.11);sp=0.2;sh=12.;}
+ else if(m<7.5){alb=vec3(0.20,0.20,0.22);sp=0.55;sh=40.;}
+ else if(m<8.5){alb=vec3(0.12,0.12,0.13);sp=0.25;sh=16.;}
+ else if(m<9.5){alb=vec3(0.97,0.96,0.93);sp=0.18;sh=20.;}
+ else if(m<10.5){alb=vec3(0.90,0.90,0.87);sp=0.18;sh=20.;}
+ else if(m<11.5){alb=vec3(0.99,0.56,0.13);sp=0.3;sh=28.;}
+ else if(m<12.5){alb=vec3(0.98,0.48,0.36);sp=0.3;sh=24.;}
+ else if(m<13.5){alb=vec3(0.02,0.02,0.03);sp=0.9;sh=90.;}
+ else{alb=vec3(0.55,0.42,0.38);sp=0.2;sh=16.;}
+}
+```
+
+Bounding radius² = 3.42 → R=1.849. Center (0.05,1.30). Check extremes: pedal bottom: crank e min y = 0.42-0.17=0.25, ankle 0.305, pedal box at e.y 0.25 minus 0.018 → 0.23; dist from center: (0.05-(-0.15+..)) small; |(−0.15+0.17*cos... worst x -0.32, y 0.23): d=sqrt(0.37²+1.07²)=1.13. Wheel bottom (-0.85,0.005): d=sqrt(0.9²+1.295²)=1.577. Beak tip (0.96,2.03): sqrt(0.91²+0.73²)=1.167. Tail top (-0.85,1.76): sqrt(0.9²+0.46²)=1.01. Head top 2.30: sqrt(0.11²+1.0²)=1.006. Max 1.577 < 1.849. Good, also legs knee z etc fine.
+
+Checker on ground: shadow rays from ground far away march map with max t 4.5 — fine.
+
+One perf improvement: in softS we can pass early bail; fine.
+
+Now worry: `pow(y,0.55)` with y≥0 ok.
+
+JS part:
+
+```js
+function compile(type,src){
+ const s=gl.createShader(type);
+ gl.shaderSource(s,src);
+ gl.compileShader(s);
+ if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)){
+  throw new Error("createPelicanSdf: shader compile failed: "+gl.getShaderInfoLog(s));
+ }
+ return s;
+}
+const vs=compile(gl.VERTEX_SHADER,VS), fs=compile(gl.FRAGMENT_SHADER,FS);
+const prog=gl.createProgram();
+gl.attachShader(prog,vs);gl.attachShader(prog,fs);gl.linkProgram(prog);
+if(!gl.getProgramParameter(prog,gl.LINK_STATUS)){
+ throw new Error("createPelicanSdf: program link failed: "+gl.getProgramInfoLog(prog));
+}
+gl.useProgram(prog);
+const uRes=gl.getUniformLocation(prog,"uRes"),uTime=...,uPos=...,uCam=...;
+```
+
+State and API:
+
+```js
+let yaw=0.65,pitch=0.16,distance=4.6;
+const target=[0,1.25,0];
+let disposed=false;
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+function render(t){
+ if(disposed||gl.isContextLost())return;
+ const w=gl.drawingBufferWidth,h=gl.drawingBufferHeight;
+ if(!w||!h)return;
+ gl.viewport(0,0,w,h);
+ const cp=Math.cos(pitch),sp=Math.sin(pitch),cy=Math.cos(yaw),sy=Math.sin(yaw);
+ const ex=target[0]+distance*sy*cp, ey=target[1]+distance*sp, ez=target[2]+distance*cy*cp;
+ let fx=target[0]-ex, fy=target[1]-ey, fz=target[2]-ez;
+ const fl=Math.hypot(fx,fy,fz); fx/=fl;fy/=fl;fz/=fl;
+ let rx= fz? ... cross(fwd,up): right = normalize(cross(fwd,[0,1,0])) = (fz*? ) cross((fx,fy,fz),(0,1,0)) = (fy*0-fz*1, fz*0-fx*0, fx*1-fy*0) = (-fz, 0, fx). normalize.
+ const rl=Math.hypot(fz,fx); const rx=-fz/rl, ry=0, rz=fx/rl;
+ // up = cross(right,fwd)
+ const ux=ry*fz-rz*fy, uy=rz*fx-rx*fz, uz=rx*fy-ry*fx;
+ gl.uniform2f(uRes,w,h);
+ gl.uniform1f(uTime,t);
+ gl.uniform3f(uPos,ex,ey,ez);
+ gl.uniformMatrix3fv(uCam,false,[rx,ry,rz,ux,uy,uz,fx,fy,fz]);
+ gl.drawArrays(gl.TRIANGLES,0,3);
+}
+```
+
+cross(right,fwd): (ry*fz - rz*fy, rz*fx - rx*fz, rx*fy - ry*fx). Yes.
+
+setView(y,p,d){yaw=y;pitch=clamp(p,-1.35,1.35);distance=clamp(d,0.7,16);}
+getView(){return{yaw,pitch,distance};}
+
+Events:
+
+```js
+const listeners=[];
+function on(type,fn,opts){canvas.addEventListener(type,fn,opts);listeners.push([type,fn,opts]);}
+const pts=new Map();
+let pinch0=0,pinchD=0;
+on("pointerdown",e=>{
+ e.preventDefault();
+ canvas.focus();
+ try{canvas.setPointerCapture(e.pointerId);}catch(_){}
+ pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
+ if(pts.size===2){
+  const v=[...pts.values()];
+  pinch0=Math.max(1,Math.hypot(v[0].x-v[1].x,v[0].y-v[1].y));
+  pinchD=distance;
+ }
+});
+on("pointermove",e=>{
+ const p=pts.get(e.pointerId);
+ if(!p)return;
+ if(pts.size===1){
+  yaw-=(e.clientX-p.x)*0.0055;
+  pitch=clamp(pitch+(e.clientY-p.y)*0.0055,-1.35,1.35);
+  p.x=e.clientX;p.y=e.clientY;
+ }else if(pts.size===2){
+  p.x=e.clientX;p.y=e.clientY;
+  const v=[...pts.values()];
+  const d=Math.max(1,Math.hypot(v[0].x-v[1].x,v[0].y-v[1].y));
+  distance=clamp(pinchD*pinch0/d,0.7,16);
+ }
+});
+function endP(e){pts.delete(e.pointerId);}
+on("pointerup",endP);
+on("pointercancel",endP);
+on("wheel",e=>{
+ e.preventDefault();
+ distance=clamp(distance*Math.exp(e.deltaY*0.0011),0.7,16);
+},{passive:false});
+on("keydown",e=>{
+ let u=true;
+ switch(e.key){
+  case "ArrowLeft":yaw-=0.09;break;
+  case "ArrowRight":yaw+=0.09;break;
+  case "ArrowUp":pitch=clamp(pitch+0.06,-1.35,1.35);break;
+  case "ArrowDown":pitch=clamp(pitch-0.06,-1.35,1.35);break;
+  case "+":case "=":distance=clamp(distance/1.12,0.7,16);break;
+  case "-":case "_":distance=clamp(distance*1.12,0.7,16);break;
+  default:u=false;
+ }
+ if(u)e.preventDefault();
+});
+on("webglcontextlost",e=>{});
+```
+
+For context lost "handle without throwing": render guards isContextLost. Also add listener to prevent default? If we preventDefault, context could be restored but our program lost → would need reinit. Simpler: don't preventDefault; render no-ops. But uniform calls after loss are no-ops anyway. Guard is fine. Keep a listener that does nothing? Not needed. I'll add one that just sets a flag — optional. Skip.
+
+Also drag pitch direction: dragging down (clientY increases) → pitch increases → camera moves up looking down — that's "drag to orbit" natural? Typically drag down tilts view down (scene rotates up). Either acceptable.
+
+tabIndex:
+```js
+if(canvas.tabIndex<0)canvas.tabIndex=0;
+canvas.style.touchAction="none";
+```
+canvas.tabIndex default -1 for canvas? Default is -1 unless focusable... property returns -1 typically. Set 0.
+
+dispose:
+```js
+function dispose(){
+ if(disposed)return;
+ disposed=true;
+ for(const l of listeners)canvas.removeEventListener(l[0],l[1],l[2]);
+ pts.clear();
+ gl.deleteProgram(prog);
+ gl.deleteShader(vs);
+ gl.deleteShader(fs);
+ const ext=gl.getExtension("WEBGL_lose_context");
+ if(ext)ext.loseContext();
+}
+return{render,setView,getView,dispose};
+```
+
+render guard also `if(disposed)return;` good after dispose.
+
+One more requirement: "render() and setView() must not resize the canvas" — we don't.
+
+"Do not lower internal resolution" — viewport = drawingBuffer. Good.
+
+Byte size: let me roughly estimate final: FS ~ 6.5KB, JS ~ 4.5KB → ~11-12KB. Under 32,768. 
+
+Double-check GLSL for errors:
+
+- `#define U(d,m) if(d<r.x)r=vec2(d,m)` — usage `U(sdTz(q,vec2(0.500,0.055)),1.);` expands `if(...<r.x)r=vec2(...,1.);` good. But in else-if chains? Not used. OK.
+
+- In map, declared `vec3 B=vec3(...)` after loop — fine.
+
+- `vec2 e=B.xy+0.17*vec2(cos(a),sin(a));` shadows nothing. But `e` name vs later `vec2 e` in calcN? calcN uses vec2 e — different function scope fine.
+
+- In main: variable `float sd=...` fine, `vec3 alb;float sp,shi;` matOf outputs.
+
+- matOf param named `sh` shadows? It's out param, fine.
+
+- `uniform mat3 uCam;` multiply uCam*vec3 — fine.
+
+- Loop `for(int i=0;i<160;i++)` with break on t bounds first — when camera inside sphere t0=0.001.
+
+One subtlety: when ray starts inside sphere and immediately t>tG? can't since t0 small.
+
+When sphere behind camera (t1<0) — guard `t1>0.` Included in if via `if(t1>0.&&t0<t1&&t0<tG)`. Wait t0=max(-b-hh,0.001); if sphere behind, -b+hh<0 → t1<0 skip. good.
+
+Check `hh` reused as sqrt — careful: after `if(hh>0.){hh=sqrt(hh);...}` fine.
+
+Sky else-branch also hit when rd.y>=-1e-4 and no subject: yes.
+
+Ground shading ambient uses n.y=1 fixed; fine.
+
+Potential issue: ground plane at y=0, camera target y 1.25; pitch negative max -1.35 at distance 16: eye y=1.25-16*sin(1.35) = negative → camera below ground! sin(1.35)=0.9757 → 1.25-15.6 <0. Camera under ground → render shows ground from below? tG = -ro.y/rd.y with ro.y<0 and rd looking up at target... rd.y>0 → tG=1e9 → sky; subject still visible? Rays upward hit sphere. Weird but not crash. Clamp pitch min based on distance? Simpler clamp pitch to [-0.35? no—allow looking from below slightly but keep above ground: limit pitch min -0.2? Inspecting from slightly below is nice but ground blocks. Choose pitch clamp [-0.5,1.35]; at distance 16, eye y = 1.25-16*0.479=-6.4 still below. Hmm. Better: also enforce eye above ground: after computing, could raise. Simpler: clamp pitch minimum to -0.15? At dist 16: 1.25-16*0.149=-1.14 still below. Compute constraint: sin(pitch) > -(target.y-0.05)/distance. For d=16: sin > -0.075 → pitch > -0.075. Implement dynamic clamp in render? But setView must store given values and getView return current — spec says getView returns current camera. We can clamp at render time for position computation? Deterministic given same inputs — fine but setView(0,-1.35,16) then getView should return what we set. Keep stored, clamp effective in render:
+
+```js
+const minP=Math.max(-1.35, Math.asin(clamp(-(target[1]-0.1)/distance,-1,1)));
+const pe=Math.max(pitch,minP);
+```
+
+Hmm wait sign: pitch negative → eye below target. Want eye y ≥ 0.1: distance*sin(pitch) ≥ -(1.25-0.1) → sin(pitch) ≥ -1.15/distance. For distance ≤1.15 no constraint. pe=max(pitch, asin(-min(1,1.15/distance))). Use in render only for eye computation... but then camera doesn't match getView exactly — acceptable ("current camera" is the stored view; render clamps to keep above floor). Actually simpler: clamp pitch at setView/interaction time to [-0.5, 1.35]? At d=16 looking from -0.5: below ground again. The evaluator probably uses reasonable distances. But robustness: implement effective clamp in render; getView returns stored. Deterministic: yes.
+
+Wait also user zooming out while pitched down — dynamic clamp keeps camera above floor — nice.
+
+Implement:
+```js
+let pe=pitch;
+const sMin=-(1.15)/distance;
+if(sMin>-1&&Math.sin(pe)<sMin) pe=Math.asin(sMin);
+```
+i.e. if distance>1.15 and sin(pitch)< -1.15/distance → raise.
+
+Then cp=Math.cos(pe), sp=Math.sin(pe).
+
+For interaction pitch clamp range: [-1.35,1.35] still fine.
+
+Now check "zoom from a useful full-subject view to a close inspection": max 16 plenty; min 0.7 — beak at distance ~0.7 from target... camera near beak: at yaw 0, camera (0,1.25,0.7); beak tip (0.96,2.03) distance ~1.4 away. Visible. Fine.
+
+Performance measurement: full-screen raymarch 160 steps worst; bounding sphere cuts sky; typical. Should be okay.
+
+Let me also consider adding a subtle shadow-only optimization: softS steps 44 — could reduce to 36. Keep 40.
+
+Also the march step multiplier 0.88 with ellipsoids: safe.
+
+Normal eps 0.0015 — at close zoom (t~0.5) features 0.001... fine.
+
+Let me also double-check spoke folding: a=mod(atan+0.3927,0.7854)-0.3927 → range [-0.3927,0.3927). cos positive ~[0.924,1], sq.x=rr*cos(a)>0. clamp(sq.x,0.04,0.44): spoke from hub 0.04 to rim 0.44. distance to that radial segment — correct spokes, 8 of them. They rotate with rot(-wa)*q.xy — rotating query by -wa rotates pattern by +wa. Wheels spin.
+
+Rear wheel has cog/chain at z=0.078 — spokes at z=0 plane; fine.
+
+Also add chainring guard? enough.
+
+One more scene element: pedal z position ±0.185 vs foot ellipsoid at same — foot above pedal (ank.y=e.y+0.055, foot center ank.y-0.005=e.y+0.05, half-height .024 → bottom at e.y+0.026; pedal top e.y+0.018 → foot just above pedal. 
+
+Thigh radius 0.052 from hip (-0.36,1.50,±0.11) — inside body (body bottom 1.35). Good.
+
+Knee offset (0.15,0.06,±0.02) at 42% blend — knees forward — bird-like pedaling. 
+
+Now check head/beak vs handlebar: head at (0.16,2.14), bar at (0.74,1.46) — pelican looks over bars. 
+
+Wing center z ±0.19 with flap rotation about x-axis — right wing (s=1): rot(0.10+fl) in yz. Fine.
+
+Also wing ellipsoid after rotations: w.xy=rot(0.25) then w.xz — order matters but any is fine.
+
+Check the `fl` sign for symmetric flap: s*(0.10+fl) — mirrored rotations about x → both wings rise/fall together. Yes: for s=-1, rotation angle -(0.10+fl): mirror. Good.
+
+Body bob: pb y-offset 0.012 sin(2.2t) same frequency as flap — synced charm. Legs NOT bobbing (they're anchored to pedals) — body bobs but hips are computed from leg loop without bob → hips stay fixed while body bobs 1.2cm — hips inside body anyway. Fine.
+
+Now background when looking slightly downward from low pitch: ground fills. Good.
+
+Edge: `uTime` may be any float; sin/cos fine.
+
+Fragment shader uses `uTime` in map only via wa, ca, fl, bob. Good.
+
+Vignette? optional skip.
+
+Now, assemble final file and count size. I'll write compact formatting (tabs or single spaces, minimal newlines in JS but keep readability moderately). Size estimate fine (~12KB).
+
+Also the evaluator "measures uncapped frame throughput ... by calling render() directly" — so render must not rely on events. Good.
+
+Also ensure no `requestAnimationFrame`, no timers. Yes.
+
+One more: "Throw a clear error during setup if WebGL2 is unavailable or shader compilation fails." Done.
+
+"Handle WebGL context loss without throwing" — render guards; also add 'webglcontextlost' listener that preventDefaults? If we don't add any listener, default behavior loses context; render checks isContextLost → returns. No throw. But some browsers: calling getExtension in dispose after lost returns null — guarded. OK. Also should add the listener to avoid... not needed. I'll add a no-op listener with preventDefault to attempt keeping context? preventDefault signals app will restore; then we'd need 'webglcontextrestored' re-init (recreate program). That's more code but more robust. Hmm — "Handle WebGL context loss without throwing" — simplest compliant: guard everything. I'll add listener that calls preventDefault and a restored handler that recreates program? If context restored, previous GL objects invalid; must recompile. Wrap setup in function initGL() called once and on restore. Let me implement:
+
+```js
+let prog=null,loc=null;
+function build(){
+ ... compile, link, get locations ...
+ gl.useProgram(prog);
+}
+on('webglcontextlost',e=>{e.preventDefault();lost=true;});
+on('webglcontextrestored',()=>{build();lost=false;});
+```
+
+And render checks `lost`. That's robust. But build() after restore: shaders recompiled — same source — fine. Errors during restore would throw inside event handler — wrap try/catch → if fails, lost stays true. OK.
+
+Actually if we preventDefault on contextlost, the context will be restored only if... browser may restore. Fine either way.
+
+Simplify: keep lost flag; render: `if(disposed||lost)return;` plus try isContextLost? isContextLost cheap, skip.
+
+Let me restructure code with build():
+
+```js
+let prog,vs,fs,uRes,uTime,uPos,uCam;
+function build(){
+ vs=compile(gl.VERTEX_SHADER,VS); fs=compile(gl.FRAGMENT_SHADER,FS);
+ prog=gl.createProgram();
+ gl.attachShader(prog,vs); gl.attachShader(prog,fs); gl.linkProgram(prog);
+ if(!gl.getProgramParameter(prog,gl.LINK_STATUS)) throw new Error("createPelicanSdf: link failed: "+gl.getProgramInfoLog(prog));
+ gl.useProgram(prog);
+ uRes=gl.getUniformLocation(prog,"uRes"); ...
+}
+build();
+```
+
+dispose deletes if exist.
+
+Now write the whole thing and check bytes. Let me count roughly as I write. I'll aim compact: GLSL with newlines but short names already.
+
+Also careful: In GLSL, `float c=dot(oc,oc)-3.42;` — but `c` also used as loop var name elsewhere? main only. But `c` conflicts with nothing.
+
+Also `vec3 q2` in map; earlier `vec3 q` in first for loop scoped.
+
+Also I used `e` as vec2 in crank loop and calcN's `vec2 e` — separate scopes ok. But in crank loop `vec2 e` and later `vec2 sp=rot(-wa)*q.xy;` in wheel loop uses name sp; later main has `float sp` — different function. In map, `sp` wheel var scoped to loop. In main `float sp,shi` — wait matOf outputs (alb,sp,shi); main declares `float sp,shi;`. And `float s=softS(...)` shadows? separate. But earlier in main I named `float s=softS(...)` and later `float sd=clamp(dot(rd,L),0.,1.);` — wait sky branch: `float sd` but `sdTz` is a function name — variable named `sd` shadows function locally, allowed. Fine, rename to `sg` anyway.
+
+GLSL reserved? `sg` fine.
+
+Also in ground branch I compute `float s=softS(...)` — but `s` already declared in subject branch? Different blocks (if/else scopes) — each branch its own scope. Fine.
+
+Check `matOf` defined before main. Order: helpers, map, calcN, softS, aof, matOf, main.
+
+One more check: uniformMatrix3fv column-major array [rx,ry,rz, ux,uy,uz, fx,fy,fz] — columns: right, up, fwd. uCam*vec3(uv,1.55)= right*uv.x + up*uv.y + fwd*1.55. Yes.
+
+Check right vector: cross(fwd,(0,1,0)) = (fy*0 - fz*1, fz*0 - fx*0, fx*1 - fy*0) = (-fz, 0, fx). For camera at yaw 0: eye (0,·,d), fwd=(0,·,-1)→ normalized horizontal -1 z. right=(-(-1),0,0)=(1,0,0)?? -fz where fz≈-1 → rx=1, rz=fx=0 → right=+X. Camera looking -Z, screen right = +X. The bike front (+X) appears on screen right — right-side view with front to the right. Good, that's the classic right-side bicycle view.
+
+Hmm wait: fwd points from eye to target = -Z direction: fx=0,fz=-1. right=(-fz,0,fx)=(1,0,0). Yes.
+
+Pitch clamp in setView also to [-1.35,1.35]; distance [0.7,16].
+
+getView returns stored (unclamped? we clamp at set) — return stored values.
+
+"respond crisply after input": we could render immediately on input? Evaluator owns loop; no.
+
+Now think about "empty or near-empty output" validation — initial view must show subject: yes.
+
+Potential compile issue: `#define U(d,m) if(d<r.x)r=vec2(d,m)` then usage inside `for` loop without braces: `U(...);` fine.
+
+In map, first loop declares `vec3 q=...` then after loop `vec3 q2` — ok. I also use name `q2` only once; wings use `w`.
+
+Also `float a=mod(atan(sp.y,sp.x)+0.3927,0.7854)-0.3927;` — atan returns [-π,π]; +0.3927 range [-2.75,3.53]; mod positive → [0,0.7854); minus 0.3927 → [-0.3927,0.3927). For negative inputs GLSL mod is x - y*floor(x/y) — always positive for positive y. Good.
+
+`vec2 sq=length(sp)*vec2(cos(a),sin(a));` ok.
+
+Wheel hub sdCz(q,0.034,0.050) — half-height 0.05 → axle z ±0.05. Fine.
+
+Now, materials list covers all ids used: 1..14. matOf else-branch covers 14 (legs) — also m could be 0? No, m set only on hit.
+
+Double-check round cone call for neck has r1 (at a) 0.105 > r2 0.075: sign(rr) positive — fine either way.
+
+Everything seems consistent. One concern: performance of map (~50 primitives, 2 loops unrolled). 160 march iterations worst case at 1080p could be ~heavy but typical GPU fine; evaluator "fixed canvas size" unknown. Could reduce steps to 140 and shadow to 36. I'll set march 150, shadow 40, AO 5.
+
+Also early eps: 0.0007 — thin spokes 0.009 radius well resolved.
+
+Let me also add a tiny anti-overstep for thin geometry: step factor 0.88 handles.
+
+Alright, also ground checker lines might alias at grazing; distance blend handles.
+
+Time to write final module text.
+
+Also remember: no imports, single export function. "Return one self-contained JavaScript ES module" — the file content. Output exactly code, no fences.
+
+Let me write it fully:
+
+```js
+export function createPelicanSdf(canvas){
+"use strict";
+const gl=canvas.getContext("webgl2",{antialias:false,alpha:false,depth:false,stencil:false,powerPreference:"high-performance"});
+if(!gl)throw new Error("createPelicanSdf: WebGL2 is not available.");
+const VS=`#version 300 es
+void main(){vec2 v=vec2(float((gl_VertexID<<1)&2),float(gl_VertexID&2));gl_Position=vec4(v*2.-1.,0.,1.);}`;
+const FS=`...`;
+```
+
+Careful: in VS, `(gl_VertexID<<1)&2` — gl_VertexID int; bit ops fine. float(...) conversions.
+
+Now FS full text (assembled above). Then JS.
+
+Let me now write FS carefully end-to-end in final form:
+
+```
+#version 300 es
+precision highp float;
+uniform vec2 uRes;
+uniform float uTime;
+uniform vec3 uPos;
+uniform mat3 uCam;
+out vec4 O;
+mat2 rot(float a){float c=cos(a),s=sin(a);return mat2(c,-s,s,c);}
+float sdE(vec3 p,vec3 r){float k0=length(p/r),k1=length(p/(r*r));return k0*(k0-1.)/k1;}
+float sdC(vec3 p,vec3 a,vec3 b,float r){vec3 pa=p-a,ba=b-a;float h=clamp(dot(pa,ba)/dot(ba,ba),0.,1.);return length(pa-ba*h)-r;}
+float sdTz(vec3 p,vec2 t){return length(vec2(length(p.xy)-t.x,p.z))-t.y;}
+float sdCz(vec3 p,float r,float h){vec2 d=abs(vec2(length(p.xy),p.z))-vec2(r,h);return min(max(d.x,d.y),0.)+length(max(d,0.));}
+float sdRB(vec3 p,vec3 b,float r){vec3 q=abs(p)-b;return length(max(q,0.))+min(max(q.x,max(q.y,q.z)),0.)-r;}
+float sdRC(vec3 p,vec3 a,vec3 b,float r1,float r2){vec3 ba=b-a;float l2=dot(ba,ba),rr=r1-r2,a2=l2-rr*rr,il2=1./l2;vec3 pa=p-a;float y=dot(pa,ba),z=y-l2;vec3 x=pa*l2-ba*y;float x2=dot(x,x),y2=y*y*l2,z2=z*z*l2,k=sign(rr)*rr*rr*x2;if(sign(z)*a2*z2>k)return sqrt(x2+z2)*il2-r2;if(sign(y)*a2*y2<k)return sqrt(x2+y2)*il2-r1;return(sqrt(x2*a2*il2)+y*rr)*il2-r1;}
+#define U(d,m) if(d<r.x)r=vec2(d,m)
+vec2 map(vec3 p){
+vec2 r=vec2(1e9,0.);
+float t=uTime,wa=t*2.6,ca=t*1.4;
+for(int i=0;i<2;i++){
+vec3 q=p-vec3(i==0?-0.85:0.85,0.56,0.);
+U(sdTz(q,vec2(0.500,0.055)),1.);
+U(sdTz(q,vec2(0.448,0.017)),2.);
+U(sdCz(q,0.034,0.050),2.);
+vec2 sp=rot(-wa)*q.xy;
+float a=mod(atan(sp.y,sp.x)+0.3927,0.7854)-0.3927;
+vec2 sq=length(sp)*vec2(cos(a),sin(a));
+U(length(sq-vec2(clamp(sq.x,0.04,0.44),0.))-0.009,2.);
+}
+vec3 B=vec3(-0.15,0.42,0.);
+U(sdC(p,B,vec3(0.56,0.78,0.),0.032),3.);
+U(sdC(p,vec3(-0.42,1.20,0.),vec3(0.68,1.28,0.),0.030),3.);
+U(sdC(p,B,vec3(-0.44,1.22,0.),0.030),3.);
+U(sdC(p,vec3(0.55,0.75,0.),vec3(0.71,1.33,0.),0.042),3.);
+U(sdC(p,vec3(-0.15,0.42,0.07),vec3(-0.85,0.56,0.07),0.020),3.);
+U(sdC(p,vec3(-0.15,0.42,-0.07),vec3(-0.85,0.56,-0.07),0.020),3.);
+U(sdC(p,vec3(-0.44,1.20,0.055),vec3(-0.85,0.56,0.055),0.016),3.);
+U(sdC(p,vec3(-0.44,1.20,-0.055),vec3(-0.85,0.56,-0.055),0.016),3.);
+U(sdC(p,vec3(0.60,0.84,0.05),vec3(0.85,0.56,0.05),0.022),3.);
+U(sdC(p,vec3(0.60,0.84,-0.05),vec3(0.85,0.56,-0.05),0.022),3.);
+U(sdC(p,vec3(0.71,1.30,0.),vec3(0.74,1.46,0.),0.024),3.);
+U(sdC(p,vec3(0.74,1.46,-0.21),vec3(0.74,1.46,0.21),0.018),5.);
+U(sdC(p,vec3(0.74,1.46,0.15),vec3(0.66,1.45,0.27),0.028),6.);
+U(sdC(p,vec3(0.74,1.46,-0.15),vec3(0.66,1.45,-0.27),0.028),6.);
+U(sdC(p,vec3(-0.44,1.16,0.),vec3(-0.46,1.30,0.),0.022),5.);
+U(sdE(p-vec3(-0.48,1.335,0.),vec3(0.17,0.05,0.09)),4.);
+U(sdC(p,vec3(-0.15,0.42,-0.10),vec3(-0.15,0.42,0.10),0.018),7.);
+U(sdCz(p-vec3(-0.15,0.42,0.078),0.095,0.010),7.);
+U(sdCz(p-vec3(-0.85,0.56,0.078),0.050,0.008),7.);
+U(sdC(p,vec3(-0.15,0.515,0.078),vec3(-0.85,0.610,0.078),0.011),7.);
+U(sdC(p,vec3(-0.15,0.325,0.078),vec3(-0.85,0.510,0.078),0.011),7.);
+for(int i=0;i<2;i++){
+float s=i==0?1.:-1.,a=ca+(i==0?0.:3.14159);
+vec2 e=B.xy+0.17*vec2(cos(a),sin(a));
+U(sdC(p,vec3(B.xy,0.09*s),vec3(e,0.15*s),0.020),7.);
+U(sdC(p,vec3(e,0.13*s),vec3(e,0.205*s),0.012),7.);
+U(sdRB(p-vec3(e.x,e.y,0.185*s),vec3(0.085,0.018,0.055),0.008),8.);
+vec3 ank=vec3(e.x,e.y+0.055,0.185*s),hip=vec3(-0.36,1.50,0.11*s),kn=mix(hip,ank,0.42)+vec3(0.15,0.06,0.02*s);
+U(sdC(p,hip,kn,0.052),14.);
+U(sdC(p,kn,ank,0.036),14.);
+U(sdE(p-vec3(ank.x+0.035,ank.y-0.005,ank.z),vec3(0.075,0.024,0.05)),14.);
+}
+vec3 pb=p-vec3(0.,0.012*sin(t*2.2),0.);
+U(sdE(pb-vec3(-0.40,1.62,0.),vec3(0.34,0.27,0.23)),9.);
+U(sdRC(pb,vec3(-0.16,1.72,0.),vec3(0.10,2.04,0.),0.105,0.075),9.);
+U(sdE(pb-vec3(0.16,2.14,0.),vec3(0.135,0.12,0.11)),9.);
+U(sdE(pb-vec3(0.09,2.25,-0.02),vec3(0.06,0.045,0.05)),9.);
+U(sdRC(pb,vec3(0.25,2.155,0.),vec3(0.96,2.03,0.),0.052,0.012),11.);
+U(sdC(pb,vec3(0.27,2.10,0.),vec3(0.88,2.005,0.),0.018),12.);
+U(sdE(pb-vec3(0.55,2.03,0.),vec3(0.30,0.115,0.08)),12.);
+U(length(pb-vec3(0.20,2.175,0.10))-0.024,13.);
+U(length(pb-vec3(0.20,2.175,-0.10))-0.024,13.);
+vec3 q=pb-vec3(-0.70,1.68,0.);
+q.xy=rot(-0.45)*q.xy;
+U(sdE(q,vec3(0.17,0.06,0.11)),9.);
+float fl=0.10*sin(t*2.2);
+for(int i=0;i<2;i++){
+float s=i==0?1.:-1.;
+vec3 w=pb-vec3(-0.42,1.66,0.19*s);
+w.yz=rot(s*(0.10+fl))*w.yz;
+w.xy=rot(0.25)*w.xy;
+w.xz=rot(s*0.30)*w.xz;
+U(sdE(w,vec3(0.32,0.15,0.06)),10.);
+}
+return r;
+}
+vec3 calcN(vec3 p){
+vec2 e=vec2(0.0015,-0.0015);
+return normalize(e.xyy*map(p+e.xyy).x+e.yyx*map(p+e.yyx).x+e.yxy*map(p+e.yxy).x+e.xxx*map(p+e.xxx).x);
+}
+float softS(vec3 ro,vec3 rd){
+float r=1.,t=0.02;
+for(int i=0;i<40;i++){
+float h=map(ro+rd*t).x;
+if(h<0.0012)return 0.;
+r=min(r,8.*h/t);
+t+=clamp(h,0.015,0.30);
+if(t>4.5)break;
+}
+return r;
+}
+float aof(vec3 p,vec3 n){
+float o=0.,s=1.;
+for(int i=0;i<5;i++){
+float h=0.02+0.05*float(i);
+o+=(h-map(p+n*h).x)*s;
+s*=0.72;
+}
+return clamp(1.-1.8*o,0.,1.);
+}
+void matOf(float m,out vec3 alb,out float sp,out float sh){
+alb=vec3(0.8);sp=0.2;sh=24.;
+if(m<1.5){alb=vec3(0.09,0.09,0.10);sp=0.15;sh=10.;}
+else if(m<2.5){alb=vec3(0.72,0.73,0.75);sp=0.7;sh=48.;}
+else if(m<3.5){alb=vec3(0.85,0.10,0.08);sp=0.5;sh=40.;}
+else if(m<4.5){alb=vec3(0.30,0.16,0.08);sp=0.25;sh=16.;}
+else if(m<5.5){alb=vec3(0.78,0.79,0.82);sp=0.8;sh=64.;}
+else if(m<6.5){alb=vec3(0.10,0.10,0.11);sp=0.2;sh=12.;}
+else if(m<7.5){alb=vec3(0.20,0.20,0.22);sp=0.55;sh=40.;}
+else if(m<8.5){alb=vec3(0.12,0.12,0.13);sp=0.25;sh=16.;}
+else if(m<9.5){alb=vec3(0.97,0.96,0.93);sp=0.18;sh=20.;}
+else if(m<10.5){alb=vec3(0.90,0.90,0.87);sp=0.18;sh=20.;}
+else if(m<11.5){alb=vec3(0.99,0.56,0.13);sp=0.3;sh=28.;}
+else if(m<12.5){alb=vec3(0.98,0.48,0.36);sp=0.3;sh=24.;}
+else if(m<13.5){alb=vec3(0.02,0.02,0.03);sp=0.9;sh=90.;}
+else{alb=vec3(0.55,0.42,0.38);sp=0.2;sh=16.;}
+}
+void main(){
+vec2 uv=(2.*gl_FragCoord.xy-uRes)/uRes.y;
+vec3 ro=uPos,rd=normalize(uCam*vec3(uv,1.55)),L=normalize(vec3(0.55,0.75,0.45)),skyH=vec3(0.78,0.84,0.92);
+float tG=rd.y<-0.0001?-ro.y/rd.y:1e9;
+vec3 oc=ro-vec3(0.05,1.30,0.);
+float b=dot(oc,rd),c=dot(oc,oc)-3.42,h2=b*b-c,t=-1.,m=-1.;
+if(h2>0.){
+h2=sqrt(h2);
+float t0=max(-b-h2,0.001),t1=-b+h2;
+if(t1>0.&&t0<t1&&t0<tG){
+t=t0;
+for(int i=0;i<150;i++){
+if(t>t1||t>tG){t=-1.;break;}
+vec2 d=map(ro+rd*t);
+if(d.x<0.0007){m=d.y;break;}
+t+=d.x*0.88;
+}
+if(m<0.)t=-1.;
+}
+}
+vec3 col;
+if(t>0.){
+vec3 p=ro+rd*t,n=calcN(p),alb;
+float sp,shi;
+matOf(m,alb,sp,shi);
+float s=softS(p+n*0.012,L),ao=aof(p,n),dif=clamp(dot(n,L),0.,1.)*s;
+vec3 hv=normalize(L-rd);
+float spe=pow(clamp(dot(n,hv),0.,1.),shi)*sp*s;
+col=alb*(vec3(0.30,0.33,0.38)*(0.55+0.45*n.y)*ao+vec3(1.15,1.05,0.90)*dif)+vec3(spe);
+col+=alb*0.10*pow(1.-clamp(dot(n,-rd),0.,1.),3.)*ao;
+}else if(tG<1e8){
+vec3 p=ro+rd*tG;
+vec2 g=floor(p.xz);
+float ch=mod(g.x+g.y,2.);
+vec3 alb=mix(vec3(0.50,0.49,0.47),vec3(0.58,0.57,0.54),ch);
+alb=mix(alb,vec3(0.54,0.53,0.505),clamp(tG*0.05,0.,1.));
+float s=softS(p+vec3(0.,0.015,0.),L);
+col=alb*(vec3(0.30,0.33,0.38)+vec3(1.05,0.97,0.85)*0.9*s);
+col=mix(col,skyH,clamp(1.-exp(-0.0011*tG*tG),0.,1.));
+}else{
+float y=max(rd.y,0.),sg=clamp(dot(rd,L),0.,1.);
+col=mix(skyH,vec3(0.19,0.40,0.83),pow(y,0.55));
+col+=vec3(1.0,0.88,0.65)*pow(sg,180.)*1.2+vec3(1.0,0.9,0.7)*pow(sg,10.)*0.10;
+}
+O=vec4(pow(col,vec3(0.4545)),1.);
+}
+```
+
+Wait — issue in `softS` for ground points far from subject: t starts 0.02, march until t>4.5 — light dir from ground: subject within ~3 units; ok.
+
+Issue: `h2` variable name vs nothing else. ok.
+
+Another: in the march loop, if ray passes bounding sphere but t>tG handled. But if `tG < t0`, we skip via `t0<tG` condition. But ground may occlude sphere partially — handled per-step.
+
+BUT: what if subject is BEHIND ground intersection only for some pixels — handled.
+
+What if ray hits bounding sphere, marches, exits sphere without hit but ground closer than exit — t=-1 set when t>tG — then ground shaded. Correct.
+
+Now JS remainder:
+
+```js
+let prog=null,vs=null,fs=null,lost=false,disposed=false;
+let uRes,uTime,uPos,uCam;
+function compile(type,src){
+const s=gl.createShader(type);
+gl.shaderSource(s,src);
+gl.compileShader(s);
+if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw new Error("createPelicanSdf: shader compile failed: "+gl.getShaderInfoLog(s));
+return s;
+}
+function build(){
+vs=compile(gl.VERTEX_SHADER,VS);
+fs=compile(gl.FRAGMENT_SHADER,FS);
+prog=gl.createProgram();
+gl.attachShader(prog,vs);
+gl.attachShader(prog,fs);
+gl.linkProgram(prog);
+if(!gl.getProgramParameter(prog,gl.LINK_STATUS))throw new Error("createPelicanSdf: program link failed: "+gl.getProgramInfoLog(prog));
+gl.useProgram(prog);
+uRes=gl.getUniformLocation(prog,"uRes");
+uTime=gl.getUniformLocation(prog,"uTime");
+uPos=gl.getUniformLocation(prog,"uPos");
+uCam=gl.getUniformLocation(prog,"uCam");
+}
+build();
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+let yaw=0.65,pitch=0.16,distance=4.6;
+const TY=1.25;
+const listeners=[];
+function on(t,f,o){canvas.addEventListener(t,f,o);listeners.push([t,f,o]);}
+const pts=new Map();
+let pinch0=1,pinchD=4.6;
+function render(timeSeconds){
+if(disposed||lost)return;
+const w=gl.drawingBufferWidth,h=gl.drawingBufferHeight;
+if(w<1||h<1)return;
+let pe=pitch;
+const sm=-1.15/distance;
+if(sm>-1&&Math.sin(pe)<sm)pe=Math.asin(sm);
+const cp=Math.cos(pe),sp=Math.sin(pe),cy=Math.cos(yaw),sy=Math.sin(yaw);
+const ex=distance*sy*cp,ey=TY+distance*sp,ez=distance*cy*cp;
+let fx=-ex,fy=TY-ey,fz=-ez;
+const fl2=Math.hypot(fx,fy,fz);
+fx/=fl2;fy/=fl2;fz/=fl2;
+const rl=Math.hypot(fz,fx)||1,rx=-fz/rl,rz=fx/rl;
+const ux=-rz*fy,uy=rz*fx-rx*fz,uz=rx*fy;
+gl.viewport(0,0,w,h);
+gl.uniform2f(uRes,w,h);
+gl.uniform1f(uTime,timeSeconds);
+gl.uniform3f(uPos,ex,ey,ez);
+gl.uniformMatrix3fv(uCam,false,[rx,0,rz,ux,uy,uz,fx,fy,fz]);
+gl.drawArrays(gl.TRIANGLES,0,3);
+}
+```
+
+Wait: target x/z are 0, so ex = 0 + distance*sy*cp etc. fwd=target-eye=(-ex, TY-ey, -ez). ok. ux=ry*fz-rz*fy with ry=0 → -rz*fy. uy=rz*fx-rx*fz. uz=rx*fy-ry*fx=rx*fy. Good.
+
+Also handle sm<=-1 case: if distance<=1.15, sm<=-1 → no clamp (sin >= -1 always ≥ sm... condition sm>-1 false → skip). Right.
+
+setView:
+```js
+function setView(y,p,d){yaw=y;pitch=clamp(p,-1.35,1.35);distance=clamp(d,0.7,16);}
+function getView(){return{yaw:yaw,pitch:pitch,distance:distance};}
+```
+
+Events (as designed). Plus:
+```js
+on("webglcontextlost",function(e){e.preventDefault();lost=true;});
+on("webglcontextrestored",function(){try{build();lost=false;}catch(_){lost=true;}});
+```
+
+dispose as designed; also delete shaders/prog if non-null; lose context.
+
+tabIndex & touchAction.
+
+Check: `canvas.tabIndex` — property exists on HTMLElement. If evaluator passes an actual canvas, fine.
+
+Also `canvas.focus()` exists.
+
+Now potential problem: `on("pointerdown",...)` with preventDefault may block focus; we call canvas.focus() manually. OK.
+
+Pinch: after one pointer lifts, remaining pointer continues drag: in endP, if pts.size===1 after delete, reset its coords to current? We don't have event coords for the remaining pointer; its stored {x,y} may be stale (it was updating during pinch though — in pinch branch we update p.x/p.y for the moved pointer only). The non-moving pointer has stale coords but it's the "last known" — acceptable; next move of it computes delta from stale → jump. To avoid jump: in pointermove with size 2 we update the moved pointer's stored coords (done). When one lifts, the other's coords are current-ish (it wasn't moving). When it starts moving, delta from last known — small jump possible but minor. Improve: on endP, nothing special. Fine.
+
+Wheel zoom centered — fine.
+
+Also add `on("contextmenu", e=>e.preventDefault())`? Not required; skip.
+
+One more: prevent double-tap zoom on mobile: touch-action none covers.
+
+Now verify requirement "Wheel and two-finger pinch must zoom" — yes.
+
+"Arrow keys must orbit and + / - must zoom when the canvas is focused" — keydown on canvas (focused) — yes.
+
+Now byte count. Let me count the FS string length approximately: it's about 5,500 chars. VS ~150. JS ~4,300. Total ~10KB. Well under limit. 
+
+Double-check GLSL validity once more, line by line for syntax:
+
+- `float t=uTime,wa=t*2.6,ca=t*1.4;` ok.
+- Ternary `i==0?-0.85:0.85` inside vec3 constructor ok.
+- `U(sdTz(q,vec2(0.500,0.055)),1.);` macro: `if(sdTz(q,vec2(0.500,0.055))<r.x)r=vec2(sdTz(q,vec2(0.500,0.055)),1.);` — recomputes; fine (compiler CSE).
+- `vec2 sq=length(sp)*vec2(cos(a),sin(a));` ok.
+- `U(length(sq-vec2(clamp(sq.x,0.04,0.44),0.))-0.009,2.);` ok.
+- `vec3(B.xy,0.09*s)` — vec3(vec2,float) valid.
+- `mix(hip,ank,0.42)` vec3 mix valid.
+- `q.xy=rot(-0.45)*q.xy;` swizzle assign ok.
+- `w.yz=rot(...)*w.yz;` ok.
+- calcN swizzles `e.xyy` vec2 swizzle → vec3 valid.
+- matOf out params assigned — ok.
+- In main: `vec3 ro=uPos,rd=normalize(uCam*vec3(uv,1.55)),L=normalize(vec3(0.55,0.75,0.45)),skyH=vec3(0.78,0.84,0.92);` ok.
+- `float tG=rd.y<-0.0001?-ro.y/rd.y:1e9;` ok.
+- `float b=dot(oc,rd),c=dot(oc,oc)-3.42,h2=b*b-c,t=-1.,m=-1.;` — `b*b-c` uses c being initialized in same declaration — allowed? In C/GLSL, declarators are sequential; `c` initialized before `h2` — yes valid.
+- Loop and breaks ok.
+- `vec3 p=ro+rd*t,n=calcN(p),alb;` — declaring uninitialized `alb` in multi-declarator with initializers for others: valid.
+- `matOf(m,alb,sp,shi);` ok.
+- `col=alb*(...)+vec3(spe);` ok.
+- ground: `vec2 g=floor(p.xz);` ok.
+- `float ch=mod(g.x+g.y,2.);` g.x can be negative — mod returns positive for positive y → ch in {0,1}. ok.
+- Sky: `float y=max(rd.y,0.),sg=clamp(dot(rd,L),0.,1.);` ok.
+- `pow(col,vec3(0.4545))` col positive? dif etc ≥0, yes.
+
+Vertex shader: `float((gl_VertexID<<1)&2)` — operator precedence: << before & — (gl_VertexID<<1)&2 correct.
+
+One more consideration: high-DPI gl_FragCoord vs uRes in device pixels — consistent since viewport = drawing buffer.
+
+Determinism: same time/view/size → same pixels. Yes.
+
+Now, "setView(0, 0, distance) must show the bicycle from its right side". With yaw=0,pitch=0: eye=(0,1.25,d). Looking at bike's +Z side (chain side). Right side confirmed.
+
+"positive yaw orbits around world-up" — yes.
+
+Also ensure scene "coherent from every angle": back side (yaw π) shows left side — legs, frame symmetrical-ish (chain only right, fine). From front: pelican faces you with beak. From top: fine.
+
+From below prevented by clamp.
+
+One more visual check: wings at z ±0.19 with thickness z 0.06 → spans z 0.13..0.25, body half-width 0.23 — wing root inside body. Wing length x 0.32 centered -0.42 → x -0.74..-0.10. Good.
+
+Pouch/beak from side: beak tip x 0.96 — beyond front wheel axle x 0.85? vertically beak at y 2.03, wheel top 1.115 — no overlap. Fine.
+
+Neck rc from (-0.16,1.72) to (0.10,2.04) — S-curve absent but ok.
+
+Eyes: head center (0.16,2.14) r x 0.135 → front 0.295; eyes at x 0.20 z ±0.10 — visible from front & side. Good.
+
+Beak vs head junction: beak starts (0.25,2.155) r 0.052 — head surface at that region: point (0.25,2.155,0) relative head center (0.09,0.015,0) normalized (0.67,0.125,0) len 0.68 <1 inside head. Good.
+
+Now confirm crank/pedal/legs animation phases: right crank (s=1, i==0, a=ca) pedal z=+0.185 (right side). Right leg same side. Good.
+
+Wheel rotation direction vs crank — arbitrary, charming.
+
+I think code is solid. Also worth a tiny detail: add small orange feet color? legs mat 14 grayish-pink ok.
+
+One risk: ellipsoid SDF `sdE` when p has zero component and r division — fine, no div by zero since r components nonzero.
+
+`sdE` for very far p: k0 large, k1 huge → returns big — fine.
+
+Another risk: `#define U(d,m)` uses `r` — inside map only. ok.
+
+Performance of macro double-evaluation — negligible after CSE.
+
+Total steps: 150 — for grazing rays along ground-subject boundary, fine.
+
+Let me also double check bounding sphere constant: 3.42 = 1.849². Center (0.05,1.30,0). Confirmed covers all.
+
+But wait: pelican beak tip x=0.96, y=2.03+bob(0.012): dx=0.91, dy=0.742 → 1.174. ok.
+
+Leg ankle when pedal at bottom: e=(B.x, B.y-0.17)=(-0.15,0.25); ank=(-0.15,0.305,±0.185): dx=0.20,dy=0.995,dz=0.185 → 1.03. ok.
+
+Knee: mix hip/ank +0.15 x... fine.
+
+Handlebar grip end (0.66,1.45,±0.27): dx=0.61,dy=0.15,dz=0.27 → 0.68.
+
+Wheel outer: tire torus outer radius 0.555 at (±0.85,0.56): bottom point (−0.85,0.005): 1.577. Also point (−0.85−0.555? no, tire extends in xy-plane around center: leftmost x −0.85−0.555=−1.405,y0.56: dx=1.455,dy=0.74 → 1.63 <1.849. Front rightmost (1.405,0.56): dx=1.355,dy=0.74→1.54. ok.
+
+Now finalize interaction code fully and dispose.
+
+Also note requirement: "Make the canvas focusable, prevent interaction gestures from scrolling while active". We set tabIndex, touchAction none, preventDefault wheel & pointerdown & handled keys. Good.
+
+Potential evaluator check: "unchanged frames after camera moves" — we render from current state. Good.
+
+"respond crisply after input" — state changes immediately reflect in next render call.
+
+Also: do not vary quality by timing — we don't.
+
+Edge: `render(timeSeconds)` — time may be fractional seconds. fine.
+
+Let me also think about whether `powerPreference` hint is allowed — yes, context attribute.
+
+Now write final answer: single module, no fences, no explanation.
+
+One more scan for bugs:
+
+In render, `rl=Math.hypot(fz,fx)||1` — if pitch ±90°, rl→0 → right degenerate; pitch clamped to 1.35 rad (77°), rl min = cos(1.35)=0.219 — fine.
+
+`ux=-rz*fy` — sign check: up = cross(right,fwd) = (ry*fz - rz*fy, rz*fx - rx*fz, rx*fy - ry*fx), ry=0 → (-rz*fy, rz*fx-rx*fz, rx*fy). At yaw 0, pitch 0: fwd=(0,0,-1) (eye +Z looking -Z), right=(1,0,0): up = (-0*0... rz=fx=0,rx=1: ux=0, uy=0*0-1*(-1)=1, uz=0 → (0,1,0). Correct.
+
+Pinch zoom factor: distance=pinchD*pinch0/d — fingers spread (d>pinch0) → distance decreases (zoom in). Correct.
+
+Wheel: deltaY>0 (scroll down) → zoom out. Standard.
+
+Keyboard: '=' and '+' both in (shift+= is '+'); ok.
+
+Now dispose: also `gl.useProgram(null)`? after delete maybe; harmless skip. Keep simple:
+
+```js
+function dispose(){
+if(disposed)return;
+disposed=true;
+for(let i=0;i<listeners.length;i++)canvas.removeEventListener(listeners[i][0],listeners[i][1],listeners[i][2]);
+listeners.length=0;
+pts.clear();
+if(prog)gl.deleteProgram(prog);
+if(vs)gl.deleteShader(vs);
+if(fs)gl.deleteShader(fs);
+const x=gl.getExtension("WEBGL_lose_context");
+if(x)x.loseContext();
+}
+```
+
+If context already lost, getExtension returns null → guarded.
+
+Also removeEventListener with same options object — passing original opts object works (capture flag matters). OK.
+
+Also note: we shouldn't add listeners for 'webglcontextrestored' via `on` helper and then remove at dispose — fine.
+
+Compile order: build() called before listeners — if build throws, error propagates — desired.
+
+Also careful: variable name `on` conflicts nothing.
+
+Also `canvas.style.touchAction="none";` — style exists on canvas element. Yes.
+
+`if(canvas.tabIndex<0)canvas.tabIndex=0;` — hmm if evaluator already set tabindex=5, we keep. good.
+
+Also pitch clamping bounds as constants; use PMAX=1.35, DMIN=0.7,DMAX=16.
+
+I think we're done. Let me also reconsider visual framing at start: yaw=0.65 rad (37°), camera at distance 4.6, pitch 0.16: eye=(4.6*0.605*0.987, 1.25+0.733, 4.6*0.796*0.987) = (2.75, 1.98, 3.62). Three-quarter front-right view. Subject spans up to y2.3, width 2.9 — vertical fov coverage at 4.6 with focal 1.55: half-height = 4.6/1.55 ≈ 2.97 → subject occupies ~40% height. Reasonable "full subject with margin". Maybe distance 4.2. I'll use 4.4.
+
+Also should the default view include whole ground shadow — yes.
+
+Final check of the FS march epsilon vs thin chain (r 0.011) at distance ~1: pixel footprint at t=1: 2/(1.55*h) per pixel... at h=800: 0.0016 world/px *? footprint = t*2/(focal*resY) = 1*2/(1.55*800)=0.0016 — chain diameter 0.022 ~ 14px. fine.
+
+One more potential issue: `atan(sp.y,sp.x)` cost per wheel — fine.
+
+Also `sign(rr)` in sdRC when rr could be 0 → k=0; inequalities still fine.
+
+Also in sdRC `a2` must be ≥0: beak: l2=(0.71²+0.125²)=0.5197; rr=0.04 → a2=0.518>0 ok. neck: computed ok.
+
+Also ellipsoid `sdE` for wings inside rotations — ok.
+
+Byte-length: final file maybe ~11KB. 
+
+Wait — one requirement: "Include ... a visible crank or pedals" — yes both.
+
+"two separate wheels, tires, a connected frame, seat, handlebar" — yes.
+
+"pelican body, head, eye, long beak and throat pouch, wings, and two legs in a plausible riding pose" — yes.
+
+Alright, also should I set `gl.clearColor`? Not needed.
+
+One more: `render` uses `lost` flag; but also `gl.isContextLost()` safer: `if(disposed||lost||gl.isContextLost())return;` — include.
+
+Also note dispose removes contextlost listeners before losing context — we call removeEventListener first then loseContext, so no handler issues.
+
+Now produce final code. Watch that template literals contain no backticks or ${. Check FS for `$` — none.
+
+Also ensure no characters outside ASCII to keep byte count predictable — yes.
+
+Writing final answer now. Structure:
+
+```js
+export function createPelicanSdf(canvas){
+ "use strict";
+ ... everything ...
+ return {render,setView,getView,dispose};
+}
+```
+
+Also, minor: in `pointermove` handler for pinch, both pointers' stored coords update only for moved one — ok as discussed.
+
+Double-check `endP` also handles `pointerleave`? With setPointerCapture, up/cancel suffice.
+
+Also when pointerdown with 3rd finger — ignore extra (pts.size>2) — pinch branch only when size===2; move with size 3 → falls into size===2? No: `if(pts.size===1)...else if(pts.size===2)...` size 3 → nothing (but p fetched exists, no update) fine.
+
+Also on pointerdown when size becomes 2, record pinch; when becomes 3, nothing; when back to 2 (one lifted), pinch0 stale — re-record? In endP: if after delete size===2, re-record pinch. Add:
+
+```js
+function endP(e){
+pts.delete(e.pointerId);
+if(pts.size===2){
+const v=[...pts.values()];
+pinch0=Math.max(1,Math.hypot(v[0].x-v[1].x,v[0].y-v[1].y));
+pinchD=distance;
+}
+}
+```
+
+Good.
+
+Also add key handling for numpad +/-: e.key "+" covers numpad add too (key is "+"). ok.
+
+Final: ensure function returns object even if... yes.
+
+Size re-check: I'll keep the code as written; approx 12KB max. Good.

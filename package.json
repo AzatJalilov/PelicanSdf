@@ -9,6 +9,8 @@
     "eval:run": "node scripts/run-model-eval.mjs",
     "eval:ingest": "node scripts/ingest-model-eval.mjs",
     "eval:measure": "node scripts/measure-results.mjs",
+    "eval:price": "node scripts/price-model-eval.mjs",
+    "thumbnails": "node scripts/generate-thumbnails.mjs",
     "hash": "node scripts/hash-file.mjs",
     "smoke": "node scripts/browser-smoke.mjs",
     "validate": "node scripts/validate-results.mjs",

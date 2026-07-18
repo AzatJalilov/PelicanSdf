@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "id": "claude-haiku-4-5-max-run-01",
+  "model": "claude-haiku-4-5-20251001",
+  "modelDisplayName": "Claude Haiku 4.5",
+  "provider": "Anthropic via Claude Code CLI",
+  "reasoningEffort": "max",
+  "accent": "#4f8fb0",
+  "harness": {
+    "name": "Claude Code CLI",
+    "version": "2.1.214 (Claude Code)",
+    "surface": "claude -p --tools \"\" --setting-sources \"\" --strict-mcp-config --system-prompt <minimal> --output-format json (prompt piped byte-exact via stdin)",
+    "sandbox": "n/a (no tools available)",
+    "ephemeral": true,
+    "userConfigLoaded": false,
+    "projectRulesLoaded": false,
+    "notes": "Fresh non-interactive invocation with a minimal replacement system prompt; no tools, skills, hooks, MCP servers, CLAUDE.md, or memory in context (verified 253-token bare context probe)."
+  },
+  "prompt": {
+    "path": "benchmark/prompt.txt",
+    "bytes": 3387,
+    "sha256": "cd21d5a8bb3956d82ab5650304e7e491063eacdb27dad85be6b4a845512f5e6b"
+  },
+  "response": {
+    "path": "data/raw/claude-haiku-4-5-max-run-01/response.txt",
+    "bytes": 4381,
+    "sha256": "f3138ab5bb8c5693e193806da2acae36a56367f5740cac0904c96ca5f9b8068a"
+  },
+  "usage": {
+    "inputTokens": 952,
+    "cachedInputTokens": 0,
+    "reasoningTokens": null,
+    "outputTokens": 16780,
+    "totalTokens": 17732
+  },
+  "billing": {
+    "mode": "subscription",
+    "apiCostUsd": 0.08624799999999999,
+    "note": "Claude subscription invocation; total_cost_usd is the CLI's pricing estimate, not a separate API charge."
+  },
+  "startedAt": "2026-07-18T11:48:37.705Z",
+  "completedAt": "2026-07-18T11:50:03.860Z",
+  "durationMs": 86155,
+  "exitCode": 0,
+  "error": null,
+  "sessionId": "53c7dafa-5d7f-4dcf-b58e-226705754db7",
+  "files": {
+    "events": "data/raw/claude-haiku-4-5-max-run-01/events.jsonl",
+    "stderr": "data/raw/claude-haiku-4-5-max-run-01/stderr.txt"
+  }
+}

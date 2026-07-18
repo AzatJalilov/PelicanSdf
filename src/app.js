@@ -102,7 +102,8 @@ function formatTokens(value) {
 
 function formatCost(usage) {
   if (!Number.isFinite(usage.apiCostUsd)) return usage.billingMode === "subscription" ? "Not exposed" : "Not captured";
-  return `$${usage.apiCostUsd.toFixed(usage.apiCostUsd < 0.01 ? 4 : 2)}`;
+  const value = `$${usage.apiCostUsd.toFixed(usage.apiCostUsd < 1 ? 4 : 2)}`;
+  return usage.billingMode === "subscription" ? `${value} est.` : value;
 }
 
 function showToast(message) {
@@ -171,6 +172,16 @@ function posterPlaceholder() {
     </div>`;
 }
 
+function posterPreview(result) {
+  if (!result.thumbnailUrl) return posterPlaceholder();
+  const source = escapeHtml(result.thumbnailUrl);
+  return `
+    <div class="poster-preview">
+      <img class="poster-backdrop" src="${source}" alt="" aria-hidden="true">
+      <img class="poster-thumbnail" src="${source}" alt="Rendered SDF submission from ${escapeHtml(result.model)}" loading="lazy" decoding="async">
+    </div>`;
+}
+
 function renderCards() {
   const query = elements.resultSearch.value.trim().toLowerCase();
   const sort = elements.resultSort.value;
@@ -195,7 +206,7 @@ function renderCards() {
     return `
       <article class="result-card" style="--card-accent:${escapeHtml(result.accent || "#16877e")}" data-result-id="${escapeHtml(result.id)}">
         <div class="result-poster">
-          ${posterPlaceholder()}
+          ${posterPreview(result)}
           <span class="poster-index">SDF-${String(index + 1).padStart(3, "0")}</span>
           <span class="poster-state state-${escapeHtml(validationStateClass(result))}">${escapeHtml(statusLabel(result))}</span>
         </div>
@@ -255,11 +266,11 @@ function renderCompareTray() {
   }).join("");
 }
 
-async function activateResult(id, scroll = false) {
+async function activateResult(id, scroll = false, syncUrl = true) {
   const result = findResult(id);
   if (!result) return;
   state.activeId = id;
-  updateUrl({ run: id });
+  if (syncUrl) updateUrl({ run: id });
   elements.heroDetails.href = `./result.html?id=${encodeURIComponent(id)}`;
   const requirementNote = result.validation.unmetRequirements.length
     ? ` / ${result.validation.unmetRequirements.length} requirements unmet`
@@ -553,7 +564,7 @@ async function main() {
     const url = new URL(window.location.href);
     const requestedActive = url.searchParams.get("run");
     const initial = findResult(requestedActive) || results[0];
-    await activateResult(initial.id);
+    await activateResult(initial.id, false, false);
 
     const requestedCompare = url.searchParams.get("compare")?.split(",");
     if (requestedCompare?.length === 2 && requestedCompare[0] !== requestedCompare[1]) {

@@ -1,0 +1,78 @@
+```javascript
+export function createPelicanSdf(c){const g=c.getContext('webgl2');if(!g)throw new Error('WebGL2');
+let y=.5,p=.3,d=20,mx,my,dg=0;
+const v=`#version 300 es
+in vec2 P;out vec2 u;void main(){gl_Position=vec4(P,0,1);u=P;}`,
+f=`#version 300 es
+precision highp float;uniform float t,y,p,d;uniform ivec2 r;in vec2 u;out vec4 o;
+float S(vec3 p,float s){return length(p)-s;}
+float B(vec3 p,vec3 b){vec3 q=abs(p)-b;return length(max(q,0.))+min(max(q.x,max(q.y,q.z)),0.);}
+float C(vec3 p,vec3 a,vec3 b,float s){vec3 m=p-a,n=b-a;float h=clamp(dot(m,n)/dot(n,n),0.,1.);return length(m-n*h)-s;}
+float E(vec3 p,vec3 e){return(length(p/e)-1.)*min(min(e.x,e.y),e.z);}
+float Pel(vec3 p){float d=1e9;
+d=min(d,E(p,vec3(1.1,.7,.55)));
+d=min(d,S(p-vec3(1.35,.35,0),.48));
+d=min(d,C(p,vec3(1.75,.25,0),vec3(3.5,.05,0),.1));
+d=min(d,S(p-vec3(2.3,-.15,0),.3));
+d=min(d,S(p-vec3(1.65,.8,.32),.065));
+d=min(d,C(p,vec3(-.15,-.8,.35),vec3(-.15,-1.8,.35),.065));
+d=min(d,C(p,vec3(.15,-.8,-.35),vec3(.15,-1.8,-.35),.065));
+d=min(d,B(p-vec3(.7,-.35,-.75),vec3(.25,.12,.2)));
+d=min(d,B(p-vec3(.7,-.35,.75),vec3(.25,.12,.2)));
+return d;}
+float Bik(vec3 p){float d=1e9;
+d=min(d,C(p,vec3(-.95,-.1,0),vec3(.75,-.1,0),.065));
+d=min(d,C(p,vec3(0,-.1,0),vec3(.05,-.95,0),.055));
+d=min(d,C(p,vec3(.05,-.95,0),vec3(1.35,-1,0),.048));
+d=min(d,S(p-vec3(-.35,.3,0),.15));
+d=min(d,C(p,vec3(-.95,-.1,0),vec3(-.95,.45,0),.045));
+d=min(d,C(p,vec3(-1.15,.45,0),vec3(-.75,.45,0),.038));
+float w=length((p-vec3(1.35,-1,0)).xy);d=min(d,abs(w-.85)-.11);
+w=length((p-vec3(-1.35,-1,0)).xy);d=min(d,abs(w-.85)-.11);
+d=min(d,S(p-vec3(1.35,-1,0),.065));
+d=min(d,S(p-vec3(-1.35,-1,0),.065));
+float a=t*3.+atan(p.z,p.x);float ca=.5*cos(a),sa=.5*sin(a);
+d=min(d,C(p,vec3(0,-.8,0),vec3(ca,-.8+sa,sa),.048));
+d=min(d,B(p-vec3(ca,-.8+sa,sa),vec3(.075,.028,.11)));
+return d;}
+float scn(vec3 p){return min(Pel(p-vec3(0,.45,0)),Bik(p));}
+float M(vec3 o,vec3 d){float t=0.;for(int i=0;i<160;i++){float s=scn(o+d*t);if(s<.0008)break;t+=s*.82;if(t>250.)break;}return t;}
+vec3 N(vec3 p){float e=.0004;float v=scn(p);return normalize(vec3(scn(p+vec3(e,0,0))-v,scn(p+vec3(0,e,0))-v,scn(p+vec3(0,0,e))-v));}
+void main(){
+vec2 s=(u*vec2(r))*2./vec2(r.y)*.5;
+vec3 ro=vec3(sin(y)*d*cos(p),sin(p)*d,cos(y)*d*cos(p));
+vec3 f=normalize(-ro);
+vec3 rt=normalize(cross(f,vec3(0,1,0)));
+vec3 u3=cross(rt,f);
+vec3 rd=normalize(rt*s.x+u3*s.y+f*1.45);
+float t=M(ro,rd);
+vec3 pos=ro+rd*t;
+vec3 col;if(t<250.){
+vec3 n=N(pos);vec3 l=normalize(vec3(1.2,1.1,.4));float df=max(dot(n,l),0.);float sp=pow(max(dot(normalize(l-rd),n),0.),24.);
+col=vec3(.12)+df*vec3(.8,.72,.6)+sp*vec3(.7);}else col=vec3(.06,.1,.16);
+o=vec4(col,1);}`;
+
+function sh(s,t){const x=g.createShader(t);g.shaderSource(x,s);g.compileShader(x);if(!g.getShaderParameter(x,g.COMPILE_STATUS))throw new Error(g.getShaderInfoLog(x));return x;}
+const vs=sh(v,g.VERTEX_SHADER),fs=sh(f,g.FRAGMENT_SHADER),pr=g.createProgram();
+g.attachShader(pr,vs);g.attachShader(pr,fs);g.linkProgram(pr);if(!g.getProgramParameter(pr,g.LINK_STATUS))throw new Error(g.getProgramInfoLog(pr));
+
+const buf=g.createBuffer();g.bindBuffer(g.ARRAY_BUFFER,buf);g.bufferData(g.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),g.STATIC_DRAW);
+const va=g.createVertexArray();g.bindVertexArray(va);const pl=g.getAttribLocation(pr,'P');g.enableVertexAttribArray(pl);g.vertexAttribPointer(pl,2,g.FLOAT,0,8,0);
+
+const pd=e=>{dg=1;mx=e.clientX;my=e.clientY};
+const pm=e=>{if(!dg)return;y+=(e.clientX-mx)*.01;p+=(e.clientY-my)*.01;p=Math.max(-1.45,Math.min(1.45,p));mx=e.clientX;my=e.clientY};
+const pu=()=>{dg=0};
+const wh=e=>{e.preventDefault();d*=Math.exp(e.deltaY*.001);d=Math.max(1.5,Math.min(120,d))};
+const kd=e=>{const s=.1,z=1.11;if(e.key==='ArrowLeft')y-=s;if(e.key==='ArrowRight')y+=s;if(e.key==='ArrowUp')p=Math.min(1.45,p+s);if(e.key==='ArrowDown')p=Math.max(-1.45,p-s);if(e.key==='+'||e.key==='=')d/=z;if(e.key==='-')d*=z;d=Math.max(1.5,Math.min(120,d))};
+
+c.addEventListener('pointerdown',pd);c.addEventListener('pointermove',pm);c.addEventListener('pointerup',pu);
+c.addEventListener('wheel',wh,{passive:!1});c.addEventListener('keydown',kd);c.tabIndex=0;
+
+return{
+render(t){g.useProgram(pr);g.uniform1f(g.getUniformLocation(pr,'t'),t);g.uniform1f(g.getUniformLocation(pr,'y'),y);g.uniform1f(g.getUniformLocation(pr,'p'),p);g.uniform1f(g.getUniformLocation(pr,'d'),d);g.uniform2i(g.getUniformLocation(pr,'r'),c.width,c.height);g.bindVertexArray(va);g.viewport(0,0,c.width,c.height);g.drawArrays(g.TRIANGLE_STRIP,0,4)},
+setView(yv,pv,dv){y=yv;p=pv;d=dv},
+getView(){return{yaw:y,pitch:p,distance:d}},
+dispose(){c.removeEventListener('pointerdown',pd);c.removeEventListener('pointermove',pm);c.removeEventListener('pointerup',pu);c.removeEventListener('wheel',wh);c.removeEventListener('keydown',kd);g.deleteProgram(pr);g.deleteShader(vs);g.deleteShader(fs);g.deleteBuffer(buf);g.deleteVertexArray(va);}
+};
+}
+```

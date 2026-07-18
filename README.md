@@ -27,9 +27,10 @@ harder, inspectable 3D task.
 - A shareable, synchronized any-two comparison view
 - Serial local A/B benchmarking with GPU timer queries when available
 - Explicit generation-harness metadata, including Codex CLI version/surface
-- Provider-reported token usage, billing mode, and per-trial API cost metadata
+- Provider-reported token usage, billing mode, and actual or API-equivalent cost metadata
 - JSON result records, artifact hashes, schema, and repository validation
-- Five one-shot model runs, including three fully receipted effort variants
+- 42 one-shot runs across 15 model identifiers, including matched five-effort Sol and Claude sweeps
+- SDF-rendered catalog thumbnails generated from each renderable first response
 - MIT licensing and contribution/security guidance
 
 No package install or build step is required. The site uses browser-native ES
@@ -108,6 +109,7 @@ data/artifacts/             untouched generated ES modules
 data/raw/                   raw responses, event streams, and run receipts
 data/results/               provenance and measurement records
 data/manifest.json          published result index
+assets/thumbnails/          generated 480×270 previews of renderable SDF runs
 index.html                  static landing page; no result code is loaded
 results.html                interactive catalog and comparison lab
 src/                        website, viewer host, and benchmark runner
@@ -139,6 +141,20 @@ GPU trials and captures canonical and close views under `artifacts/evals/` for
 review. Review the generated record and screenshots before adding it to the
 manifest.
 
+Codex JSON events expose input, cached-input, reasoning, output, and total token
+counts. For GPT-5.6 Sol, the runner also calculates the standard API-equivalent
+cost using OpenAI's published rates: `$5/M` uncached input, `$0.50/M` cached
+input, and `$30/M` output:
+`((input - cached) × 5 + cached × 0.5 + output × 30) / 1,000,000`.
+The receipt cites the [official model pricing
+page](https://developers.openai.com/api/docs/models/gpt-5.6-sol) and labels the
+value as an estimate because the benchmark invocation itself uses a Codex
+subscription. Recalculate a stored run with `npm run eval:price -- <run-id>`.
+
+After measuring and publishing a result in the manifest, generate its card image
+from the SDF with `npm run thumbnails -- <run-id>`; omit the id to regenerate
+all renderable runs.
+
 For another harness, scaffold the record manually:
 
 ```bash
@@ -156,15 +172,16 @@ Add the result JSON path to `data/manifest.json`, run `npm test`, inspect every
 view and close zoom in a browser, and open a pull request. See
 [`CONTRIBUTING.md`](CONTRIBUTING.md) for the full provenance and review checklist.
 
-## Seed-run caveat
+## Evaluation caveat
 
-The five included entries were produced one-shot through Codex CLI 0.144.5. The
-three effort-variant runs preserve machine-readable raw responses, event streams,
-and receipts; the two earlier entries predate that runner and explicitly retain
-their missing usage fields. All five include same-profile measurements and their
-observed requirement findings, but remain `unverified` until provenance is
-independently reproduced. Blind visual scores stay `null`. Unknown values are
-`null`; the repository never fills gaps with plausible guesses.
+The 42 included entries were produced one-shot through Codex CLI, Claude Code
+CLI, or the pi SDK with OpenRouter. Raw first responses, available event streams,
+and receipts are retained; two early seed entries predate the receipted runner
+and explicitly keep their missing usage fields. Renderable runs include
+same-profile measurements, while compilation failures remain published with the
+failure evidence and no fabricated timing or thumbnail. Results remain
+`unverified` until provenance is independently reproduced. Blind visual scores
+stay `null`; the repository never fills gaps with plausible guesses.
 
 ## Security
 
@@ -175,6 +192,6 @@ that boundary.
 
 ## License
 
-Pelican SDF is available under the [MIT License](LICENSE). Benchmark results keep
+Pelican SDF is available under the [MIT License](https://github.com/AzatJalilov/PelicanSdf/blob/main/LICENSE). Benchmark results keep
 their provenance metadata; contributors must have the right to publish submitted
 artifacts.

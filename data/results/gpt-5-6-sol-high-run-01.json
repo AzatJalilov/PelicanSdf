@@ -1,0 +1,79 @@
+{
+  "id": "gpt-5-6-sol-high-run-01",
+  "title": "Sol / high effort",
+  "model": "gpt-5.6-sol",
+  "provider": "OpenAI via Codex CLI",
+  "status": "unverified",
+  "track": "one-shot",
+  "promptVersion": "1.0.0",
+  "promptSha256": "cd21d5a8bb3956d82ab5650304e7e491063eacdb27dad85be6b4a845512f5e6b",
+  "artifactSha256": "6768bf2e1f27b23c6964dbcf63311ec3a84792d88d735d155675737a884d6683",
+  "createdAt": "2026-07-18",
+  "artifact": "../artifacts/gpt-5-6-sol-high-run-01.js",
+  "description": "A close, sculptural pelican with an oversized pouch beak, teal frame, detailed spoked wheels, and grounded studio lighting.",
+  "accent": "#c94f2d",
+  "generationHarness": {
+    "name": "Codex CLI",
+    "version": "0.144.6",
+    "surface": "codex exec --json",
+    "sandbox": "read-only",
+    "notes": "Fresh ephemeral invocation with user config and project rules disabled; orchestrated by Codex."
+  },
+  "generationUsage": {
+    "inputTokens": 13270,
+    "cachedInputTokens": 8960,
+    "reasoningTokens": 5659,
+    "outputTokens": 10716,
+    "totalTokens": 23986,
+    "apiCostUsd": 0.34751,
+    "billingMode": "subscription",
+    "source": "data/raw/gpt-5-6-sol-high-run-01/events.jsonl",
+    "notes": "Codex CLI subscription invocation; API-equivalent standard price estimated from captured tokens at OpenAI's published gpt-5.6-sol rates ($5/M uncached input, $0.5/M cached input, $30/M output); not a separate API charge."
+  },
+  "validation": {
+    "state": "passed",
+    "checks": [
+      "JavaScript syntax",
+      "lifecycle contract",
+      "WebGL2 compilation",
+      "initial composition",
+      "pointer orbit",
+      "wheel zoom",
+      "two-finger pinch",
+      "keyboard camera",
+      "multi-angle camera response",
+      "close-range inspection",
+      "three-trial GPU timing"
+    ],
+    "unmetRequirements": [],
+    "warnings": []
+  },
+  "metrics": {
+    "sourceBytes": 14658,
+    "initMs": 2390.9,
+    "gpuMsMedian": 3.0131,
+    "gpuMsP95": 3.4193,
+    "throughputFps": 331.8819,
+    "timingMethod": "gpu-query",
+    "environment": "AMD Radeon(TM) Graphics / ANGLE D3D11; Headless Chrome 150; Windows; 960x540; 3 serial trials",
+    "environmentKey": "amd-15bf-angle-d3d11|headless-chrome-150|windows|960x540|pelican-canvas-v1",
+    "profile": "pelican-canvas-960x540-v1",
+    "sampleCount": 36,
+    "trials": 3,
+    "measuredAt": "2026-07-18T17:22:34.037Z"
+  },
+  "visual": {
+    "readability": null,
+    "completeness": null,
+    "coherence": null,
+    "craft": null,
+    "inspectability": null,
+    "reviewers": 0
+  },
+  "provenance": {
+    "generatorKind": "model-eval",
+    "method": "Fresh one-shot Codex CLI invocation; read-only ephemeral sandbox; added trailing LF",
+    "rawResponse": "../raw/gpt-5-6-sol-high-run-01/response.txt",
+    "decoding": "reasoning effort: high; other decoding settings not exposed"
+  }
+}

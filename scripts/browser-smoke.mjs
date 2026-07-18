@@ -11,7 +11,12 @@ const sitePort = Number(process.env.QA_PORT || 4174);
 const debugPort = Number(process.env.QA_DEBUG_PORT || 9334);
 const siteUrl = `http://127.0.0.1:${sitePort}/`;
 const profileDir = path.resolve(os.tmpdir(), `pelican-sdf-chrome-${process.pid}`);
-const publishedResultCount = JSON.parse(await readFile(path.join(root, "data", "manifest.json"), "utf8")).length;
+const publishedEntries = JSON.parse(await readFile(path.join(root, "data", "manifest.json"), "utf8"));
+const publishedResults = await Promise.all(publishedEntries.map(async (entry) =>
+  JSON.parse(await readFile(path.join(root, "data", entry), "utf8"))));
+const publishedResultCount = publishedResults.length;
+const publishedThumbnailCount = publishedResults.filter((result) => result.validation.state !== "failed").length;
+const publishedFailureCount = publishedResultCount - publishedThumbnailCount;
 
 const browserCandidates = process.platform === "win32"
   ? [
@@ -270,6 +275,7 @@ try {
       resourceCount: resources.length,
       heavyResources: resources.filter((url) => /\\/data\\/(?:manifest\\.json|results\\/|artifacts\\/)|\\/src\\/(?:app|data|viewer)\\.js/.test(url)),
       resultsHref: document.querySelector('.landing-copy a[href="./results.html"]')?.href,
+      licenseHref: document.querySelector('.license-note a')?.href,
       viewport: { width: innerWidth, height: innerHeight, scrollWidth: document.documentElement.scrollWidth },
       heroBounds: document.querySelector('.landing-hero').getBoundingClientRect().toJSON(),
       contractBounds: document.querySelector('.contract-card').getBoundingClientRect().toJSON(),
@@ -278,7 +284,9 @@ try {
   if (landing.canvases || landing.runCards || landing.scripts || landing.heavyResources.length) {
     throw new Error(`Landing page loaded run machinery: ${JSON.stringify(landing)}`);
   }
-  if (!landing.resultsHref?.endsWith('/results.html') || landing.viewport.scrollWidth > landing.viewport.width) {
+  if (!landing.resultsHref?.endsWith('/results.html')
+    || landing.licenseHref !== 'https://github.com/AzatJalilov/PelicanSdf/blob/main/LICENSE'
+    || landing.viewport.scrollWidth > landing.viewport.width) {
     throw new Error(`Landing page navigation or layout failed: ${JSON.stringify(landing)}`);
   }
   const landingScreenshot = await screenshot(client, "desktop-landing.jpg");
@@ -303,9 +311,23 @@ try {
       heroBounds: document.querySelector('.hero').getBoundingClientRect().toJSON(),
       canvasDataLength: document.querySelector('#hero-canvas').toDataURL().length,
       view: document.querySelector('#hero-view').textContent,
+      search: location.search,
+      thumbnails: document.querySelectorAll('.poster-thumbnail').length,
+      failedPlaceholders: document.querySelectorAll('.result-card .poster-placeholder').length,
+      knownFailedPlaceholder: document.querySelectorAll('[data-result-id="claude-sonnet-5-max-run-01"] .poster-placeholder').length,
+      licenseHref: document.querySelector('.license-note a')?.href,
     };
   })()`);
-  if (!initial.webgl2 || initial.heroError || initial.cards !== publishedResultCount) throw new Error(`Initial state failed: ${JSON.stringify(initial)}`);
+  if (!initial.webgl2
+    || initial.heroError
+    || initial.cards !== publishedResultCount
+    || initial.search !== ''
+    || initial.thumbnails !== publishedThumbnailCount
+    || initial.failedPlaceholders !== publishedFailureCount
+    || initial.knownFailedPlaceholder !== 1
+    || initial.licenseHref !== 'https://github.com/AzatJalilov/PelicanSdf/blob/main/LICENSE') {
+    throw new Error(`Initial state failed: ${JSON.stringify(initial)}`);
+  }
   if (initial.viewport.scrollWidth > initial.viewport.width) throw new Error("Desktop page has horizontal overflow.");
   const catalogScreenshot = await screenshot(client, "desktop-catalog.jpg");
 
@@ -344,6 +366,7 @@ try {
 
   await evaluate(client, `document.querySelector('#results').scrollIntoView({block:'start', behavior:'instant'})`);
   await waitFor(client, `document.querySelectorAll('.result-card').length === ${publishedResultCount}`, 30000);
+  await waitFor(client, `document.querySelector('.poster-thumbnail')?.naturalWidth === 480`, 30000);
   await click(client, "#result-search");
   await client.send("Input.insertText", { text: "Grand Tourer" });
   await waitFor(client, `document.querySelectorAll('.result-card').length === 1`);
@@ -371,6 +394,9 @@ try {
     throw new Error(`Catalog requirement disclosure failed: ${JSON.stringify(requirementCard)}`);
   }
   const resultsScreenshot = await screenshot(client, "desktop-results.jpg");
+  await evaluate(client, `document.querySelector('[data-result-id="claude-sonnet-5-max-run-01"] .result-body').scrollIntoView({block:'center', behavior:'instant'})`);
+  await delay(120);
+  const renderFailureCardScreenshot = await screenshot(client, "desktop-render-failure-card.jpg");
   await evaluate(client, `document.querySelector('[data-result-id="gpt-5-5-run-01"] .result-body').scrollIntoView({block:'center', behavior:'instant'})`);
   await delay(120);
   const resultRequirementCardScreenshot = await screenshot(client, "desktop-result-requirement-card.jpg");
@@ -497,9 +523,14 @@ try {
   const runSourceScreenshot = await screenshot(client, "desktop-run-source.jpg");
 
   const evaluatedRuns = [];
+  let solCostScreenshot = null;
   const generatedRuns = [
     { id: "gpt-5-6-terra-low-run-01", effort: "low", totalTokens: "17,290" },
-    { id: "gpt-5-6-sol-medium-run-01", effort: "medium", totalTokens: "20,913" },
+    { id: "gpt-5-6-sol-low-run-01", effort: "low", totalTokens: "19,079", cost: "$0.2055 est." },
+    { id: "gpt-5-6-sol-medium-run-01", effort: "medium", totalTokens: "20,913", cost: "$0.2712 est." },
+    { id: "gpt-5-6-sol-high-run-01", effort: "high", totalTokens: "23,986", cost: "$0.3475 est." },
+    { id: "gpt-5-6-sol-xhigh-run-01", effort: "xhigh", totalTokens: "32,183", cost: "$0.5933 est." },
+    { id: "gpt-5-6-sol-max-run-01", effort: "max", totalTokens: "40,772", cost: "$0.8563 est." },
     { id: "gpt-5-6-luna-high-run-01", effort: "high", totalTokens: "22,619" },
   ];
   for (const generatedRun of generatedRuns) {
@@ -523,10 +554,17 @@ try {
       || record.promptLoaded < 1000
       || !record.invocation.includes(`reasoning effort: ${generatedRun.effort}`)
       || !record.usage.includes(generatedRun.totalTokens)
+      || (generatedRun.cost && !record.usage.includes(generatedRun.cost))
       || record.checks < 10
       || record.requirements !== 0
       || record.scrollWidth > record.width) {
       throw new Error(`Generated run record failed: ${JSON.stringify({ generatedRun, record })}`);
+    }
+
+    if (generatedRun.id === "gpt-5-6-sol-medium-run-01") {
+      await evaluate(client, `document.querySelector('#generation').scrollIntoView({block:'start', behavior:'instant'})`);
+      await delay(120);
+      solCostScreenshot = await screenshot(client, "desktop-sol-token-cost.jpg");
     }
 
     await evaluate(client, `document.querySelector('.run-hero').scrollIntoView({block:'start', behavior:'instant'})`);
@@ -649,6 +687,10 @@ try {
   })`);
   if (mobile.scrollWidth > mobile.width || mobile.error || mobile.cards !== publishedResultCount) throw new Error(`Mobile state failed: ${JSON.stringify(mobile)}`);
   const mobileScreenshot = await screenshot(client, "mobile-catalog.jpg");
+  await evaluate(client, `document.querySelector('#results').scrollIntoView({block:'start', behavior:'instant'})`);
+  await waitFor(client, `document.querySelector('.poster-thumbnail')?.naturalWidth === 480`, 30000);
+  await delay(120);
+  const mobileResultsScreenshot = await screenshot(client, "mobile-results.jpg");
 
   await click(client, '[data-result-id="gpt-5-6-sol-run-01"] .compare-check span');
   await click(client, '[data-result-id="gpt-5-5-run-01"] .compare-check span');
@@ -734,7 +776,7 @@ try {
     mobileRun,
     mobileRequirementRun,
     browserErrors,
-    screenshots: [landingScreenshot, landingMethodScreenshot, landingCtaScreenshot, catalogScreenshot, closeupScreenshot, resultsScreenshot, resultRequirementCardScreenshot, methodScreenshot, compareScreenshot, compareLedgerScreenshot, runDetailScreenshot, runGenerationScreenshot, runSourceScreenshot, requirementRunScreenshot, requirementFindingsScreenshot, secondScreenshot, mobileLandingScreenshot, mobileLandingContractScreenshot, mobileScreenshot, mobileCompareScreenshot, mobileRunScreenshot, mobileRunGenerationScreenshot, mobileRequirementScreenshot, mobileRequirementEvidenceScreenshot],
+    screenshots: [landingScreenshot, landingMethodScreenshot, landingCtaScreenshot, catalogScreenshot, closeupScreenshot, resultsScreenshot, renderFailureCardScreenshot, resultRequirementCardScreenshot, methodScreenshot, compareScreenshot, compareLedgerScreenshot, runDetailScreenshot, runGenerationScreenshot, solCostScreenshot, runSourceScreenshot, requirementRunScreenshot, requirementFindingsScreenshot, secondScreenshot, mobileLandingScreenshot, mobileLandingContractScreenshot, mobileScreenshot, mobileResultsScreenshot, mobileCompareScreenshot, mobileRunScreenshot, mobileRunGenerationScreenshot, mobileRequirementScreenshot, mobileRequirementEvidenceScreenshot],
   };
   console.log(JSON.stringify(report, null, 2));
   if (browserErrors.length) process.exitCode = 1;

@@ -1,0 +1,16 @@
+**Developing Pelican Code**
+
+I'm focused on building out the core WebGL2 rendering logic for the pelican and bicycle scene. The current stage involves defining vertex and fragment shaders, and integrating them into a functional ES module for dynamic scene generation.
+
+**Designing Scene Components**
+
+My thoughts are currently centered on defining the geometric primitives and their SDF representations for both the pelican and the bicycle. I'm detailing the specific shapes and SDF operations needed to construct each part, from the pelican's ellipsoid body to the bicycle's torus wheels, aiming for efficient scene composition.
+
+**Implementing Raymarching Logic**
+
+I'm now focused on the fragment shader, where the core raymarching will happen. I'm considering how best to pass camera data from JavaScript, opting for position and rotation vectors for flexibility in shader calculations, while also refining my approach to SDF shape definitions.
+
+**Defining Scene Geometry**
+
+I'm now concentrating on defining the precise mathematical primitives and their SDF functions. Specifically, I'm detailing how to combine capsules, tori, boxes, and ellipsoids to construct the bicycle frame, pelican body, and its various features, alongside planning animation and coloring.
+

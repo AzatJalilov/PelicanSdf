@@ -5,6 +5,8 @@ import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+import { extractCodexUsage, parseJsonLines } from "./eval-usage.mjs";
+import { apiPricingNote, calculateApiCostUsd, getModelPricing } from "./model-pricing.mjs";
 
 const root = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 const allowedEfforts = new Set(["minimal", "low", "medium", "high", "xhigh", "max", "ultra"]);
@@ -27,56 +29,6 @@ function parseArgs(argv) {
 
 function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
-}
-
-function parseEvents(stdout) {
-  const events = [];
-  for (const line of stdout.split(/\r?\n/)) {
-    if (!line.trim()) continue;
-    try {
-      events.push(JSON.parse(line));
-    } catch {
-      // Preserve the complete stream even if a future CLI adds a non-JSON line.
-    }
-  }
-  return events;
-}
-
-function firstFinite(...values) {
-  return values.find((value) => Number.isInteger(value) && value >= 0) ?? null;
-}
-
-function extractUsage(events) {
-  const receipts = events
-    .map((event) => event?.usage)
-    .filter((usage) => usage && typeof usage === "object");
-  const usage = receipts.at(-1) || {};
-  const inputTokens = firstFinite(usage.input_tokens, usage.inputTokens);
-  const cachedInputTokens = firstFinite(
-    usage.cached_input_tokens,
-    usage.cachedInputTokens,
-    usage.input_tokens_details?.cached_tokens,
-    usage.inputTokensDetails?.cachedTokens,
-  );
-  const reasoningTokens = firstFinite(
-    usage.reasoning_tokens,
-    usage.reasoningTokens,
-    usage.output_tokens_details?.reasoning_tokens,
-    usage.outputTokensDetails?.reasoningTokens,
-  );
-  const outputTokens = firstFinite(usage.output_tokens, usage.outputTokens);
-  const reportedTotal = firstFinite(usage.total_tokens, usage.totalTokens);
-  return {
-    inputTokens,
-    cachedInputTokens,
-    reasoningTokens,
-    outputTokens,
-    totalTokens: reportedTotal ?? (
-      Number.isInteger(inputTokens) && Number.isInteger(outputTokens)
-        ? inputTokens + outputTokens
-        : null
-    ),
-  };
 }
 
 async function exists(filePath) {
@@ -159,8 +111,11 @@ const stderr = Buffer.concat(stderrChunks).toString("utf8");
 await writeFile(eventsPath, stdout, "utf8");
 await writeFile(stderrPath, stderr, "utf8");
 
-const events = parseEvents(stdout);
+const events = parseJsonLines(stdout);
 const response = await readFile(responsePath).catch(() => Buffer.alloc(0));
+const usage = extractCodexUsage(events);
+const pricing = getModelPricing(model);
+const apiCostUsd = calculateApiCostUsd(model, usage);
 const receipt = {
   schemaVersion: 1,
   id,
@@ -185,11 +140,18 @@ const receipt = {
     bytes: response.byteLength,
     sha256: sha256(response),
   },
-  usage: extractUsage(events),
+  usage,
   billing: {
     mode: "subscription",
-    apiCostUsd: null,
-    note: "Codex CLI subscription invocation; no per-call API charge was exposed.",
+    apiCostUsd,
+    note: apiPricingNote(model),
+    pricing: pricing ? {
+      inputUsdPerMillion: pricing.inputUsdPerMillion,
+      cachedInputUsdPerMillion: pricing.cachedInputUsdPerMillion,
+      outputUsdPerMillion: pricing.outputUsdPerMillion,
+      source: pricing.source,
+      publishedAt: pricing.publishedAt,
+    } : null,
   },
   startedAt: startedAt.toISOString(),
   completedAt: completedAt.toISOString(),
@@ -216,6 +178,7 @@ console.log(JSON.stringify({
   effort,
   responseBytes: response.byteLength,
   usage: receipt.usage,
+  apiCostUsd: receipt.billing.apiCostUsd,
   durationMs: receipt.durationMs,
   receipt: path.relative(root, receiptPath),
 }, null, 2));

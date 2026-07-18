@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "id": "claude-opus-4-8-max-run-01",
+  "model": "claude-opus-4-8",
+  "modelDisplayName": "Claude Opus 4.8",
+  "provider": "Anthropic via Claude Code CLI",
+  "reasoningEffort": "max",
+  "accent": "#b0762f",
+  "harness": {
+    "name": "Claude Code CLI",
+    "version": "2.1.214 (Claude Code)",
+    "surface": "claude -p --tools \"\" --setting-sources \"\" --strict-mcp-config --system-prompt <minimal> --output-format json (prompt piped byte-exact via stdin); CLAUDE_CODE_MAX_OUTPUT_TOKENS=128000",
+    "sandbox": "n/a (no tools available)",
+    "ephemeral": true,
+    "userConfigLoaded": false,
+    "projectRulesLoaded": false,
+    "notes": "Fresh non-interactive invocation with a minimal replacement system prompt; no tools, skills, hooks, MCP servers, CLAUDE.md, or memory in context (verified 253-token bare context probe)."
+  },
+  "prompt": {
+    "path": "benchmark/prompt.txt",
+    "bytes": 3387,
+    "sha256": "cd21d5a8bb3956d82ab5650304e7e491063eacdb27dad85be6b4a845512f5e6b"
+  },
+  "response": {
+    "path": "data/raw/claude-opus-4-8-max-run-01/response.txt",
+    "bytes": 16825,
+    "sha256": "31d6a11ca785338e7939b9027c77a0362dfed9563ad4766135cd68eabc76cb77"
+  },
+  "usage": {
+    "inputTokens": 3,
+    "cachedInputTokens": 1558,
+    "reasoningTokens": null,
+    "outputTokens": 229517,
+    "totalTokens": 232697
+  },
+  "billing": {
+    "mode": "subscription",
+    "apiCostUsd": 5.7562999999999995,
+    "note": "Claude subscription invocation; total_cost_usd is the CLI's pricing estimate, not a separate API charge."
+  },
+  "startedAt": "2026-07-18T13:11:45.148Z",
+  "completedAt": "2026-07-18T13:57:56.464Z",
+  "durationMs": 2771316,
+  "exitCode": 0,
+  "error": null,
+  "sessionId": "28915a3e-83e3-49d2-8806-0f147f3f0c46",
+  "files": {
+    "events": "data/raw/claude-opus-4-8-max-run-01/events.jsonl",
+    "stderr": "data/raw/claude-opus-4-8-max-run-01/stderr.txt"
+  }
+}

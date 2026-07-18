@@ -1,0 +1,79 @@
+{
+  "id": "claude-sonnet-5-xhigh-run-01",
+  "title": "Claude Sonnet 5 / xhigh effort",
+  "model": "claude-sonnet-5",
+  "provider": "Anthropic via Claude Code CLI",
+  "status": "unverified",
+  "track": "one-shot",
+  "promptVersion": "1.0.0",
+  "promptSha256": "cd21d5a8bb3956d82ab5650304e7e491063eacdb27dad85be6b4a845512f5e6b",
+  "artifactSha256": "c1ce89a10fb5be8b4076ece9a3921e05c79330ce9f820207374022c03c37de5c",
+  "createdAt": "2026-07-18",
+  "artifact": "../artifacts/claude-sonnet-5-xhigh-run-01.js",
+  "description": "A polished white pelican with a yellow beak and pink pouch leans its wings onto the handlebars of a coral fat-tire bicycle with spoked wheels, softly mirrored in a checkered floor.",
+  "accent": "#3f7f5f",
+  "generationHarness": {
+    "name": "Claude Code CLI",
+    "version": "2.1.214 (Claude Code)",
+    "surface": "claude -p --tools \"\" --setting-sources \"\" --strict-mcp-config --system-prompt <minimal> --output-format json (prompt piped byte-exact via stdin)",
+    "sandbox": "n/a (no tools available)",
+    "notes": "Fresh non-interactive invocation with a minimal replacement system prompt; no tools, skills, hooks, MCP servers, CLAUDE.md, or memory in context (verified 253-token bare context probe)."
+  },
+  "generationUsage": {
+    "inputTokens": 3,
+    "cachedInputTokens": 1343,
+    "reasoningTokens": null,
+    "outputTokens": 124362,
+    "totalTokens": 127112,
+    "apiCostUsd": 1.8756568999999998,
+    "billingMode": "subscription",
+    "source": "data/raw/claude-sonnet-5-xhigh-run-01/events.jsonl",
+    "notes": "Claude subscription invocation; total_cost_usd is the CLI's pricing estimate, not a separate API charge."
+  },
+  "validation": {
+    "state": "passed",
+    "checks": [
+      "JavaScript syntax",
+      "lifecycle contract",
+      "WebGL2 compilation",
+      "initial composition",
+      "pointer orbit",
+      "wheel zoom",
+      "two-finger pinch",
+      "keyboard camera",
+      "multi-angle camera response",
+      "close-range inspection",
+      "three-trial GPU timing"
+    ],
+    "unmetRequirements": [],
+    "warnings": []
+  },
+  "metrics": {
+    "sourceBytes": 16542,
+    "initMs": 10234,
+    "gpuMsMedian": 7.8099,
+    "gpuMsP95": 8.854,
+    "throughputFps": 128.0429,
+    "timingMethod": "gpu-query",
+    "environment": "AMD Radeon(TM) Graphics / ANGLE D3D11; Headless Chrome 150; Windows; 960x540; 3 serial trials",
+    "environmentKey": "amd-15bf-angle-d3d11|headless-chrome-150|windows|960x540|pelican-canvas-v1",
+    "profile": "pelican-canvas-960x540-v1",
+    "sampleCount": 36,
+    "trials": 3,
+    "measuredAt": "2026-07-18T12:15:42.328Z"
+  },
+  "visual": {
+    "readability": null,
+    "completeness": null,
+    "coherence": null,
+    "craft": null,
+    "inspectability": null,
+    "reviewers": 0
+  },
+  "provenance": {
+    "generatorKind": "model-eval",
+    "method": "Fresh one-shot Claude Code CLI invocation; text-only with tools and skills disabled; added trailing LF",
+    "rawResponse": "../raw/claude-sonnet-5-xhigh-run-01/response.txt",
+    "decoding": "reasoning effort: xhigh; other decoding settings not exposed"
+  }
+}

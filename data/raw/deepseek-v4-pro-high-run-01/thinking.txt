@@ -1,0 +1,708 @@
+We need to produce a self-contained JavaScript ES module. The user wants a complete interactive 3D SDF artwork of a pelican riding a bicycle. Must use WebGL2 ray marching fragment shader. Must implement SDF primitives, operations, normals, camera math, lighting, materials, background, and controls. Must handle interactions: mouse drag orbit, scroll wheel zoom, pinch zoom, arrow keys orbit, +/- zoom. Canvas must be focusable. Must prevent scrolling. Must export function createPelicanSdf(canvas) returning object with render(timeSeconds), setView(yaw, pitch, distance), getView(), dispose(). All SDF construction in shader. Must be within 32KB UTF-8 bytes.
+
+Given the constraints, this is a massive task. I need to design a shader that constructs the SDF of a pelican riding a bicycle using only pure math and SDF operations. It's almost impossible to encode the exact shape within the size limit, but we can create a stylized, cartoon-like pelican and bike using primitives (spheres, capsules, boxes, cylinders, etc.) and smooth blends, etc.
+
+I'll create a single HTML-like module but no HTML, just JS that uses WebGL2 and compiles shaders. I need to define the fragment shader with many SDF functions, and combine them all.
+
+The pelican riding a bicycle: The bicycle has two wheels (torus? Actually wheels can be cylinders with rims, maybe two torus for tires, spokes? For simplicity, wheels could be torus for tires, with hub and spokes, but complex. The frame: triangles? We'll use capsule/cylinder primitives for frame tubes. Seat: like a box. Handlebar: curved. Pedals/crank: small cylinder and maybe two spheres for pedals. The pelican: body like a ellipsoid, head sphere, long beak (cone or capsule?), throat pouch (maybe a stretched sphere?), wings (maybe two ellipsoids or boxes), legs (capsules) connecting to pedals and frame. Eye sphere. The pelican must be riding: feet on pedals, hands on handlebar? Actually pelican wings are arms, so maybe wings resting on handlebar. Legs on pedals. So we need to position these elements relative to some coordinate system.
+
+We'll define a world coordinate system. Use time to add slight animation maybe (like rotating wheels or bobbing?), but the requirement: render(timeSeconds) draws a frame; we can animate something like the wheels spinning, pedals moving, pelican slightly bobbing. But it's not mandatory, but might help. However, they require deterministic for same time, so fine.
+
+Camera: orbit around world origin. setView(yaw, pitch, distance) - positive yaw orbits around world-up (Y axis). setView(0,0,distance) shows bicycle from right side. So right side means the bike is oriented such that its forward direction is maybe along +Z or -Z? Typically, for an object viewed from right side, we want the bike facing left or right? setView(0,0,distance) means camera at distance along something? The function: yaw around world-up (Y), pitch up from horizontal. So setView(0,0,dist) means looking from direction (0,0,-1) if we consider standard? Usually, with yaw and pitch, camera position relative to target. If target is origin, default camera at distance "dist" along negative Z axis? If yaw=0, pitch=0, then camera at (0,0,dist) looking at origin? Or camera at (0,0,dist) looking at origin from positive Z? Actually typical orbit: camera orbits around target, looking at target. So setView(0,0,dist): yaw=0 means camera azimuth 0, pitch=0 means elevation 0. Then camera position = target + (dist*cos(pitch)*sin(yaw?), wait. We need to define. The evaluator states: "setView(0, 0, distance) must show the bicycle from its right side; positive yaw orbits around world-up." That suggests that when yaw=0 and pitch=0, the view is from the positive X axis? Right side of bicycle: if bicycle faces forward along +Z or -Z, then right side is +X or -X depending on orientation. Let's define the bike facing -Z direction for right side? For a bicycle, right side is where the rider's right side is. If the bike is moving forward in the +Z direction, then the right side is +X. So setView(0,0,dist) should show bike from +X, looking towards origin. So camera at (dist, 0, 0) looking at (0,0,0)? Actually to look at origin from +X, the camera position is (dist,0,0) and look direction is (-1,0,0), which corresponds to viewing from right side. But then setView with yaw and pitch: standard spherical coordinates: yaw = angle around Y axis, from +X towards +Z? If yaw=0, camera direction vector might be (0,0,-1) if we define yaw relative to -Z? Many conventions. We need to match the requirement: setView(0,0,distance) must show from right side. So choose yaw=0 to mean direction from +X axis towards origin. So we'll set yaw=0 => camera position at (distance, 0, 0) looking at origin. Positive yaw orbits around world-up: that is, increase yaw rotates the camera around Y axis. So if we start at (dist,0,0), a positive yaw would move the camera towards +Z? For example, yaw = pi/2 would bring camera to (0,0,dist) looking at origin? That would view from front (if bike facing -Z, front is +Z? Let's define bike facing +Z? Which side is front? We need to define orientation. If bike is facing +Z, then its right side is -X? Let's think: A bicycle's forward direction: usually rider faces forward. If the bike is moving forward in +Z, then the front is +Z, rear is -Z. Right side is -X? Actually, hold: standard coordinate: X right, Y up, Z forward. If Z forward, then right side is X positive. Wait: imagine looking down from top: Y up, Z forward, X right. So a person standing on the ground facing +Z, their right side is +X. So if bike faces +Z, the right side is +X. So camera at (dist,0,0) looks at origin from +X, seeing the right side. So setView(0,0,dist) should produce that. So we can define yaw=0 => camera position on +X axis at distance dist from origin. Yaw positive would rotate around Y: if we rotate camera position from +X toward +Z by positive angle, that's clockwise? Let's compute: initially at (dist,0,0). After rotating around Y by angle θ (positive rotation follows right-hand rule: Y axis up, rotating from +X toward +Z is positive). So new position = (dist*cosθ, 0, dist*sinθ). For θ = π/2, position = (0,0,dist), which is front view (looking at -Z direction? Wait camera at (0,0,dist) looks at origin from +Z, which is front of bike. That would show the front. So positive yaw orbits from right to front, which is valid. Pitch positive tilts down? Usually pitch up/down. We'll make pitch positive tilt down, so camera goes above. That's fine.
+
+So implement camera: target = origin (0,0,0). cameraPos = target + distance * (cos(pitch)*cos(yaw?), careful: To get initial position (dist,0,0) at yaw=0,pitch=0: we can set cameraPos = target + distance * (cos(yaw), 0, sin(yaw))? That gives (dist,0,0) for yaw=0. But with pitch: we want to elevate camera. So we can do: horizontal distance = distance * cos(pitch); vertical = distance * sin(pitch). Then horizontal pos on XZ plane: horizontalDist = distance * cos(pitch); cameraPos = (horizontalDist * cos(yaw), distance * sin(pitch), horizontalDist * sin(yaw)). This yields at yaw=0,pitch=0: (dist,0,0). At yaw=0,pitch>0: (dist*cos(pitch), dist*sin(pitch), 0) -> camera moves up and a bit closer in horizontal plane? Actually horizontalDist reduces, vertical increases. That works for orbiting.
+
+Now implement WebGL2: create vertex buffer for full-screen quad, compile vertex and fragment shaders. Ray marching in fragment shader: compute ray origin and direction from camera parameters and canvas coordinates. Compute SDF scene distance, march, compute lighting. Must avoid using any built-in SDF primitives from external sources, so implement all primitives inline.
+
+The challenge is to code the entire SDF scene within the fragment shader while staying under 32KB total module size. So the shader must be very compact. We'll use simple primitives and combine them with min, max, smooth min, etc. The bike and pelican need to be recognizable. I'll design a simplistic but plausible scene:
+
+- Bike frame: two wheels (tires as torus, maybe just a torus with small radius for tire, large radius for wheel radius). Wheel radius ~1 unit. The bike has two wheels spaced apart along Z axis (front and back). Wheelbase length ~3 units. So back wheel at z = -1.5, front wheel at z = 1.5. Wheel radius = 1. Tire thickness ~0.15. Inner rim: maybe a cylinder? For simplicity, use a torus for tire and a disk for the wheel disc? But could just use torus for entire wheel appearance, with thickness. We'll add spokes by a few rotating cylinders? Time-based rotation will make wheels spin, adding a nice touch. We can animate the entire wheel rotation using time. We'll pass time uniform.
+
+- Frame: use capsules (line segments with round caps) connecting bottom bracket (pedal area) to seat, to rear wheel, to front etc. A typical diamond frame: top tube, down tube, seat tube, chainstays, seatstays. We can approximate with 5-6 tubes.
+
+- Seat: a rounded box or cylinder sitting on top of seat tube.
+
+- Handlebar: a bar going up and forward, with grips. Maybe a cylinder bent? Use a combination of cylinders and spheres.
+
+- Pedals/crank: a rotating crank arm anchored at bottom bracket (pedal center). The crank rotates with wheels. Two pedals on ends of a rotating arm.
+
+- Pelican body: ellipsoid shaped like a bird body, positioned above seat, leaning forward maybe. Head at one end (front), beak pointing forward. So body placed around pelican_coords: body center somewhere above seat. The pelican should be "riding" meaning feet on pedals, wings holding handlebar.
+
+- Legs: two capsules from body to pedals, each foot connected to a pedal. So each leg goes down to the crank. As crank rotates, the legs would move. That's complex to animate. For simplicity, we can have legs attached to pedals that are at a certain angle, not animated, or maybe static. But we can animate the crank rotation, causing pedals to move, and thus one leg moves up and down? That would be realistic. We need to compute the position of the feet that rotate with crank. To keep shader simple, we could compute the position of each foot based on time, using sin/cos of time to rotate the crank arm. Then the leg is a capsule from hip (pelican body) to that foot position. So the leg will stretch and bend? Capsule will be straight, but that's okay for stylized.
+
+- Wings: attach to body side, extend forward to grip handlebar. We can use a couple of capsules for each wing, like upper arm and forearm. The hand at handlebar grip. So compute positions based on body orientation.
+
+- Throat pouch: a stretched sphere under the beak.
+
+- Eye: small sphere on head.
+
+I need to produce all this using SDF functions in the shader. The shader code must be small. I'll use macros or define functions inline to save space. Probably the whole shader string will be large, so I'll need to minimize whitespace and variable names. I'll aim for under 30KB for the whole module, so the shader might be around 20-25KB. I can use short variable names, minimize comments, etc.
+
+Plan the SDF functions:
+
+- sdSphere(p, r)
+- sdBox(p, b) (rounded box using sdRoundBox maybe, but simpler: sdBox with sharp edges may be okay if not visible, but for seat we want slightly rounded, so implement sdRoundedBox: return length(max(abs(p)-b,0.0))-r; with r small)
+- sdCapsule(p, a, b, r): distance to line segment. Standard.
+- sdCylinder(p, h, r): infinite cylinder? Better use sdCappedCylinder: sdCylinder(p, a, b, r) similar to capsule but with flat ends? Use sdRoundCone for varying radius? For frame tubes, we can use sdCapsule which gives rounded caps, looks fine.
+- sdTorus(p, t): t.x = major radius, t.y = minor radius.
+- sdPlane(p, n, h): for ground plane, but the scene may not have ground? Could include a ground plane? It would help grounding. Yes, include a flat ground with some color.
+- sdEllipsoid(p, r): scale space: if we want elongated pelican body, we can apply scaling to a sphere: like sdSphere(p/radii)*min(min(radii)). But careful: scaling distances is not exact unless we use linear transform. For ellipsoid, we can do: q = p/r; return length(q)*min(r) - the radii component handling. But it's not exact SDF, but close enough. Use: return (length(p/r)-1.0)*min(r). This yields a smooth ellipsoid.
+- sdTorus82 maybe for something else.
+
+Combine using opSmoothUnion, opSmoothSubtraction, opUnion (min), opSubtraction (max).
+
+I'll design positions: Let's define coordinate system:
+
+- Origin at bottom bracket (center of pedals). So the bike's bottom bracket is at world origin (0,0,0). Ground plane at y = -wheel_radius? Wheels touch ground, so wheel center is at y = wheel_radius = 1. So bottom bracket is above ground: typical bike, bottom bracket height ~ 0.3? But for simplicity, place bottom bracket at y=0.3? Actually easier: define wheel radius = 1.0. Place wheel centers at y = 1.0 (so bottom of wheel at y=0). Ground at y=0. Rear wheel center at (0,1.0,-wheelbase/2). Front wheel center at (0,1.0,wheelbase/2). Use wheelbase=2.5 for compactness. Then bottom bracket position: typical behind seat tube? We'll place bottom bracket at (0,0.5,0) maybe? Let's set: wheelbase = 2.4. rear at z=-1.2, front at z=1.2. Wheel radius = 1.0, tire thickness 0.15. So wheel center y=1.0. The bottom bracket: usually located between wheels, slightly forward of rear wheel, behind the seat tube. We'll put bottom bracket at (0,0.4, -0.2) maybe. Then we need frame tubes connecting: rear wheel hub to bottom bracket, bottom bracket to seat, seat to rear wheel, also top tube from seat to head tube (front), down tube from head tube to bottom bracket. Let's set coordinates: head tube top at (0,1.5, 1.2) maybe; seat post top at (0,1.5, -0.8). So we can define tube endpoints.
+
+Seat: above seat post, at (0,1.8, -0.8), like a box rotated? Seat top is horizontal but maybe tilted. Use a rounded box.
+
+Handlebar: above head tube, at (0,1.8, 1.2) maybe, with grips extending forward and outward.
+
+Pedal crank: bottom bracket at (0,0.4, -0.2). Crank arm length 0.3. Two pedals rotated by angle = time*speed. Crank rotates; we can define pedal positions: pedal1 = (0,0.4,-0.2) + crank_length * (cos(angle), sin(angle), 0) (but orientation along X? Actually pedals are perpendicular to X, so crank arm rotates in XZ plane? Typically crank rotates around Y axis? Actually crank rotates around X axis? Because bike frame is in XZ plane. The pedal axle is parallel to X, so the crank arm rotates in YZ plane? Let's define crank rotation around X axis maybe. But we want the legs to attach from body to pedals. The pelican's legs hang down. So we can define crank rotation around X axis (so arm rotates in YZ). Pedal positions: pedal_left and pedal_right? Actually there is one pedal on each side of the bottom bracket. For right side, a crank arm extends from bottom bracket, with pedal at end. But in this stylized scene, we can have one set of pedals (as the viewer sees from right side, we'll place a crank arm on the right side). So pedal position: crank_center = bottom bracket position, crank_radius = 0.25. Rotate around X. angle = time * 5.0; Then pedal_pos = crank_center + (0, crank_radius*cos(angle), crank_radius*sin(angle))? That would make it go up and down. But for realistic cycling, the right pedal at bottom when left is top, etc. We'll have one visible pedal (right side). That's fine. The leg will connect from pelican hip to that pedal. So as pedal moves, leg follows (straight capsule). It may detach, but capsule will stretch; but okay.
+
+Pelican body: positioned above seat, leaning forward. The pelican is mounted on the bike, sitting on seat. So the body's bottom rests on the seat. We can define pelican coordinate system relative to bike. Let's set pelican root at (0, 1.6, -0.3) maybe (above seat). Orientation: the pelican faces forward (+Z?). Since bike faces +Z, pelican should face +Z as well. So body elongated along Z axis, with head at front (+Z). So body center around (0,1.8, 0) maybe, with head further forward. Use ellipsoid scaling: body.scale = (0.4, 0.5, 0.7) to make it longer along Z. So transform body: translate to body_position, rotate (pitch maybe slightly forward lean). Then apply scale.
+
+Head: sphere at front of body, say at body_pos + (0,0.2, 0.8).
+
+Beak: cone or capsule from head forward, pointing +Z and slightly down. Use sdCapsule from head tip to beak tip.
+
+Pouch: sphere scaled vertically below beak.
+
+Eye: small sphere on head side.
+
+Wings: attach at shoulders (top side of body). Shoulder position maybe body_pos + (0.4, 0.1, 0.3) for right wing? Actually wing on right side would be positive X if body center is at X=0. So shoulder at (0.7, 1.9, 0.2) maybe. The wing extends forward to handlebar (grip). So we can define two capsules: upper arm from shoulder to elbow, forearm from elbow to handlebar grip. Elbow bend for wing. Let's compute positions: shoulder, elbow, hand.
+
+Legs: hips at lower body, like (0.3, 1.6, -0.1) for right hip? Then foot at pedal. So capsule from hip to foot.
+
+Thus all parts are defined relatively.
+
+Now combine all SDFs using min and smooth min for the bike and pelican. Use materials: we'll implement simple diffuse lighting with ambient, diffuse, specular using Phong. Color the objects differently: bike frame metallic, wheels black, tires dark gray, body white/pink, beak orange, etc. To differentiate, we can use a simple material ID returned from SDF, then apply color in lighting. So in ray marching, after hitting the scene, compute material ID from the nearest SDF (store in a variable) and then compute lighting with diffuse and specular. For shadows, we can do a simple shadow ray march towards light. That's doable.
+
+Lighting: we'll have a directional light (sun) and ambient light. Sun direction from (1,1,0.5). Use soft shadows maybe.
+
+The fragment shader will need to compute ray direction from camera. We'll pass camera uniforms: u_cameraPos, u_cameraMatrix (or u_rayOrigin, u_rayDir per fragment? Better pass cameraPos and three axes: u_forward, u_right, u_up. In the shader, compute ray direction based on normalized screen coordinates. So uniforms: u_cameraPos, u_cameraForward, u_cameraRight, u_cameraUp, plus u_fovScale (tan of half fov). Then for each pixel, compute rd = normalize(u_cameraForward + u_cameraRight * (uv.x*2-1)*aspect_ratio * u_fovScale + u_cameraUp * (uv.y*2-1)*u_fovScale? Actually typical: uv = (gl_FragCoord.xy / resolution) * 2 - 1; aspect = resolution.x/resolution.y; rd = normalize(u_cameraForward + u_cameraRight * uv.x * aspect * u_fovScale + u_cameraUp * uv.y * u_fovScale). We'll set u_fovScale = tan(fov/2). Use fov = 45 degrees rads.
+
+So we need to compute these axes from yaw, pitch, distance. We'll compute camera position as earlier. The camera looks at origin (target). So forwardDirection = normalize(target - cameraPos). Then need right and up. worldUp = (0,1,0). Compute right = normalize(cross(forward, worldUp)). If forward aligns with worldUp, handle using another up. Then up = cross(right, forward). So that gives camera basis.
+
+Thus setView(yaw, pitch, distance) will set internal states (yaw, pitch, distance) and update cameraPos, forward, right, up. default values: yaw=0, pitch=0, distance=8 (to see full scene). The evaluator wants setView(0,0,distance) shows right side, so that works.
+
+Interaction: mouse drag: add event listeners to canvas for pointerdown, pointermove, pointerup. On drag, calculate delta and adjust yaw and pitch. Wheel: adjust distance. Pinch: use touch events maybe two-finger pinch. Simpler: on wheel event (passive: false, preventDefault) and adjust distance. Arrow keys: on canvas keydown, adjust yaw and pitch (left/right for yaw, up/down for pitch). +/- keys for zoom. We'll make canvas focusable by adding tabindex and focus on click. Also prevent scrolling when canvas focused? We'll call preventDefault on wheel and keydown maybe for arrows and +/-, but allow other keys. We'll set canvas.style.touchAction = 'none' to prevent touch scrolling? But the evaluator may not set style; we can set it in code. We'll also set canvas.style.outline = 'none' maybe.
+
+We need to respect canvas drawing buffer size. So we'll get canvas.width and canvas.height each frame in render() to set viewport and uniforms for resolution.
+
+Dispose: remove event listeners, delete WebGL resources (delete programs, shaders, buffers, texture if any). Also we need to save bound listeners for removal. We'll add listeners directly on canvas, using anonymous functions but we must store references to remove. So we'll create functions and store them on a variable.
+
+Implementation structure:
+
+```
+export function createPelicanSdf(canvas) {
+  if (!canvas) throw new Error('Canvas required');
+  const gl = canvas.getContext('webgl2', { antialias: false, alpha: false, preserveDrawingBuffer: true });
+  if (!gl) throw new Error('WebGL2 not supported');
+  
+  // compile shaders, create program
+  const vertSrc = ...; // simple fullscreen quad
+  const fragSrc = ...; // huge SDF shader
+  
+  const program = createProgram(gl, vertSrc, fragSrc);
+  if (!program) throw new Error('Shader compilation failed');
+  
+  // set up vertex data: fullscreen quad
+  const vao = gl.createVertexArray();
+  gl.bindVertexArray(vao);
+  const positions = new Float32Array([-1,-1, 1,-1, -1,1, 1,1]);
+  const buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0);
+  gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+  gl.bindVertexArray(null);
+  
+  // uniforms locations
+  const u_cameraPos = gl.getUniformLocation(program, 'u_cameraPos');
+  const u_cameraForward = ... etc.
+  const u_resolution = ...
+  const u_fovScale = ...
+  const u_time = ...
+  
+  // initial camera state
+  let yaw = 0, pitch = 0, distance = 8.0;
+  // compute camera
+  const cameraState = { pos: new Float32Array(3), forward: new Float32Array(3), right: new Float32Array(3), up: new Float32Array(3) };
+  
+  function updateCamera() {
+    const horizDist = distance * Math.cos(pitch);
+    cameraState.pos[0] = horizDist * Math.cos(yaw);
+    cameraState.pos[1] = distance * Math.sin(pitch);
+    cameraState.pos[2] = horizDist * Math.sin(yaw);
+    // target at origin
+    const target = [0,0,0];
+    const fwd = new Float32Array([target[0]-cameraState.pos[0], target[1]-cameraState.pos[1], target[2]-cameraState.pos[2]]);
+    const len = Math.hypot(fwd[0], fwd[1], fwd[2]);
+    fwd[0]/=len; fwd[1]/=len; fwd[2]/=len;
+    cameraState.forward = fwd;
+    const worldUp = [0,1,0];
+    const right = new Float32Array(3);
+    // cross(fwd, worldUp)
+    right[0] = fwd[1]*worldUp[2] - fwd[2]*worldUp[1];
+    right[1] = fwd[2]*worldUp[0] - fwd[0]*worldUp[2];
+    right[2] = fwd[0]*worldUp[1] - fwd[1]*worldUp[0];
+    // if forward is parallel to worldUp, use different worldUp
+    const lenR = Math.hypot(right[0],right[1],right[2]);
+    if (lenR < 0.001) {
+      const altUp = [0,0,1];
+      right[0] = fwd[1]*altUp[2] - fwd[2]*altUp[1];
+      right[1] = fwd[2]*altUp[0] - fwd[0]*altUp[2];
+      right[2] = fwd[0]*altUp[1] - fwd[1]*altUp[0];
+    }
+    // normalize right
+    right[0]/=Math.hypot(right[0],right[1],right[2]);
+    right[1]/=Math.hypot(right[0],right[1],right[2]); // lazy: compute len again
+    // simplify: recompute len
+    const rlen = Math.hypot(right[0],right[1],right[2]);
+    right[0]/=rlen; right[1]/=rlen; right[2]/=rlen;
+    // up = cross(right, forward)
+    const up = [ right[1]*fwd[2] - right[2]*fwd[1], right[2]*fwd[0] - right[0]*fwd[2], right[0]*fwd[1] - right[1]*fwd[0] ];
+    // assign
+    cameraState.right = right;
+    cameraState.up = up;
+  }
+  
+  // interactions
+  let isPointerDown = false;
+  let lastPointerX, lastPointerY;
+  const onPointerDown = (e) => {
+    canvas.setPointerCapture(e.pointerId);
+    isPointerDown = true;
+    lastPointerX = e.clientX;
+    lastPointerY = e.clientY;
+    e.preventDefault();
+  };
+  const onPointerMove = (e) => {
+    if (!isPointerDown) return;
+    const dx = e.clientX - lastPointerX;
+    const dy = e.clientY - lastPointerY;
+    yaw -= dx * 0.005;
+    pitch += dy * 0.005;
+    pitch = Math.max(-Math.PI/2+0.01, Math.min(Math.PI/2-0.01, pitch));
+    updateCamera();
+    lastPointerX = e.clientX;
+    lastPointerY = e.clientY;
+  };
+  const onPointerUp = (e) => {
+    isPointerDown = false;
+    canvas.releasePointerCapture(e.pointerId);
+  };
+  const onWheel = (e) => {
+    e.preventDefault();
+    distance *= (1 + e.deltaY * 0.001);
+    distance = Math.max(1.0, Math.min(30.0, distance));
+    updateCamera();
+  };
+  const onKeyDown = (e) => {
+    if (e.key === 'ArrowLeft') { yaw += 0.05; updateCamera(); e.preventDefault(); }
+    else if (e.key === 'ArrowRight') { yaw -= 0.05; updateCamera(); e.preventDefault(); }
+    else if (e.key === 'ArrowUp') { pitch += 0.05; pitch = Math.min(Math.PI/2-0.01, pitch); updateCamera(); e.preventDefault(); }
+    else if (e.key === 'ArrowDown') { pitch -= 0.05; pitch = Math.max(-Math.PI/2+0.01, pitch); updateCamera(); e.preventDefault(); }
+    else if (e.key === '+' || e.key === '=') { distance = Math.max(1.0, distance - 0.5); updateCamera(); e.preventDefault(); }
+    else if (e.key === '-' || e.key === '_') { distance = Math.min(30.0, distance + 0.5); updateCamera(); e.preventDefault(); }
+  };
+  
+  canvas.addEventListener('pointerdown', onPointerDown);
+  canvas.addEventListener('pointermove', onPointerMove);
+  canvas.addEventListener('pointerup', onPointerUp);
+  canvas.addEventListener('pointercancel', onPointerUp);
+  canvas.addEventListener('wheel', onWheel, { passive: false });
+  canvas.addEventListener('keydown', onKeyDown);
+  // make canvas focusable
+  canvas.setAttribute('tabindex', '0');
+  canvas.style.outline = 'none';
+  canvas.addEventListener('click', () => canvas.focus());
+  // also to prevent default touch behavior
+  canvas.style.touchAction = 'none';
+  
+  // initial update
+  updateCamera();
+  
+  const fovScale = Math.tan( (45 * Math.PI/180) / 2 );
+  
+  function render(time) {
+    // get canvas size
+    const w = canvas.width;
+    const h = canvas.height;
+    if (w === 0 || h === 0) return;
+    gl.viewport(0, 0, w, h);
+    gl.useProgram(program);
+    gl.bindVertexArray(vao);
+    // set uniforms
+    gl.uniform3fv(u_cameraPos, cameraState.pos);
+    gl.uniform3fv(u_cameraForward, cameraState.forward);
+    gl.uniform3fv(u_cameraRight, cameraState.right);
+    gl.uniform3fv(u_cameraUp, cameraState.up);
+    gl.uniform2f(u_resolution, w, h);
+    gl.uniform1f(u_fovScale, fovScale);
+    gl.uniform1f(u_time, time);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    gl.bindVertexArray(null);
+  }
+  
+  function setView(yaw_, pitch_, distance_) {
+    yaw = yaw_;
+    pitch = pitch_;
+    distance = distance_;
+    updateCamera();
+  }
+  
+  function getView() {
+    return { yaw, pitch, distance };
+  }
+  
+  function dispose() {
+    canvas.removeEventListener('pointerdown', onPointerDown);
+    canvas.removeEventListener('pointermove', onPointerMove);
+    canvas.removeEventListener('pointerup', onPointerUp);
+    canvas.removeEventListener('pointercancel', onPointerUp);
+    canvas.removeEventListener('wheel', onWheel);
+    canvas.removeEventListener('keydown', onKeyDown);
+    gl.deleteProgram(program);
+    gl.deleteVertexArray(vao);
+    gl.deleteBuffer(buf);
+    // delete shaders
+    const shaders = gl.getAttachedShaders(program);
+    if (shaders) shaders.forEach(s => gl.deleteShader(s));
+    // reset canvas state
+    canvas.style.touchAction = '';
+  }
+  
+  return { render, setView, getView, dispose };
+}
+```
+
+Now the biggest part: fragment shader. I need to code all SDF primitives and combine them, then ray marching loop, lighting, shadows, materials. The shader must be under total module size. I'll try to write compact GLSL. Use macros for SDF functions without full definitions to save space, but must be valid GLSL. I'll use one-line definitions like:
+
+```
+float sdSphere(vec3 p, float r) { return length(p)-r; }
+float sdBox(vec3 p, vec3 b) { vec3 q = abs(p)-b; return length(max(q,0.0)) + min(max(q.x,max(q.y,q.z)),0.0); }
+float sdRoundBox(vec3 p, vec3 b, float r) { vec3 q = abs(p)-b; return length(max(q,0.0))-r; }
+float sdCapsule(vec3 p, vec3 a, vec3 b, float r) { vec3 pa = p-a, ba = b-a; float h = clamp(dot(pa,ba)/dot(ba,ba),0.0,1.0); return length(pa-ba*h)-r; }
+float sdCylinder(vec3 p, vec3 a, vec3 b, float r) { vec3 ba = b-a, pa = p-a; float baba = dot(ba,ba), paba = dot(pa,ba); float x = length(pa*baba-ba*paba)-r*baba; float y = abs(paba-baba*0.5)-baba*0.5; return (max(x,y)<0.0) ? -min(-x,-y) : length(max(vec2(x,y),0.0)) + min(max(x,y),0.0); } // this is sdCappedCylinder, complicated. Simpler: use sdCapsule for frame tubes, which is rounded ends, that's okay. For seat, we might use sdRoundBox. For handlebars, sdCapsule.
+float sdTorus(vec3 p, vec2 t) { vec2 q = vec2(length(p.xz)-t.x, p.y); return length(q)-t.y; }
+float sdEllipsoid(vec3 p, vec3 r) { return (length(p/r)-1.0) * min(min(r.x,r.y),r.z); }
+// smooth min
+float smin(float a, float b, float k) { float h = clamp(0.5+0.5*(b-a)/k, 0.0, 1.0); return mix(b, a, h) - k*h*(1.0-h); }
+```
+
+But we need to be careful with precision. To save characters, use `#define` for repeated expressions? That might increase size. Instead, write functions inline but with short names. Also for material ID, we'll return a float representing object type: e.g., 1.0 for pelican body, 2.0 for bike frame, etc. We can encode as distance and material ID using a vec2: the SDF eval function returns vec2 dist, mat. Then ray march returns mat for coloring.
+
+Actually we can do: The SDF function `vec2 map(vec3 p)` returns distance and material ID. Then the marching loop stops when distance < threshold, and we get the material. Then compute normal, lighting, color based on material. For shadow, we need a separate distance function that returns just distance (or we can reuse map but ignore mat). So we can have `float dist_scene(vec3 p)` that returns distance ignoring material, for shadows.
+
+Alternatively, we can have map return only distance, and we compute material based on which primitive is closest? That's messy. Better return both. I'll do `vec2 map(vec3 p)` returning distance and material ID. For shadow, we'll just use the distance part, say `map(p).x`.
+
+Now to define the scene: We'll define the whole bike and pelican inside map(). We'll use transforms: translate, rotate, scale. In shader, we can't use matrices easily, but we can apply inverse transforms manually. For each component, we'll transform the point p to the object's local space, then call primitive SDF. For example, for wheel at pos = rear wheel center: local_p = p - rearPos; then compute torus(local_p, ...). For rotated parts like crank arm: we need to rotate p around X axis by angle. So we can do: `vec3 q = p - bbpos; q.yz = vec2(q.y*cos(ang)-q.z*sin(ang), q.y*sin(ang)+q.z*cos(ang));` then compute crank SDF. Similarly for wings and legs that depend on body orientation.
+
+We'll need many local variables to define positions as constants. Use #define or const variables. Since the shader needs to be compiled each time, constants are fine.
+
+Plan structure of map():
+
+```
+vec2 map(vec3 p) {
+    float d = 1e10;
+    float mat = 0.0;
+    
+    // Ground plane
+    float ground = p.y; // at y=0? Actually ground at y=0, so distance = p.y. We'll use y=0 as ground plane.
+    if (ground < d) { d = ground; mat = 10.0; } // mat 10 = ground
+    
+    // Bike parts
+    // Helpful constants
+    float wr = 1.0; // wheel radius
+    float tireR = 0.12;
+    float wheelZRear = -1.2;
+    float wheelZFront = 1.2;
+    vec3 rearCenter = vec3(0.0, wr, wheelZRear);
+    vec3 frontCenter = vec3(0.0, wr, wheelZFront);
+    // bottom bracket
+    vec3 bb = vec3(0.0, 0.4, -0.2);
+    
+    // Wheels: rear
+    {
+        vec3 q = p - rearCenter;
+        float dwh = sdTorus(q.xzy?, torus: major radius = wr, minor radius = tireR); // careful: torus in XY? standard sdTorus takes (p, vec2(t.x, t.y)) with p.xz length vs p.y. We need orientation: the wheel lies in XZ plane? Actually wheel horizontal axis is along X, so the wheel disc is in YZ plane? The bike wheel spins around X axis, so the wheel is a circle in YZ plane. So a torus with major radius in YZ plane, minor radius around. So to use sdTorus which expects length(p.xz) for ring, we need to rotate coordinates so that the ring lies in XZ. We can just rotate q: `q = q.xzy?` No, we can define a custom torus: `float torus(vec3 p, float major, float minor) { return length(vec2(length(p.yz)-major, p.x))-minor; }` Then we can directly build. So we'll write a local function torusX: major in YZ, thickness along X. We'll have two wheels: rear and front.
+    }
+    
+    // Need a torus function in map but cannot define inside GLSL ES 3.0. We can define functions at top level. So define `float sdTorusX(vec3 p, float major, float minor) { return length(vec2(length(p.yz)-major, p.x))-minor; }`. Similarly for sdCapsule, etc.
+    
+    // So we'll define all primitives at top.
+}
+```
+
+But to save space, I could write inline expansions for simple primitives within map using local operations, but that's messy. Better define functions at top.
+
+We'll need about 10-15 SDF primitives. That's okay.
+
+Now materials: I'll assign mat IDs:
+- 10: ground (brown/green? simple gray)
+- 20: bike frame (metallic blue)
+- 21: wheels tire (black)
+- 22: handlebar grip (brown)
+- 23: seat (black)
+- 24: pedals (gray)
+- 30: pelican body (white/pink)
+- 31: pelican head (white)
+- 32: beak (orange)
+- 33: eye (black)
+- 34: pouch (yellow)
+- 35: wings (gray)
+- 36: legs (orange yellow)
+Then in lighting, based on mat, choose base color.
+
+We'll also compute shadows: fire a ray from hit point towards light direction, march using dist_scene (just distance) until distance below threshold or max distance. If hit, then shadowed.
+
+Light direction: `vec3 lightDir = normalize(vec3(1.0, 1.0, 0.5));`. Ambient = 0.3.
+
+Now size limitation: 32768 bytes total. The module includes all JS code plus the shader source strings. I'll aim to keep the shader source under ~20KB. I'll minify it: remove all unnecessary whitespace, use one-line definitions, short variable names. The JS part is also small.
+
+Potential problem: The shader string will be long with many lines. I'll write it as a template literal with commented formatting but stripped. I'll produce the final string with no extra spaces: e.g., `"float sdS(vec3 p,float r){return length(p)-r;}\n"` etc.
+
+I need to ensure there are no syntax errors. I'll create a variable `fragSrc` holding the shader code. I'll define all functions first, then the map function, then main().
+
+Main() in fragment shader: set up ray, march loop, get hit, compute color.
+
+Ray marching parameters: MAX_STEPS=100, MAX_DIST=50.0, SURF_DIST=0.001.
+
+Now define the scene details with exact positions. Let's decide coordinates:
+
+Set up:
+
+- Wheel radius = 1.0, tire thickness = 0.12 -> minor radius for torus = 0.12.
+- Wheelbase = 2.4: rear at z=-1.2, front at z=1.2.
+- Bottom bracket BB = vec3(0.0, 0.5, -0.3) maybe? But need chainstays and seat tube. Put BB = (0,0.5,0)? Let's define: rear wheel center (0,1,-1.2), front (0,1,1.2). BB should be somewhere near midpoint, slightly lower and maybe forward of rear wheel. Typical: bottom bracket is about 0.3* wheelbase behind front wheel? Actually for diamond frame: Bottom bracket is between wheels, usually located around 0.6 of wheelbase from rear wheel. In our case, wheelbase = 2.4, so distance from rear = 1.44 -> z = -1.2+1.44 = 0.24. So BB = (0,0.6,0.24). Rear wheel center z=-1.2. Let's keep BB at (0,0.5,0.2) for simplicity. Then chainstay goes from rear wheel center to BB. Seat tube goes from BB up to some point near seat. Seat tube top at (0,1.5,-0.8) maybe. Let's set seat post top at (0,1.6,-0.8). Top tube from seat tube top to head tube top at (0,1.7,1.2). Head tube top at (0,1.7,1.2). Down tube from head tube top to BB. So we have 5 tubes.
+
+We'll represent each tube as a capsule between its endpoints with radius = 0.06 (frame tube thickness). So we'll define `sdCapsule(p, a, b, r)`.
+
+Seat: at the top of seat post, maybe a bit higher: seat_pos = (0,1.75,-0.9). We'll use a rounded box for seat: size = (0.2,0.08,0.6) perhaps rotated? The seat is horizontal but might be tilted. We can apply a rotation matrix or just use a box without rotation, but tilt would be nice. For simplicity, we can use a capsule or rounded box oriented along Z (so box size (0.15,0.1,0.4)). 
+
+Handlebar: Head tube top extends upward as stem, then handlebar bends forward. We'll define a stem tube from headtube_top (0,1.7,1.2) to handlebar center (0,1.9,1.3). Then the handlebar is a curved bar going left and right? We'll create two grips: left and right ends protruding in X direction. For right side, a grip at (0.3,1.9,1.3) and (0.4,1.9,1.3). Use capsules. The handlebar itself can be a bent cylinder; we'll approximate with a capsule from stem top to grip left, and a capsule to grip right. But since we only see right side mostly, we can just place one grip for right hand. For completeness, we'll have both but one is enough. So handlebar location: stem_end = (0,1.9,1.3). Then a horizontal bar from (0,1.9,1.3) to (0.3,1.9,1.3) as grip.
+
+Crank/pedals: Rotating around X axis. bb_center = (0,0.5,0.2). crank_length = 0.3. angle = time * 5.0. Then right pedal pos: `vec3 pedalR = bb + vec3(0.0, crank_len*cos(angle), crank_len*sin(angle));` But note that the crank rotates in YZ plane. The pedal is at the end of this vector. The pedal itself is a small cylinder along X axis? Actually the pedal axis is parallel to X, so we can represent pedal as a capsule from (pedalR.x-0.15, pedalR.y, pedalR.z) to (pedalR.x+0.15, pedalR.y, pedalR.z) with radius 0.05. The crank arm is a thin cylinder from bb to pedalR. So we'll need to transform coordinates: we'll rotate the point relative to BB by angle around X axis. So we'll apply rotation to `q = p - bb;` then `q.yz = vec2(q.y*cos(-angle)-q.z*sin(-angle), q.y*sin(-angle)+q.z*cos(-angle));` Then we can place crank and pedal in this rotated space, where crank arm is along some axis? In the rotated space, the crank arm is oriented along a fixed direction, say (0,1,0) if angle=0 makes it point up. We'll define in rotated space, the crank arm is from origin (bb) to `vec3(0.0, crank_len, 0.0)`. So we set that. So after applying inverse rotation, we compute SDF for crank arm: capsule between (0,0,0) and (0,crank_len,0), radius 0.03. Pedal: capsule centered at (0,crank_len,0) along X from -0.15 to 0.15, radius 0.05. So composite minimum.
+
+Thus to get pedal and crank, we'll combine within one transform.
+
+Similarly, for wheels, we can rotate the wheel around X axis for spinning animation. But a wheel is symmetric, so spinning doesn't change shape. However, we could add spokes to indicate rotation. Spokes: multiple capsules radiating from center. We'll rotate the entire wheel's local space by time for spinning. So for rear wheel: apply rotation around X by `angle = time * 3.0`. Then compute wheel components: torusX for tire, and a few capsules for spokes. The rim: maybe a slightly larger torus (major=wr, minor=tireR*1.2?). We'll just keep tire torus. But for visual, we can add a thin cylinder for the rim.
+
+Spokes: we can place 5 or 6 capsules from center to rim. In local rotated space, we'll compute SDF for multiple capsules along radial directions (0,5, etc). We can define using a loop or inlined but to save size, use a `for` loop in GLSL. Or we can use some formula to repeat using modulo. Simpler: use a few explicit capsules (like 0°, 72°, 144°, 216°, 288°). That's okay.
+
+So wheelSDF: rotate p around X, then compute tire torus, rim torus (maybe same major, smaller minor), and spokes.
+
+Frame: To avoid repeating capsule code for each tube, we can define a macro or use a function `float sdCapsule(vec3 p, vec3 a, vec3 b, float r)`. We'll call many times.
+
+Pelican body: We'll define a local transformation for the pelican. The pelican is positioned relative to the bike. We want the pelican to sit on the seat (seat_pos), leaning forward. So we'll define pelican_root = seat_pos + something upward then forward. Actually the body is above seat. Let's set body center at (0, 2.1, -0.5) after transform? Wait seat at (0,1.75,-0.9). Body should be above seat, maybe shifted forward. So body_pos = (0,2.3, -0.6). The pelican faces forward (+Z). So we can rotate the pelican locally maybe a slight forward lean (rotate around X by some angle like -0.2 rad) so that head tilts forward. Or we can just place body and head manually. To simplify, we'll define the pelican in local space: body_center at origin, then transformed to world. We'll set `pelicanTransform` = translate to body_pos, then maybe rotate around X for lean. We can do: `vec3 q = p - body_pos;` then apply rotation if needed. But we can also just position head forward relative to body.
+
+Let's define body center = (0,2.3,-0.5). pelican orientation: facing +Z. So head at forward, belly down. So body is an ellipsoid elongated along Z: radii (0.35,0.45,0.6). We'll use sdEllipsoid with scaling. For ellipsoid, we can use the scaled sphere technique: `float d = sdEllipsoid(q, vec3(0.35,0.45,0.6));` and assign material pelican body. Then head at q + vec3(0,0.25,0.65) sphere radius 0.25. Beak: from head tip forward: capsule from head_center + (0,0,0.22) to further (0,-0.05,0.55). That creates a long beak. Throat pouch: scale a sphere at under beak: `vec3 bp = q - (head_center + vec3(0,-0.2,0.45));` enlarge Y and Z, maybe sdEllipsoid with radii (0.2,0.3,0.25). Eye: small sphere at head side +X.
+
+Wings: The pelican's wings attach at shoulders. Shoulders position approx body_top_side: body_center + (0.35,0.1,0.2) for right wing. Let's define shoulderR = body_center + vec3(0.4,0.2,0.1). The wing extends forward and down to grip on handlebar. The grip is at handlebar_right = (0.4,1.9,1.3) maybe. So we need an arm. We'll use two capsules: upper arm from shoulder to elbow, forearm from elbow to grip. Set elbow = body_center + vec3(0.6,0.0,0.5). Then from elbow to grip. So we'll define capsules. That's fine.
+
+Legs: Hips at lower body, maybe body_center + vec3(0.2,-0.35,-0.2). Right hip at (0.35,...)? Actually body center at (0,2.3,-0.5), so hipR = hip_base + vec3(0.35,0.0,0.0). Then foot at pedalR (dynamic). So capsule from hipR to foot.
+
+Left leg: not visible but we can include symmetric using negative X.
+
+Thus many parts.
+
+Now to construct map(), we will sequentially compute distance to each component and update d and mat. Since we have many components, we can use a combination. But we must ensure the SDF is exact (no overlaps causing incorrect distance). For overlapping objects, using min is fine; smooth min for organic blends. For pelican body parts, we can use smooth min to blend them softly. So we'll use smin() for body parts, and opUnion (simple min) for bike parts. For ground, we'll keep separate.
+
+We'll define a function `float smin(float a, float b, float k)`.
+
+Now lighting: in main(), after ray march, if we hit something (dist < SURF_DIST and ray not gone to max), we compute position p = ro + rd*dist. Compute normal via central differences using map. Then compute material ID from the dist? Actually we need the material from the SDF that was closest. In our marching loop, we just march until distance < SURF_DIST, but we don't know which material. We could during marching, keep track of closest material with a variable. But simpler: after hit, evaluate map at the hit point and extract the material from the vec2 (since map returns distance and material, we can just get map(p).y). But map(p) at hit might return a distance near zero (because we stopped), so the material will be correct. So we can do `vec2 res = map(p); float mat = res.y;`. However, we need to ensure that the distance is actually the one we stopped on; it is because we iteratively refined d = map(p).x and stopped when d < SURF_DIST. But after break, we have the distance value d. To get material, we can re-evaluate map(p). So that works.
+
+For shadow, we need to march from p along lightDir, using only distance (ignore material). So we'll have a `float dist_only(vec3 p)` that may be lighter but we can just use `map(p).x`. That's fine.
+
+Now we need to handle that map returns vec2. We'll design map to return vec2(distance, material). However, evaluating map involves a lot of calculations; doing it again for shadow ray will be expensive but acceptable. For shadow, we'll use a separate function `float shadowDist(vec3 p)` that is a simplified version of map that only returns distance. That could be more efficient and save code. To avoid duplication, we can make map call `sdistance` internally and then decide material. But to keep code size small, we can duplicate the distance logic in a function `float dist_scene(vec3 p)`. But that would double the code. Better to have map return vec2 and for shadow, we call map(p).x. It recalculates all primitives but that's okay. We'll use `map(p).x` for shadow ray.
+
+Now the fragment shader's main function layout:
+
+```
+void main() {
+    vec2 uv = (gl_FragCoord.xy - 0.5*u_res) / u_res.y;
+    vec3 ro = u_camPos;
+    vec3 rd = normalize(u_camFwd + u_camRgt * uv.x * u_fov + u_camUp * uv.y * u_fov);
+    
+    float t = 0.0;
+    vec3 col = vec3(0.8, 0.9, 1.0); // sky bg
+    for (int i=0;i<100;i++) {
+        vec3 p = ro + rd * t;
+        vec2 h = map(p);
+        float d = h.x;
+        if (d < 0.001 || t > 50.0) {
+            if (t < 50.0) {
+                // hit
+                vec3 pos = p;
+                float mat = h.y;
+                // lighting
+                vec3 normal = calcNormal(pos);
+                // get material color
+                vec3 base = getColor(mat, pos); // a function
+                // ambient
+                float amb = 0.2;
+                float diff = max(dot(normal, lightDir), 0.0);
+                float shadow = calcShadow(pos, lightDir);
+                diff *= shadow;
+                // specular
+                vec3 halfVec = normalize(lightDir - rd);
+                float spec = pow(max(dot(normal, halfVec), 0.0), 32.0);
+                col = base * (amb + diff*0.7) + spec * 0.3;
+                // fog maybe
+            }
+            break;
+        }
+        t += d;
+    }
+    gl_FragColor = vec4(col, 1.0);
+}
+```
+
+But we need to compute normal: `vec3 calcNormal(vec3 p) { vec2 e = vec2(1e-3,0); return normalize(vec3(map(p+e.xyy).x - map(p-e.xyy).x, map(p+e.yxy).x - map(p-e.yxy).x, map(p+e.yyx).x - map(p-e.yyx).x)); }`
+
+Shadow: `float calcShadow(vec3 ro, vec3 rd) { float t = 0.01; for (int i=0;i<50;i++) { vec3 p = ro+rd*t; float d = map(p).x; if (d<0.001) return 0.0; if (t>5.0) break; t+=d; } return 1.0; }`
+
+Color function based on material ID.
+
+Now to write the entire shader, I'll craft a string with minimal whitespace. I'll use short variable names for functions: sSD for sdSphere, sBx for sdRoundBox, sCp for sdCapsule, sTrX for torusX, sEl for sdEllipsoid, sPl for plane, etc. For smooth min: `float smin(float a,float b,float k){float h=clamp(.5+.5*(b-a)/k,0.,1.);return mix(b,a,h)-k*h*(1.-h);}`
+
+Now define constants: positions, radii, etc., using macros or const vec3. Use #define to avoid taking variable declaration cost. For positions, I'll define them in map as local variables.
+
+To minimize shader length, I'll compress coordinate calculations.
+
+Let's design map with many components:
+
+```
+vec2 map(vec3 p) {
+    float d=1e4; float m=0.;
+    // Ground
+    float gd = p.y;
+    if(gd<d){d=gd;m=10.;}
+    // precompute common
+    float wr=1., tr=.12;
+    float rZ=-1.2, fZ=1.2;
+    vec3 rc=vec3(0.,wr,rZ), fc=vec3(0.,wr,fZ);
+    vec3 bb=vec3(0.,.5,.2);
+    // Wheels
+    // rear
+    vec3 qr = p-rc;
+    float angR = u_time*4.; // spin
+    // rotate around X
+    float ca=cos(angR), sa=sin(angR);
+    qr.yz = vec2(qr.y*ca-qr.z*sa, qr.y*sa+qr.z*ca);
+    // tire
+    float dtire = length(vec2(length(qr.yz)-wr, qr.x))-tr;
+    if(dtire<d){d=dtire; m=21.;}
+    // spokes (5)
+    for(int i=0;i<5;i++) { float a = float(i)*1.2566; vec2 dir=vec2(cos(a),sin(a)); float dsp = sCp(qr, vec3(0.,0.,0.), vec3(dir.x*wr,dir.y*wr,0.), .03); if(dsp<d){d=dsp;m=21.;} }
+    // rim: optional, skip to save chars
+}
+```
+
+But using a for loop adds few characters. It's okay.
+
+Instead of for loop, I can precompute 5 spoke capsules manually. But loop is shorter. I'll use a loop of 5.
+
+Similarly front wheel.
+
+Now frame tubes: define function sdCa or just inline capsules. Write a simple macro? We'll define sdCp.
+
+```
+float sdCp(vec3 p, vec3 a, vec3 b, float r) {
+    vec3 pa=p-a, ba=b-a; float h=clamp(dot(pa,ba)/dot(ba,ba),0.,1.); return length(pa-ba*h)-r;
+}
+```
+
+Now frame:
+
+```
+// tubes
+vec3 seatTop = vec3(0.,1.6,-0.8);
+vec3 hdTop = vec3(0.,1.7,1.2);
+// chainstay
+float dcs = sdCp(p, rc, bb, .06); if(dcs<d){d=dcs; m=20.;}
+// seat tube
+float dst = sdCp(p, bb, seatTop, .06); if(dst<d){d=dst; m=20.;}
+// seatstay
+float dss = sdCp(p, seatTop, rc, .06); if(dss<d){d=dss; m=20.;}
+// top tube
+float dtt = sdCp(p, seatTop, hdTop, .06); if(dtt<d){d=dtt; m=20.;}
+// down tube
+float ddt = sdCp(p, hdTop, bb, .06); if(ddt<d){d=ddt; m=20.;}
+// head tube (maybe a capsule at hdTop to bb? Actually head tube is from headtube top to bottom, we can put from (0,1.7,1.2) to (0,1.0,1.2) but not crucial, skip.
+```
+
+Seat: `vec3 seatPos = seatTop + vec3(0.,.15,0.);` but we can just place a round box at seatTop + a bit up. Let's define `vec3 sp = p - (seatTop + vec3(0.,.1,-.1));` maybe? We'll create a rounded box:
+
+```
+float sdRB(vec3 p, vec3 b, float r) { vec3 q = abs(p)-b; return length(max(q,0.))-r; }
+vec3 sPos = seatTop + vec3(0.,.12,.05);
+vec3 qs = p - sPos;
+float ds = sdRB(qs, vec3(.18,.05,.25), .02);
+if(ds<d){d=ds; m=23;}
+```
+
+Handlebar: stem from hdTop to stem_end, then handlebar.
+
+```
+vec3 stemEnd = hdTop + vec3(0.,.2,.1);
+float dste = sdCp(p, hdTop, stemEnd, .04); if(dste<d){d=dste; m=20;}
+vec3 gripR = stemEnd + vec3(.3,0.,.05);
+float dgr = sdCp(p, stemEnd, gripR, .04); if(dgr<d){d=dgr; m=22;}
+// left grip symmetrical - skip
+```
+
+Crank and pedals: use rotated space around bb.
+
+```
+float crLen=.3, crRad=.04;
+vec3 qb = p - bb;
+float an = u_time*5.;
+float ca2=cos(an), sa2=sin(an);
+qb.yz = vec2(qb.y*ca2-qb.z*sa2, qb.y*sa2+qb.z*ca2);
+// crank arm from 0 to (0,crLen,0)
+float dcr = sdCp(qb, vec3(0.), vec3(0.,crLen,0.), crRad);
+if(dcr<d){d=dcr; m=24;}
+// pedal R at (0,crLen,0) along X
+float dpd = sdCp(qb, vec3(-.15,crLen,0.), vec3(.15,crLen,0.), .05);
+if(dpd<d){d=dpd; m=24;}
+// left pedal (maybe negative X) skip, not visible much.
+```
+
+Now pelican: We'll define pelican relative to its local space `vec3 pelPos = vec3(0.,1.9,-.5);`? Actually body center above seat. SeatTop y=1.6, so pelican body should be above that, maybe y=2.1. So set `vec3 bodyCenter = vec3(0.,2.25,-.5);`. Then we transform to world: `vec3 q = p - bodyCenter;`. We'll apply a slight forward lean around X: `float lean = -0.2;` rotate q.x ? Actually lean around X axis: `q.yz = vec2(q.y*cos(lean)-q.z*sin(lean), q.y*sin(lean)+q.z*cos(lean));`. Then compute body ellipsoid: radii (0.4,0.5,0.7). We'll use sdEllipsoid: `float db = length(q/vec3(.4,.5,.7))*.4; // min radius? Actually formula: (len(q/r)-1)*min(r). So use minr = 0.4; db = (length(q/vec3(.4,.5,.7))-1.)*.4;`. Then apply smin for blend.
+
+```
+float bd = (length(q/vec3(.4,.5,.7))-1.)*.4;
+float headR=.28;
+vec3 headPos = vec3(0.,.15,.8);
+float hd = length(q-headPos)-headR;
+float bmat = 30.;
+float dbody = smin(bd, hd, .15);
+if(dbody<d){d=dbody; m=bmat;}
+// Beak
+vec3 beakStart = headPos + vec3(0.,-.02,.22);
+vec3 beakEnd = beakStart + vec3(0.,-.06,.45);
+float dbk = sdCp(q, beakStart, beakEnd, .08);
+if(dbk<d){d=dbk; m=32.;}
+// Pouch
+vec3 pocPos = headPos + vec3(0.,-.2,.2);
+float dpc = (length((q-pocPos)/vec3(.18,.28,.22))-1.)*.18;
+if(dpc<d){d=dpc; m=34.;}
+// Eye
+float de = length(q - (headPos + vec3(.2,.12,.24)))-.06;
+if(de<d){d=de; m=33.;}
+```
+
+Wings: right wing. Shoulder: `vec3 shR = bodyCenter + vec3(.45,.1,.2);` (in local space? We'll compute in local transformed space. So after applying lean, q is in body-centric space. We'll define shoulder relative to body center in body space. So position of shoulder in body-centric: `vec3 shLocal = vec3(.45,.1,.1);` Then transform to world: `vec3 shWorld = bodyCenter + rot(shLocal)*? Actually we applied rotation on q (p - bodyCenter). So if we want a point in world, we can inverse the rotation. But easier: define wing parts directly in body-centric raw coordinates (before rotation). Since we will compute distance to wing parts by subtracting shoulder point and then perhaps apply same rotation. We can compute wing's distance by transforming query point to body-centric with same rotation, then compute difference from shoulderLocal, then compute capsule to arm. So we can just compute within the same `q` space. So we'll set shoulder in q-space: `vec3 shoulderQ = vec3(.45,.1,.1);`, then `vec3 qw = q - shoulderQ;`. Then capsules.
+
+```
+// right wing (upper arm)
+vec3 elbowQ = shoulderQ + vec3(.2,-.05,.3);
+float dw1 = sdCp(q, shoulderQ, elbowQ, .08);
+if(dw1<d){d=dw1; m=35;}
+// forearm to grip
+vec3 gripWorld = gripR; // from earlier handlebar gripR
+vec3 gripQ = gripWorld - bodyCenter; // apply inverse rotation? Actually we need gripQ in body-centric space. We can transform gripWorld to the same coordinate as q (after rotation). So compute gripQ_local = rot_inverse(gripWorld - bodyCenter). Since we used rotation of angle lean, we can apply inverse rotation to (gripWorld - bodyCenter) to get gripQ. So: vec3 gripDelta = gripWorld - bodyCenter; float c=cos(-lean), s=sin(-lean); gripDelta.yz = vec2(gripDelta.y*c-gripDelta.z*s, gripDelta.y*s+gripDelta.z*c); then gripQ = gripDelta. This is messy. Simpler: we can compute wing parts in world space directly, without using body-centric rotation. We can define shoulderWorld = bodyCenter + rotated(shoulderQ) using rotation. But that's also messy. Instead, we can avoid the lean on wings by just placing them directly in world space. The pelican body is approximately placed; we can compute shoulderWorld manually: shoulderWorld = bodyCenter + vec3(0.45,0.1,0.1) rotated by lean? But maybe not necessary for visual. We could skip the lean altogether and just orient body by scaling, no rotation. That would simplify. The requirement is for the pelican to be riding, so it can be upright. So I'll remove the lean and just place body upright. Then wings can be computed easily in world space. So no rotation. Then pelican is just translated, not rotated. So map is simpler.
+
+Set bodyCenter = (0,2.25,-0.5). All pelican parts defined in world space with offsets. So wing shoulder: shoulderR = bodyCenter + vec3(0.45,0.1,0.1); elbowR = bodyCenter + vec3(0.7,0.05,0.4); gripR = already in world at (0.3,1.9,1.3). So capsule from shoulderR to elbowR, then elbowR to gripR. So we can directly use world coordinates.
+
+Leg right: hipR = bodyCenter + vec3(0.3,-0.4,-0.1); footR = pedalR (dynamic). So capsule from hipR to footR.
+
+Thus no rotation needed.
+
+Now we need to compute world positions for dynamic pedalR: `vec3 pedalR = bb + vec3(0.0, crLen*cos(an), crLen*sin(an));` with appropriate axis. Wait we used crLen rotation around X so it moves in YZ. So pedalR = bb + (0, crLen*cos(angle), crLen*sin(angle)). That's world position. So we can compute that in map.
+
+We'll need to pass time uniform `u_time`.
+
+Now add all together.
+
+For the wheels, we added spin rotation which works.
+
+Now define material colors in `vec3 getColor(float mat)`. Return base color.
+
+Now compile and ensure it's under 32KB.
+
+Estimate shader string size: I'll count characters. Many functions: sdEllipsoid, sdCapsule, sdRoundBox, smin, etc. Each ~50-100 chars. 10 primitives ~1KB. Main map with many if statements: each tube adds ~100 chars, I have about 5 frame tubes, seat, handle, crank, wheels, pelican parts, etc. That's maybe 3-4KB. Total shader might be 6-7KB. The JS code maybe 2KB. So well under limit.
+
+But I need to get the material coloring and lighting right. I'll define getColor function with a switch or series of ifs. Use if-else chain.
+
+Now compile shader: createProgram function that creates shader, compiles, links, and returns program. If compilation fails, throw error with log.
+
+We also need to handle context loss: we'll add a gl context loss listener to no-op or just ignore. The render method will just be no-op if context lost? But the evaluator says handle WebGL context loss without throwing. So we can check gl.isContextLost() before rendering, and if lost, skip. In createPelicanSdf, we can store a flag lost. Add event listener for 'webglcontextlost' and 'webglcontextrestored'. We'll set a boolean lost = true. In render, if lost, return. Good.
+
+Now produce the final module. I'll craft the full code.
+
+Important: The canvas must be focusable and not cause scrolling. We'll set tabindex, outline, touchAction. Also we need to prevent default for keydown only for the specific keys; others should work. In wheel event, prevent default.
+
+One nuance: Arrow keys may still cause scrolling if default not prevented; we do preventDefault for those keys.
+
+Now I'll write the shader source with all details.
+
+But I need to ensure that the SDF values are correct and the ray marching converges. I'll test mentally.
+
+Potential issues: capsule SDF: `sdCp(p,a,b,r)`. Works.
+
+The ground plane distance is simply p.y; that's correct.
+
+Wheels: torusX: `length(vec2(length(p.yz)-major, p.x))-minor`. For wheel radius major=wr, minor=tr. Good.
+
+Spokes: we rotate local space so that the spokes are aligned with some axis. After rotation, the wheel hub is at origin, and we want capsules radiating from (0,0,0) to (wr*cos(θ), wr*sin(θ), 0) if we place spokes in YZ? But our wheel after rotation might have spokes in some plane. We set qr as p-rearCenter, then rotate around X. This rotation aligns the wheel's spin axis to X. After rotation, the wheel is static, so the spokes can be placed in YZ plane. So we compute capsule from (0,0,0) to (dir.x*wr, dir.y*wr, 0.0) where dir is a unit vector in YZ? Actually we need YZ plane. So dir.x = 0, dir.y=cos(a), dir.z=sin(a). That matches YZ. So we'll set `vec2 dir = vec2(cos(a),sin(a));` then `vec3 spEnd = vec3(0., dir.x*wr, dir.y*wr);` (since y,z are rotated). Good.
+
+Thus spokes work.
+
+Now for crank: after rotation, the local space X is unchanged, YZ rotated. So the crank arm is along Y (positive). So we set capsule from (0,0,0) to (0,crLen,0) radius crRad. Pedal along X: capsule from (-0.15,crLen,0) to (0.15,crLen,0). Good.
+
+Now leg: hipR is bodyCenter+... footR is pedalR. But footR is world position from bb + rotated vector. We'll compute that within map. So we need pedalR world position. In map, we have the rotation angle an and crLen, so we can compute pedalR = bb + vec3(0., crLen*cos(an), crLen*sin(an))? Wait our rotated space: the unrotated crank arm at default angle zero would be along Y+? But we set in rotated space the crank from 0 to (0,crLen,0), meaning that in world before rotation, that direction is Y? After rotation around X, Y becomes Y*cos(an) - Z*sin(an)? Actually we applied inverse rotation to qb = p - bb: qb.yz = rotated by -an (since we use ca2,sa2 rotating by +an?). Let's track: We want to transform point into a space where the crank is stationary (pointing along Y). If the crank is rotating around X with angle an (positive rotation), then its direction in world is (0, cos(an), sin(an)). To bring a world point into the crank's local space where the crank is fixed along Y, we apply rotation of -an around X. So we compute `qb.yz = vec2(qb.y*ca2 - qb.z*sa2, qb.y*sa2 + qb.z*ca2)` where ca2=cos(an), sa2=sin(an). That's a rotation by +an? Actually if we rotate point by -an, the formulas: qb.y' = qb.y*cos(an) + qb.z*sin(an), qb.z' = -qb.y*sin(an) + qb.z*cos(an). That's equivalent to `ca=cos(an), sa=sin(an); qb.yz = vec2(qb.y*ca + qb.z*sa, -qb.y*sa + qb.z*ca);`. But I used `qb.yz = vec2(qb.y*ca - qb.z*sa, qb.y*sa + qb.z*ca)`. This corresponds to rotation by -an if I adjust sign? We'll verify: For an=0, ca=1, sa=0 -> qb.yz unchanged. For an=pi/2, ca=0, sa=1 -> qb.yz = (-qb.z, qb.y). That's correct for rotation -90°? Not important as long as crank arm is visible. The pedals will rotate. We'll just use the same rotation to compute world pedal position: To get pedal world from local space where crank is along Y, we apply forward rotation +an: worldPedal = bb + (0, crLen*cos(an), crLen*sin(an)). So we'll compute pedalR = bb + vec3(0., crLen*ca2, crLen*sa2) using the same an. Perfect.
+
+So leg: hipR fixed world, footR = pedalR. Then capsule between them.
+
+Now materials: I'll assign:
+
+- ground: 10
+- bike frame tubes, stem: 20
+- wheels tire, spokes: 21
+- handlebar grip: 22
+- seat: 23
+- crank/pedals: 24
+- pelican body/head: 30
+- beak: 32
+- eye: 33
+- pouch: 34
+- wings: 35
+- legs: 36
+
+Colors: ground: brownish; frame: metallic blue (0.2,0.4,0.8); tire: black (0.1); handle grip: dark brown; seat: black; pedals: gray; body: white (0.9,0.85,0.8); head: same; beak: orange (1.0,0.6,0.2); eye: black; pouch: yellow; wings: dark gray; legs: orange (0.9,0.5,0.1).
+
+Now we implement getColor in shader using if-else.
+
+Now shadow: soft shadow maybe using simple hard shadow for speed. I'll do hard shadow: loop with max steps 30, start t=0.02, if hit return 0.0 else 1.0.
+
+Now finalize the shader.
+
+To save space, I'll avoid writing `distance=` each time, just `float dt = ...; if(dt<d){d=dt; m=...}`.
+
+I'll compress the code by removing unnecessary whitespace and using short variable names.
+
+Now produce the final module string. I'll write it as a template literal for the fragment shader.
+
+Also need vertex shader:
+
+```
+attribute vec2 a_pos;
+void main() { gl_Position = vec4(a_pos, 0., 1.); }
+```
+
+Simple.
+
+Now implement createProgram.
+
+One more requirement: render(timeSeconds) must not resize canvas. So we just use canvas.width/height each frame. setView must update camera state without resizing. Good.
+
+Now I'll craft the complete code. Because of size, I'll be careful.
+
+I need to ensure that the module is self-contained and ES module. I'll export the function.
+
+Now let's write the code.

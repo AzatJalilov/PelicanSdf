@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "id": "claude-sonnet-5-medium-run-01",
+  "model": "claude-sonnet-5",
+  "modelDisplayName": "Claude Sonnet 5",
+  "provider": "Anthropic via Claude Code CLI",
+  "reasoningEffort": "medium",
+  "accent": "#3f7f5f",
+  "harness": {
+    "name": "Claude Code CLI",
+    "version": "2.1.214 (Claude Code)",
+    "surface": "claude -p --tools \"\" --setting-sources \"\" --strict-mcp-config --system-prompt <minimal> --output-format json (prompt piped byte-exact via stdin)",
+    "sandbox": "n/a (no tools available)",
+    "ephemeral": true,
+    "userConfigLoaded": false,
+    "projectRulesLoaded": false,
+    "notes": "Fresh non-interactive invocation with a minimal replacement system prompt; no tools, skills, hooks, MCP servers, CLAUDE.md, or memory in context (verified 253-token bare context probe)."
+  },
+  "prompt": {
+    "path": "benchmark/prompt.txt",
+    "bytes": 3387,
+    "sha256": "cd21d5a8bb3956d82ab5650304e7e491063eacdb27dad85be6b4a845512f5e6b"
+  },
+  "response": {
+    "path": "data/raw/claude-sonnet-5-medium-run-01/response.txt",
+    "bytes": 12409,
+    "sha256": "39db68ddaaf5534fb418a44d85a13e03b39c9d6e397418e53dcd76a649e8e6e7"
+  },
+  "usage": {
+    "inputTokens": 1,
+    "cachedInputTokens": 0,
+    "reasoningTokens": null,
+    "outputTokens": 25631,
+    "totalTokens": 26975
+  },
+  "billing": {
+    "mode": "subscription",
+    "apiCostUsd": 0.393907,
+    "note": "Claude subscription invocation; total_cost_usd is the CLI's pricing estimate, not a separate API charge."
+  },
+  "startedAt": "2026-07-18T11:52:46.099Z",
+  "completedAt": "2026-07-18T11:56:47.164Z",
+  "durationMs": 241065,
+  "exitCode": 0,
+  "error": null,
+  "sessionId": "959b0ec0-5e9b-4a32-9c7a-ac6a7bdc85ed",
+  "files": {
+    "events": "data/raw/claude-sonnet-5-medium-run-01/events.jsonl",
+    "stderr": "data/raw/claude-sonnet-5-medium-run-01/stderr.txt"
+  }
+}

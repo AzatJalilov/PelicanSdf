@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "id": "claude-fable-5-xhigh-run-01",
+  "model": "claude-fable-5",
+  "modelDisplayName": "Claude Fable 5",
+  "provider": "Anthropic via Claude Code CLI",
+  "reasoningEffort": "xhigh",
+  "accent": "#7b4fa6",
+  "harness": {
+    "name": "Claude Code CLI",
+    "version": "2.1.214 (Claude Code)",
+    "surface": "claude -p --tools \"\" --setting-sources \"\" --strict-mcp-config --system-prompt <minimal> --output-format json (prompt piped byte-exact via stdin)",
+    "sandbox": "n/a (no tools available)",
+    "ephemeral": true,
+    "userConfigLoaded": false,
+    "projectRulesLoaded": false,
+    "notes": "Fresh non-interactive invocation with a minimal replacement system prompt; no tools, skills, hooks, MCP servers, CLAUDE.md, or memory in context (verified 253-token bare context probe)."
+  },
+  "prompt": {
+    "path": "benchmark/prompt.txt",
+    "bytes": 3387,
+    "sha256": "cd21d5a8bb3956d82ab5650304e7e491063eacdb27dad85be6b4a845512f5e6b"
+  },
+  "response": {
+    "path": "data/raw/claude-fable-5-xhigh-run-01/response.txt",
+    "bytes": 12250,
+    "sha256": "94c82cbce2b340c437be2ee32dc088f9b01f098cbdffe1bd0f7fea451e965feb"
+  },
+  "usage": {
+    "inputTokens": 1,
+    "cachedInputTokens": 0,
+    "reasoningTokens": null,
+    "outputTokens": 51508,
+    "totalTokens": 53067
+  },
+  "billing": {
+    "mode": "subscription",
+    "apiCostUsd": 2.607951,
+    "note": "Claude subscription invocation; total_cost_usd is the CLI's pricing estimate, not a separate API charge."
+  },
+  "startedAt": "2026-07-18T12:51:12.080Z",
+  "completedAt": "2026-07-18T13:01:06.719Z",
+  "durationMs": 594639,
+  "exitCode": 0,
+  "error": null,
+  "sessionId": "5b272f89-ce38-4f97-b819-22d9f6542333",
+  "files": {
+    "events": "data/raw/claude-fable-5-xhigh-run-01/events.jsonl",
+    "stderr": "data/raw/claude-fable-5-xhigh-run-01/stderr.txt"
+  }
+}

@@ -1,0 +1,416 @@
+```javascript
+export function createPelicanSdf(canvas) {
+  canvas.tabIndex = canvas.tabIndex >= 0 ? canvas.tabIndex : 0;
+  canvas.style.touchAction = 'none';
+  canvas.style.outline = 'none';
+
+  let gl = canvas.getContext('webgl2', { antialias: false, alpha: false });
+  if (!gl) throw new Error('WebGL2 not available');
+
+  const VERT = `#version 300 es
+  layout(location=0) in vec2 aPos;
+  void main(){ gl_Position = vec4(aPos,0.0,1.0); }`;
+
+  const FRAG = `#version 300 es
+  precision highp float;
+  out vec4 fragColor;
+  uniform vec2 uRes;
+  uniform vec3 uEye, uForward, uRight, uUp;
+  uniform float uTanFov;
+  uniform float uTime;
+
+  float sdSphere(vec3 p, float r){ return length(p)-r; }
+  float sdEllipsoid(vec3 p, vec3 r){
+    float k0 = length(p/r);
+    float k1 = length(p/(r*r));
+    return k0*(k0-1.0)/max(k1,1e-4);
+  }
+  float sdCapsule(vec3 p, vec3 a, vec3 b, float r){
+    vec3 pa=p-a, ba=b-a;
+    float h=clamp(dot(pa,ba)/dot(ba,ba),0.0,1.0);
+    return length(pa-ba*h)-r;
+  }
+  float sdTorusX(vec3 p, float R, float r){
+    vec2 q = vec2(length(p.yz)-R, p.x);
+    return length(q)-r;
+  }
+  float sdBox(vec3 p, vec3 b){
+    vec3 q = abs(p)-b;
+    return length(max(q,0.0)) + min(max(q.x,max(q.y,q.z)),0.0);
+  }
+
+  vec4 uMin(vec4 a, vec4 b){ return a.x<b.x ? a : b; }
+  vec4 sMin(vec4 a, vec4 b, float k){
+    float h = clamp(0.5+0.5*(b.x-a.x)/k, 0.0, 1.0);
+    float d = mix(b.x,a.x,h) - k*h*(1.0-h);
+    vec3 c = mix(b.yzw,a.yzw,h);
+    return vec4(d,c);
+  }
+
+  vec4 map(vec3 p, float t){
+    vec4 res = vec4(1000.0,0.0,0.0,0.0);
+    vec3 tireCol = vec3(0.04,0.04,0.045);
+    vec3 frameCol = vec3(0.55,0.6,0.68);
+    vec3 seatCol = vec3(0.3,0.18,0.1);
+    vec3 crankCol = vec3(0.18,0.18,0.2);
+    vec3 birdCol = vec3(0.95,0.95,0.92);
+    vec3 beakCol = vec3(0.95,0.55,0.06);
+    vec3 eyeCol = vec3(0.02,0.02,0.02);
+    vec3 wingCol = vec3(0.82,0.83,0.85);
+
+    vec3 rearHub = vec3(0.0,0.0,-0.85);
+    vec3 frontHub = vec3(0.0,0.0,0.85);
+    vec3 bb = vec3(0.0,0.15,-0.05);
+    vec3 seatTop = vec3(0.0,0.85,-0.55);
+    vec3 headTubeTop = vec3(0.0,0.65,0.7);
+    vec3 barCenter = vec3(0.0,1.0,0.62);
+
+    // wheels
+    res = uMin(res, vec4(sdTorusX(p-rearHub,0.55,0.075), tireCol));
+    res = uMin(res, vec4(sdTorusX(p-frontHub,0.55,0.075), tireCol));
+
+    // frame tubes
+    float fr = 0.045;
+    res = uMin(res, vec4(sdCapsule(p, rearHub, bb, fr), frameCol));
+    res = uMin(res, vec4(sdCapsule(p, rearHub, seatTop, fr), frameCol));
+    res = uMin(res, vec4(sdCapsule(p, bb, seatTop, fr), frameCol));
+    res = uMin(res, vec4(sdCapsule(p, seatTop, headTubeTop, fr), frameCol));
+    res = uMin(res, vec4(sdCapsule(p, bb, headTubeTop, fr), frameCol));
+    res = uMin(res, vec4(sdCapsule(p, frontHub, headTubeTop, fr), frameCol));
+    res = uMin(res, vec4(sdCapsule(p, headTubeTop, barCenter, 0.04), frameCol));
+    res = uMin(res, vec4(sdCapsule(p, barCenter+vec3(-0.28,0.0,0.0), barCenter+vec3(0.28,0.0,0.0), 0.035), frameCol));
+
+    // seat
+    vec3 sp = p - (seatTop+vec3(0.0,0.06,0.02));
+    res = uMin(res, vec4(sdBox(sp, vec3(0.09,0.05,0.2)), seatCol));
+
+    // crank + pedals
+    float ang = t*2.0;
+    vec3 off = 0.28*vec3(0.0, sin(ang), cos(ang));
+    res = uMin(res, vec4(sdCapsule(p, bb, bb+off, 0.03), crankCol));
+    res = uMin(res, vec4(sdCapsule(p, bb, bb-off, 0.03), crankCol));
+    vec3 pedal1 = bb+off; vec3 pedal2 = bb-off;
+    res = uMin(res, vec4(sdBox(p-pedal1, vec3(0.09,0.02,0.05)), crankCol));
+    res = uMin(res, vec4(sdBox(p-pedal2, vec3(0.09,0.02,0.05)), crankCol));
+
+    // pelican body
+    vec3 bodyC = vec3(0.0,1.4,-0.45);
+    vec4 body = vec4(sdEllipsoid(p-bodyC, vec3(0.42,0.36,0.55)), birdCol);
+    vec3 neckTop = bodyC+vec3(0.0,0.35,0.35);
+    vec4 neck = vec4(sdCapsule(p, bodyC+vec3(0.0,0.1,0.2), neckTop, 0.16), birdCol);
+    vec3 headC = neckTop+vec3(0.0,0.18,0.28);
+    vec4 head = vec4(sdEllipsoid(p-headC, vec3(0.18,0.17,0.24)), birdCol);
+    vec3 beakTip = headC+vec3(0.0,-0.06,0.55);
+    vec4 beak = vec4(sdCapsule(p, headC+vec3(0.0,-0.02,0.15), beakTip, 0.045), beakCol);
+    vec3 pouchC = mix(headC, beakTip, 0.45)+vec3(0.0,-0.09,0.0);
+    vec4 pouch = vec4(sdEllipsoid(p-pouchC, vec3(0.07,0.09,0.18)), beakCol);
+    vec3 eyeC = headC+vec3(0.12,0.05,0.1);
+    vec4 eye = vec4(sdSphere(p-eyeC,0.035), eyeCol);
+
+    vec4 bird = sMin(body, neck, 0.15);
+    bird = sMin(bird, head, 0.1);
+    bird = uMin(bird, beak);
+    bird = sMin(bird, pouch, 0.06);
+    bird = uMin(bird, eye);
+
+    // wings and legs, two sides
+    for(int i=0;i<2;i++){
+      float s = i==0 ? -1.0 : 1.0;
+      vec3 w0 = bodyC+vec3(0.2*s,0.15,-0.15);
+      vec3 w1 = bodyC+vec3(0.55*s,-0.2,0.15);
+      vec4 wing = vec4(sdCapsule(p, w0, w1, 0.12), wingCol);
+      bird = uMin(bird, wing);
+
+      vec3 hip = bodyC+vec3(0.15*s,-0.35,0.05);
+      vec3 pedalPos = (i==0 ? pedal1 : pedal2) + vec3(0.13*s,0.0,0.0);
+      vec3 knee = vec3(0.17*s, bb.y+0.42, mix(hip.z,pedalPos.z,0.5)+0.05);
+      vec4 thigh = vec4(sdCapsule(p, hip, knee, 0.075), beakCol);
+      vec4 shin = vec4(sdCapsule(p, knee, pedalPos, 0.06), beakCol);
+      bird = uMin(bird, thigh);
+      bird = uMin(bird, shin);
+    }
+
+    res = uMin(res, bird);
+
+    // ground
+    float groundY = -0.64;
+    float dPlane = p.y - groundY;
+    float cx = floor(p.x*0.6), cz = floor(p.z*0.6);
+    vec3 gcol = mix(vec3(0.16,0.24,0.16), vec3(0.21,0.3,0.21), mod(cx+cz,2.0));
+    res = uMin(res, vec4(dPlane, gcol));
+
+    return res;
+  }
+
+  vec3 skyColor(vec3 dir){
+    float h = clamp(dir.y*0.5+0.5, 0.0, 1.0);
+    return mix(vec3(0.55,0.68,0.85), vec3(0.85,0.9,0.98), pow(h,0.6));
+  }
+
+  vec4 castRay(vec3 ro, vec3 rd){
+    float t = 0.0;
+    vec4 res = vec4(-1.0,0.0,0.0,0.0);
+    for(int i=0;i<100;i++){
+      vec3 p = ro+rd*t;
+      vec4 h = map(p, uTime);
+      if(h.x < 0.0009){ res = vec4(t,h.yzw); break; }
+      t += h.x;
+      if(t > 30.0) break;
+    }
+    return res;
+  }
+
+  vec3 calcNormal(vec3 p){
+    vec2 e = vec2(0.0012,0.0);
+    return normalize(vec3(
+      map(p+e.xyy,uTime).x - map(p-e.xyy,uTime).x,
+      map(p+e.yxy,uTime).x - map(p-e.yxy,uTime).x,
+      map(p+e.yyx,uTime).x - map(p-e.yyx,uTime).x
+    ));
+  }
+
+  void main(){
+    vec2 uv = (gl_FragCoord.xy - 0.5*uRes) / uRes.y;
+    vec3 rd = normalize(uForward + uv.x*uRight*uTanFov + uv.y*uUp*uTanFov);
+    vec3 ro = uEye;
+    vec4 hit = castRay(ro, rd);
+    vec3 col;
+    if(hit.x > 0.0){
+      vec3 p = ro + rd*hit.x;
+      vec3 n = calcNormal(p);
+      vec3 lightDir = normalize(vec3(0.5,0.9,0.35));
+      float diff = max(dot(n,lightDir),0.0);
+      float amb = 0.35;
+      vec3 base = hit.yzw;
+      vec3 lit = base*(amb+diff*0.8);
+      vec3 rf = reflect(-lightDir,n);
+      float spec = pow(max(dot(rf,-rd),0.0),28.0)*0.2;
+      col = lit+spec;
+      float fog = 1.0-exp(-hit.x*0.018);
+      col = mix(col, skyColor(rd), fog*0.5);
+    } else {
+      col = skyColor(rd);
+    }
+    col = pow(clamp(col,0.0,1.0), vec3(0.4545));
+    fragColor = vec4(col,1.0);
+  }`;
+
+  function compile(type, src) {
+    const sh = gl.createShader(type);
+    gl.shaderSource(sh, src);
+    gl.compileShader(sh);
+    if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+      const info = gl.getShaderInfoLog(sh);
+      gl.deleteShader(sh);
+      throw new Error('Shader compile error: ' + info);
+    }
+    return sh;
+  }
+
+  let program, vao, vbo, uniforms = {};
+
+  function buildProgram() {
+    const vs = compile(gl.VERTEX_SHADER, VERT);
+    const fs = compile(gl.FRAGMENT_SHADER, FRAG);
+    const prog = gl.createProgram();
+    gl.attachShader(prog, vs);
+    gl.attachShader(prog, fs);
+    gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+      const info = gl.getProgramInfoLog(prog);
+      throw new Error('Program link error: ' + info);
+    }
+    gl.deleteShader(vs);
+    gl.deleteShader(fs);
+    return prog;
+  }
+
+  function setupResources() {
+    program = buildProgram();
+    vao = gl.createVertexArray();
+    gl.bindVertexArray(vao);
+    vbo = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+    const verts = new Float32Array([-1,-1, 3,-1, -1,3]);
+    gl.bufferData(gl.ARRAY_BUFFER, verts, gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+    gl.bindVertexArray(null);
+
+    uniforms.uRes = gl.getUniformLocation(program, 'uRes');
+    uniforms.uEye = gl.getUniformLocation(program, 'uEye');
+    uniforms.uForward = gl.getUniformLocation(program, 'uForward');
+    uniforms.uRight = gl.getUniformLocation(program, 'uRight');
+    uniforms.uUp = gl.getUniformLocation(program, 'uUp');
+    uniforms.uTanFov = gl.getUniformLocation(program, 'uTanFov');
+    uniforms.uTime = gl.getUniformLocation(program, 'uTime');
+  }
+
+  setupResources();
+
+  // camera state
+  let yaw = 0.6, pitch = 0.28, dist = 4.6;
+  const target = [0.0, 0.85, 0.0];
+  const fov = 55 * Math.PI / 180;
+  const tanFov = Math.tan(fov / 2);
+
+  function clampPitch(p) { return Math.max(-1.4, Math.min(1.4, p)); }
+  function clampDist(d) { return Math.max(1.3, Math.min(12.0, d)); }
+
+  function computeCam() {
+    const cp = Math.cos(pitch), sp = Math.sin(pitch);
+    const cy = Math.cos(yaw), sy = Math.sin(yaw);
+    const eye = [
+      target[0] + dist * cp * cy,
+      target[1] + dist * sp,
+      target[2] + dist * cp * sy
+    ];
+    let fwd = [target[0]-eye[0], target[1]-eye[1], target[2]-eye[2]];
+    const flen = Math.hypot(fwd[0],fwd[1],fwd[2]) || 1;
+    fwd = [fwd[0]/flen, fwd[1]/flen, fwd[2]/flen];
+    const worldUp = [0,1,0];
+    let right = [
+      fwd[1]*worldUp[2]-fwd[2]*worldUp[1],
+      fwd[2]*worldUp[0]-fwd[0]*worldUp[2],
+      fwd[0]*worldUp[1]-fwd[1]*worldUp[0]
+    ];
+    const rlen = Math.hypot(right[0],right[1],right[2]) || 1;
+    right = [right[0]/rlen, right[1]/rlen, right[2]/rlen];
+    const up = [
+      right[1]*fwd[2]-right[2]*fwd[1],
+      right[2]*fwd[0]-right[0]*fwd[2],
+      right[0]*fwd[1]-right[1]*fwd[0]
+    ];
+    return { eye, fwd, right, up };
+  }
+
+  // interaction state
+  let dragging = false;
+  let lastX = 0, lastY = 0;
+  const pointers = new Map();
+  let pinchStartDist = null;
+  let pinchStartCam = null;
+  let disposed = false;
+
+  function onPointerDown(e) {
+    canvas.focus();
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.size === 1) {
+      dragging = true;
+      lastX = e.clientX; lastY = e.clientY;
+      try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
+    } else if (pointers.size === 2) {
+      dragging = false;
+      const pts = Array.from(pointers.values());
+      pinchStartDist = Math.hypot(pts[0].x-pts[1].x, pts[0].y-pts[1].y);
+      pinchStartCam = dist;
+    }
+    e.preventDefault();
+  }
+  function onPointerMove(e) {
+    if (pointers.has(e.pointerId)) pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.size === 2) {
+      const pts = Array.from(pointers.values());
+      const d = Math.hypot(pts[0].x-pts[1].x, pts[0].y-pts[1].y);
+      if (pinchStartDist && pinchStartDist > 1) {
+        dist = clampDist(pinchStartCam * (pinchStartDist / Math.max(d, 1)));
+      }
+      e.preventDefault();
+      return;
+    }
+    if (dragging) {
+      const dx = e.clientX - lastX;
+      const dy = e.clientY - lastY;
+      lastX = e.clientX; lastY = e.clientY;
+      yaw += dx * 0.006;
+      pitch = clampPitch(pitch - dy * 0.006);
+      e.preventDefault();
+    }
+  }
+  function onPointerUp(e) {
+    pointers.delete(e.pointerId);
+    if (pointers.size < 2) { pinchStartDist = null; }
+    if (pointers.size === 0) dragging = false;
+    try { canvas.releasePointerCapture(e.pointerId); } catch (err) {}
+  }
+  function onWheel(e) {
+    e.preventDefault();
+    dist = clampDist(dist * Math.exp(e.deltaY * 0.0012));
+  }
+  function onKeyDown(e) {
+    let handled = true;
+    if (e.key === 'ArrowLeft') yaw -= 0.12;
+    else if (e.key === 'ArrowRight') yaw += 0.12;
+    else if (e.key === 'ArrowUp') pitch = clampPitch(pitch + 0.08);
+    else if (e.key === 'ArrowDown') pitch = clampPitch(pitch - 0.08);
+    else if (e.key === '+' || e.key === '=') dist = clampDist(dist * 0.9);
+    else if (e.key === '-' || e.key === '_') dist = clampDist(dist * 1.1);
+    else handled = false;
+    if (handled) e.preventDefault();
+  }
+  function onContextMenu(e) { e.preventDefault(); }
+  function onContextLost(e) { e.preventDefault(); }
+  function onContextRestored() {
+    try { setupResources(); } catch (err) {}
+  }
+
+  canvas.addEventListener('pointerdown', onPointerDown);
+  canvas.addEventListener('pointermove', onPointerMove);
+  canvas.addEventListener('pointerup', onPointerUp);
+  canvas.addEventListener('pointercancel', onPointerUp);
+  canvas.addEventListener('wheel', onWheel, { passive: false });
+  canvas.addEventListener('keydown', onKeyDown);
+  canvas.addEventListener('contextmenu', onContextMenu);
+  canvas.addEventListener('webglcontextlost', onContextLost, false);
+  canvas.addEventListener('webglcontextrestored', onContextRestored, false);
+
+  function render(timeSeconds) {
+    if (disposed) return;
+    if (gl.isContextLost()) return;
+    const w = canvas.width, h = canvas.height;
+    if (w === 0 || h === 0) return;
+    gl.viewport(0, 0, w, h);
+    gl.useProgram(program);
+    gl.bindVertexArray(vao);
+    const cam = computeCam();
+    gl.uniform2f(uniforms.uRes, w, h);
+    gl.uniform3f(uniforms.uEye, cam.eye[0], cam.eye[1], cam.eye[2]);
+    gl.uniform3f(uniforms.uForward, cam.fwd[0], cam.fwd[1], cam.fwd[2]);
+    gl.uniform3f(uniforms.uRight, cam.right[0], cam.right[1], cam.right[2]);
+    gl.uniform3f(uniforms.uUp, cam.up[0], cam.up[1], cam.up[2]);
+    gl.uniform1f(uniforms.uTanFov, tanFov);
+    gl.uniform1f(uniforms.uTime, timeSeconds || 0);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.bindVertexArray(null);
+  }
+
+  function setView(y, p, d) {
+    yaw = y;
+    pitch = clampPitch(p);
+    dist = clampDist(d);
+  }
+  function getView() {
+    return { yaw, pitch, distance: dist };
+  }
+
+  function dispose() {
+    disposed = true;
+    canvas.removeEventListener('pointerdown', onPointerDown);
+    canvas.removeEventListener('pointermove', onPointerMove);
+    canvas.removeEventListener('pointerup', onPointerUp);
+    canvas.removeEventListener('pointercancel', onPointerUp);
+    canvas.removeEventListener('wheel', onWheel);
+    canvas.removeEventListener('keydown', onKeyDown);
+    canvas.removeEventListener('contextmenu', onContextMenu);
+    canvas.removeEventListener('webglcontextlost', onContextLost);
+    canvas.removeEventListener('webglcontextrestored', onContextRestored);
+    try {
+      if (vbo) gl.deleteBuffer(vbo);
+      if (vao) gl.deleteVertexArray(vao);
+      if (program) gl.deleteProgram(program);
+    } catch (err) {}
+  }
+
+  return { render, setView, getView, dispose };
+}
+```

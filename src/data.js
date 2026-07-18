@@ -17,6 +17,9 @@ export async function loadResults() {
       ...result,
       resultUrl: resultUrl.href,
       artifactUrl: new URL(result.artifact, resultUrl).href,
+      thumbnailUrl: result.validation.state === "failed"
+        ? null
+        : new URL(`../assets/thumbnails/${result.id}.jpg`, import.meta.url).href,
       rawResponseUrl: result.provenance.rawResponse
         ? new URL(result.provenance.rawResponse, resultUrl).href
         : null,

@@ -1,0 +1,79 @@
+{
+  "id": "claude-haiku-4-5-max-run-01",
+  "title": "Claude Haiku 4.5 / max effort",
+  "model": "claude-haiku-4-5-20251001",
+  "provider": "Anthropic via Claude Code CLI",
+  "status": "unverified",
+  "track": "one-shot",
+  "promptVersion": "1.0.0",
+  "promptSha256": "cd21d5a8bb3956d82ab5650304e7e491063eacdb27dad85be6b4a845512f5e6b",
+  "artifactSha256": "84696c069df252c5eba096ab1371b35096509cdde383ed0cc900dafaae7d15bd",
+  "createdAt": "2026-07-18",
+  "artifact": "../artifacts/claude-haiku-4-5-max-run-01.js",
+  "description": "Small monochrome grey figure with two disc wheels flanking a blobby bird body on a vertical post; readable as a vehicle mainly from the front, with no visible frame or pedals.",
+  "accent": "#4f8fb0",
+  "generationHarness": {
+    "name": "Claude Code CLI",
+    "version": "2.1.214 (Claude Code)",
+    "surface": "claude -p --tools \"\" --setting-sources \"\" --strict-mcp-config --system-prompt <minimal> --output-format json (prompt piped byte-exact via stdin)",
+    "sandbox": "n/a (no tools available)",
+    "notes": "Fresh non-interactive invocation with a minimal replacement system prompt; no tools, skills, hooks, MCP servers, CLAUDE.md, or memory in context (verified 253-token bare context probe)."
+  },
+  "generationUsage": {
+    "inputTokens": 952,
+    "cachedInputTokens": 0,
+    "reasoningTokens": null,
+    "outputTokens": 16780,
+    "totalTokens": 17732,
+    "apiCostUsd": 0.08624799999999999,
+    "billingMode": "subscription",
+    "source": "data/raw/claude-haiku-4-5-max-run-01/events.jsonl",
+    "notes": "Claude subscription invocation; total_cost_usd is the CLI's pricing estimate, not a separate API charge."
+  },
+  "validation": {
+    "state": "passed",
+    "checks": [
+      "JavaScript syntax",
+      "lifecycle contract",
+      "WebGL2 compilation",
+      "initial composition",
+      "pointer orbit",
+      "wheel zoom",
+      "two-finger pinch",
+      "keyboard camera",
+      "multi-angle camera response",
+      "close-range inspection",
+      "three-trial GPU timing"
+    ],
+    "unmetRequirements": [],
+    "warnings": []
+  },
+  "metrics": {
+    "sourceBytes": 4364,
+    "initMs": 331.6,
+    "gpuMsMedian": 0.9477,
+    "gpuMsP95": 1.6888,
+    "throughputFps": 1055.1862,
+    "timingMethod": "gpu-query",
+    "environment": "AMD Radeon(TM) Graphics / ANGLE D3D11; Headless Chrome 150; Windows; 960x540; 3 serial trials",
+    "environmentKey": "amd-15bf-angle-d3d11|headless-chrome-150|windows|960x540|pelican-canvas-v1",
+    "profile": "pelican-canvas-960x540-v1",
+    "sampleCount": 36,
+    "trials": 3,
+    "measuredAt": "2026-07-18T11:53:21.087Z"
+  },
+  "visual": {
+    "readability": null,
+    "completeness": null,
+    "coherence": null,
+    "craft": null,
+    "inspectability": null,
+    "reviewers": 0
+  },
+  "provenance": {
+    "generatorKind": "model-eval",
+    "method": "Fresh one-shot Claude Code CLI invocation; text-only with tools and skills disabled; removed one surrounding Markdown fence; added trailing LF",
+    "rawResponse": "../raw/claude-haiku-4-5-max-run-01/response.txt",
+    "decoding": "reasoning effort: max; other decoding settings not exposed"
+  }
+}

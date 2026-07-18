@@ -72,7 +72,8 @@ function formatTokens(value) {
 
 function formatCost(usage) {
   if (!Number.isFinite(usage.apiCostUsd)) return usage.billingMode === "subscription" ? "Not exposed" : "Not captured";
-  return `$${usage.apiCostUsd.toFixed(usage.apiCostUsd < 0.01 ? 4 : 2)}`;
+  const value = `$${usage.apiCostUsd.toFixed(usage.apiCostUsd < 1 ? 4 : 2)}`;
+  return usage.billingMode === "subscription" ? `${value} est.` : value;
 }
 
 function formatValue(value) {
@@ -178,7 +179,7 @@ function populateRecord(results, itemIndex) {
     row("Reasoning tokens", formatTokens(usage.reasoningTokens)),
     row("Output tokens", formatTokens(usage.outputTokens)),
     row("Total tokens", formatTokens(usage.totalTokens)),
-    row("API cost", formatCost(usage)),
+    row("Generation cost", formatCost(usage)),
     row("Billing mode", usage.billingMode),
     row("Usage source", usage.source),
   ].join("");

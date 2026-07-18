@@ -1,0 +1,468 @@
+export function createPelicanSdf(canvas) {
+  const gl = canvas.getContext("webgl2", {
+    antialias: false,
+    alpha: false,
+    depth: false,
+    stencil: false,
+    preserveDrawingBuffer: false
+  });
+  if (!gl) throw new Error("createPelicanSdf: WebGL2 is unavailable");
+
+  const vertexSource = `#version 300 es
+  void main(){
+    vec2 p=vec2((gl_VertexID<<1)&2,gl_VertexID&2);
+    gl_Position=vec4(p*2.0-1.0,0.0,1.0);
+  }`;
+
+  const fragmentSource = `#version 300 es
+  precision highp float;
+  out vec4 fragColor;
+  uniform vec2 uResolution;
+  uniform float uTime;
+  uniform vec3 uCamera;
+  uniform vec3 uTarget;
+
+  #define PI 3.14159265359
+  #define FAR 18.0
+
+  mat2 rot(float a){
+    float c=cos(a),s=sin(a);
+    return mat2(c,-s,s,c);
+  }
+
+  float sphere(vec3 p,float r){return length(p)-r;}
+
+  float ellipsoid(vec3 p,vec3 r){
+    float k0=length(p/r);
+    float k1=length(p/(r*r));
+    return k0*(k0-1.0)/max(k1,0.0001);
+  }
+
+  float boxSdf(vec3 p,vec3 b){
+    vec3 q=abs(p)-b;
+    return length(max(q,0.0))+min(max(q.x,max(q.y,q.z)),0.0);
+  }
+
+  float capsule(vec3 p,vec3 a,vec3 b,float r){
+    vec3 pa=p-a,ba=b-a;
+    float h=clamp(dot(pa,ba)/dot(ba,ba),0.0,1.0);
+    return length(pa-ba*h)-r;
+  }
+
+  float torusZ(vec3 p,float majorR,float minorR){
+    return length(vec2(length(p.xy)-majorR,p.z))-minorR;
+  }
+
+  vec2 pick(vec2 a,vec2 b){return a.x<b.x?a:b;}
+
+  vec2 obj(vec2 m,float d,float id){return pick(m,vec2(d,id));}
+
+  float wheelSpokes(vec3 p,vec2 c){
+    p.xy-=c;
+    float r=length(p.xy);
+    float a=atan(p.y,p.x);
+    float sector=PI/6.0;
+    a=mod(a+sector*.5,sector)-sector*.5;
+    vec2 q=vec2(r*cos(a)-.38,r*sin(a));
+    return boxSdf(vec3(q,p.z),vec3(.38,.014,.018));
+  }
+
+  vec3 bendLocal(vec3 p,vec3 c,float a){
+    p-=c;
+    p.xy=rot(a)*p.xy;
+    return p;
+  }
+
+  vec2 scene(vec3 p){
+    vec2 m=vec2(1e5,0.0);
+    vec2 rw=vec2(-1.25,.82),fw=vec2(1.30,.82);
+    float tire=min(torusZ(p-vec3(rw,0),.72,.075),
+                   torusZ(p-vec3(fw,0),.72,.075));
+    m=obj(m,tire,1.0);
+    m=obj(m,min(wheelSpokes(p,rw),wheelSpokes(p,fw)),2.0);
+    m=obj(m,min(sphere(p-vec3(rw,0),.10),
+                sphere(p-vec3(fw,0),.10)),3.0);
+
+    vec3 rear=vec3(-1.25,.82,0);
+    vec3 front=vec3(1.30,.82,0);
+    vec3 crank=vec3(-.10,.87,0);
+    vec3 seatBase=vec3(-.43,1.62,0);
+    vec3 headBase=vec3(.88,1.54,0);
+    float frame=1e4;
+    frame=min(frame,capsule(p,rear,crank,.055));
+    frame=min(frame,capsule(p,rear,seatBase,.055));
+    frame=min(frame,capsule(p,seatBase,crank,.055));
+    frame=min(frame,capsule(p,crank,headBase,.055));
+    frame=min(frame,capsule(p,seatBase,headBase,.055));
+    frame=min(frame,capsule(p,headBase,front,.055));
+    frame=min(frame,capsule(p,vec3(.88,1.54,0),vec3(1.02,1.92,0),.045));
+    frame=min(frame,capsule(p,vec3(1.02,1.92,0),vec3(1.24,2.00,0),.035));
+    frame=min(frame,capsule(p,vec3(1.24,2.00,-.30),vec3(1.24,2.00,.30),.035));
+    m=obj(m,frame,4.0);
+
+    vec3 sp=p-vec3(-.48,1.70,0);
+    sp.xz=rot(-.08)*sp.xz;
+    m=obj(m,boxSdf(sp,vec3(.31,.065,.22))-.035,5.0);
+
+    float phase=uTime*.8;
+    vec3 pedalA=crank+vec3(.22*cos(phase),.22*sin(phase),.28);
+    vec3 pedalB=crank-vec3(.22*cos(phase),.22*sin(phase),.28);
+    float cr=min(torusZ(p-crank,.19,.035),
+                 capsule(p,pedalA,pedalB,.027));
+    cr=min(cr,capsule(p,pedalA-vec3(.11,0,0),pedalA+vec3(.11,0,0),.035));
+    cr=min(cr,capsule(p,pedalB-vec3(.11,0,0),pedalB+vec3(.11,0,0),.035));
+    m=obj(m,cr,2.0);
+
+    vec3 bp=bendLocal(p,vec3(-.28,2.30,0),-.13);
+    m=obj(m,ellipsoid(bp,vec3(.67,.78,.48)),6.0);
+
+    vec3 chest=bendLocal(p,vec3(.18,2.56,0),-.30);
+    m=obj(m,ellipsoid(chest,vec3(.40,.63,.35)),6.0);
+    m=obj(m,ellipsoid(p-vec3(.28,3.08,0),vec3(.42,.39,.37)),6.0);
+
+    vec3 crown=p-vec3(.12,3.39,0);
+    crown.xy=rot(.25)*crown.xy;
+    m=obj(m,ellipsoid(crown,vec3(.27,.19,.28)),6.0);
+
+    vec3 beak=p-vec3(.93,3.06,0);
+    beak.xy=rot(-.035)*beak.xy;
+    m=obj(m,ellipsoid(beak,vec3(.78,.16,.20)),7.0);
+    vec3 tip=p-vec3(1.62,3.08,0);
+    tip.xy=rot(.08)*tip.xy;
+    m=obj(m,ellipsoid(tip,vec3(.24,.10,.13)),7.0);
+
+    vec3 pouch=p-vec3(.82,2.87,0);
+    pouch.xy=rot(-.13)*pouch.xy;
+    float pouchD=ellipsoid(pouch,vec3(.65,.25,.23));
+    pouchD=max(pouchD,-(p.y-3.02));
+    m=obj(m,pouchD,10.0);
+
+    m=obj(m,sphere(p-vec3(.40,3.18,.335),.065),8.0);
+    m=obj(m,sphere(p-vec3(.40,3.18,-.335),.065),8.0);
+    m=obj(m,sphere(p-vec3(.414,3.192,.389),.018),11.0);
+    m=obj(m,sphere(p-vec3(.414,3.192,-.389),.018),11.0);
+
+    vec3 wingR=p-vec3(-.46,2.38,.40);
+    wingR.xy=rot(-.35)*wingR.xy;
+    vec3 wingL=p-vec3(-.46,2.38,-.40);
+    wingL.xy=rot(-.35)*wingL.xy;
+    m=obj(m,min(ellipsoid(wingR,vec3(.57,.48,.16)),
+                ellipsoid(wingL,vec3(.57,.48,.16))),12.0);
+
+    float feathers=1e4;
+    for(int i=0;i<3;i++){
+      float fi=float(i)-1.0;
+      feathers=min(feathers,capsule(p,vec3(-.55+fi*.08,2.30,.48),
+                                     vec3(-.91+fi*.07,1.96,.45),.075));
+      feathers=min(feathers,capsule(p,vec3(-.55+fi*.08,2.30,-.48),
+                                     vec3(-.91+fi*.07,1.96,-.45),.075));
+    }
+    m=obj(m,feathers,12.0);
+
+    vec3 hipA=vec3(-.18,2.02,.24),hipB=vec3(-.18,2.02,-.24);
+    vec3 kneeA=vec3(.13,1.48,.30),kneeB=vec3(-.47,1.43,-.28);
+    float legs=min(capsule(p,hipA,kneeA,.095),capsule(p,kneeA,pedalA,.075));
+    legs=min(legs,capsule(p,hipB,kneeB,.095));
+    legs=min(legs,capsule(p,kneeB,pedalB,.075));
+    legs=min(legs,capsule(p,pedalA,pedalA+vec3(.18,.02,0),.065));
+    legs=min(legs,capsule(p,pedalB,pedalB-vec3(.18,-.02,0),.065));
+    m=obj(m,legs,7.0);
+
+    float ground=p.y-.035;
+    m=obj(m,ground,9.0);
+    return m;
+  }
+
+  vec3 normalAt(vec3 p){
+    vec2 e=vec2(.0015,0);
+    float d=scene(p).x;
+    return normalize(vec3(scene(p+e.xyy).x-d,
+                          scene(p+e.yxy).x-d,
+                          scene(p+e.yyx).x-d));
+  }
+
+  float shadow(vec3 ro,vec3 rd){
+    float res=1.0,t=.04;
+    for(int i=0;i<22;i++){
+      float h=scene(ro+rd*t).x;
+      res=min(res,12.0*h/t);
+      t+=clamp(h,.025,.22);
+      if(h<.001||t>7.0) break;
+    }
+    return clamp(res,0.16,1.0);
+  }
+
+  vec3 material(float id,vec3 p){
+    if(id<1.5)return vec3(.055,.065,.075);
+    if(id<2.5)return vec3(.68,.72,.75);
+    if(id<3.5)return vec3(.18,.20,.22);
+    if(id<4.5)return vec3(.08,.38,.56);
+    if(id<5.5)return vec3(.34,.16,.09);
+    if(id<6.5)return vec3(.92,.91,.80);
+    if(id<7.5)return vec3(1.00,.56,.14);
+    if(id<8.5)return vec3(.015,.012,.010);
+    if(id<9.5){
+      float c=mod(floor(p.x*.8)+floor(p.z*.8),2.0);
+      return mix(vec3(.48,.55,.50),vec3(.57,.63,.56),c);
+    }
+    if(id<10.5)return vec3(.96,.66,.25);
+    if(id<11.5)return vec3(1.0);
+    return vec3(.74,.79,.82);
+  }
+
+  void main(){
+    vec2 uv=(gl_FragCoord.xy*2.0-uResolution)/uResolution.y;
+    float yaw=uCamera.x,pitch=uCamera.y,dist=uCamera.z;
+    vec3 ro=uTarget+dist*vec3(sin(yaw)*cos(pitch),sin(pitch),
+                              cos(yaw)*cos(pitch));
+    vec3 fw=normalize(uTarget-ro);
+    vec3 right=normalize(cross(fw,vec3(0,1,0)));
+    vec3 up=cross(right,fw);
+    vec3 rd=normalize(fw+uv.x*right*.72+uv.y*up*.72);
+
+    vec3 sky=mix(vec3(.80,.91,.96),vec3(.30,.57,.78),
+                 clamp(rd.y*.65+.45,0.0,1.0));
+    float sun=pow(max(dot(rd,normalize(vec3(-.45,.62,-.64))),0.0),48.0);
+    sky+=vec3(1.0,.80,.48)*sun*.35;
+
+    float t=.05,id=0.0;
+    vec3 p=ro;
+    bool hit=false;
+    for(int i=0;i<112;i++){
+      p=ro+rd*t;
+      vec2 h=scene(p);
+      if(h.x<.0015*max(1.0,t*.18)){id=h.y;hit=true;break;}
+      t+=h.x*.78;
+      if(t>FAR)break;
+    }
+
+    vec3 col=sky;
+    if(hit){
+      vec3 n=normalAt(p);
+      vec3 lightDir=normalize(vec3(-.55,.82,.45));
+      float diff=max(dot(n,lightDir),0.0);
+      float sh=shadow(p+n*.012,lightDir);
+      float hemi=.35+.30*n.y;
+      vec3 base=material(id,p);
+      vec3 halfV=normalize(lightDir-rd);
+      float spec=pow(max(dot(n,halfV),0.0),42.0);
+      float rim=pow(1.0-max(dot(n,-rd),0.0),3.0);
+      col=base*(hemi+diff*.85*sh);
+      col+=spec*sh*(id==8.0?.65:.20);
+      col+=rim*vec3(.18,.25,.28);
+      float fog=1.0-exp(-t*t*.008);
+      col=mix(col,sky,fog);
+    }
+    col=col/(col+vec3(.72));
+    col=pow(col,vec3(.4545));
+    float vignette=1.0-.16*dot(uv,uv);
+    fragColor=vec4(col*clamp(vignette,.72,1.0),1.0);
+  }`;
+
+  let program = null;
+  let vao = null;
+  let resolutionLoc = null;
+  let timeLoc = null;
+  let cameraLoc = null;
+  let targetLoc = null;
+  let lost = false;
+  let disposed = false;
+  let lastTime = 0;
+  let yaw = 0.62;
+  let pitch = 0.20;
+  let distance = 6.1;
+  const target = new Float32Array([0.05, 1.78, 0]);
+  const pointers = new Map();
+  let pinchDistance = 0;
+  let pinchZoom = distance;
+
+  function compile(type, source) {
+    const shader = gl.createShader(type);
+    gl.shaderSource(shader, source);
+    gl.compileShader(shader);
+    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+      const log = gl.getShaderInfoLog(shader) || "unknown shader error";
+      gl.deleteShader(shader);
+      throw new Error("createPelicanSdf shader compilation failed: " + log);
+    }
+    return shader;
+  }
+
+  function initialize() {
+    const vs = compile(gl.VERTEX_SHADER, vertexSource);
+    const fs = compile(gl.FRAGMENT_SHADER, fragmentSource);
+    const nextProgram = gl.createProgram();
+    gl.attachShader(nextProgram, vs);
+    gl.attachShader(nextProgram, fs);
+    gl.linkProgram(nextProgram);
+    gl.deleteShader(vs);
+    gl.deleteShader(fs);
+    if (!gl.getProgramParameter(nextProgram, gl.LINK_STATUS)) {
+      const log = gl.getProgramInfoLog(nextProgram) || "unknown link error";
+      gl.deleteProgram(nextProgram);
+      throw new Error("createPelicanSdf shader link failed: " + log);
+    }
+    program = nextProgram;
+    vao = gl.createVertexArray();
+    resolutionLoc = gl.getUniformLocation(program, "uResolution");
+    timeLoc = gl.getUniformLocation(program, "uTime");
+    cameraLoc = gl.getUniformLocation(program, "uCamera");
+    targetLoc = gl.getUniformLocation(program, "uTarget");
+    gl.disable(gl.BLEND);
+    gl.disable(gl.DEPTH_TEST);
+  }
+
+  initialize();
+
+  const oldTabIndex = canvas.getAttribute("tabindex");
+  const oldTouchAction = canvas.style.touchAction;
+  canvas.tabIndex = oldTabIndex === null ? 0 : Number(oldTabIndex);
+  canvas.style.touchAction = "none";
+
+  function clampView() {
+    pitch = Math.max(-1.35, Math.min(1.35, pitch));
+    distance = Math.max(2.05, Math.min(12.0, distance));
+  }
+
+  function redraw() {
+    if (!disposed && !lost) render(lastTime);
+  }
+
+  function pointerDown(e) {
+    if (disposed) return;
+    canvas.focus({preventScroll:true});
+    pointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
+    try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+    if (pointers.size === 2) {
+      const a = [...pointers.values()];
+      pinchDistance = Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y);
+      pinchZoom = distance;
+    }
+    e.preventDefault();
+  }
+
+  function pointerMove(e) {
+    const old = pointers.get(e.pointerId);
+    if (!old) return;
+    pointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
+    if (pointers.size === 1) {
+      yaw -= (e.clientX-old.x)*0.009;
+      pitch += (e.clientY-old.y)*0.009;
+    } else {
+      const a = [...pointers.values()];
+      const d = Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y);
+      if (pinchDistance > 1) distance = pinchZoom*pinchDistance/Math.max(d,1);
+    }
+    clampView();
+    redraw();
+    e.preventDefault();
+  }
+
+  function pointerUp(e) {
+    pointers.delete(e.pointerId);
+    if (pointers.size === 2) {
+      const a = [...pointers.values()];
+      pinchDistance = Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y);
+      pinchZoom = distance;
+    }
+    e.preventDefault();
+  }
+
+  function wheel(e) {
+    distance *= Math.exp(e.deltaY*0.0012);
+    clampView();
+    redraw();
+    e.preventDefault();
+  }
+
+  function keydown(e) {
+    let used = true;
+    if (e.key === "ArrowLeft") yaw -= .09;
+    else if (e.key === "ArrowRight") yaw += .09;
+    else if (e.key === "ArrowUp") pitch += .07;
+    else if (e.key === "ArrowDown") pitch -= .07;
+    else if (e.key === "+" || e.key === "=") distance *= .88;
+    else if (e.key === "-" || e.key === "_") distance *= 1.14;
+    else used = false;
+    if (used) {
+      clampView();
+      redraw();
+      e.preventDefault();
+    }
+  }
+
+  function contextLost(e) {
+    e.preventDefault();
+    lost = true;
+    program = null;
+    vao = null;
+  }
+
+  function contextRestored() {
+    if (disposed) return;
+    try {
+      initialize();
+      lost = false;
+      redraw();
+    } catch (_) {
+      lost = true;
+    }
+  }
+
+  canvas.addEventListener("pointerdown", pointerDown);
+  canvas.addEventListener("pointermove", pointerMove);
+  canvas.addEventListener("pointerup", pointerUp);
+  canvas.addEventListener("pointercancel", pointerUp);
+  canvas.addEventListener("wheel", wheel, {passive:false});
+  canvas.addEventListener("keydown", keydown);
+  canvas.addEventListener("webglcontextlost", contextLost);
+  canvas.addEventListener("webglcontextrestored", contextRestored);
+
+  function render(timeSeconds) {
+    lastTime = Number.isFinite(timeSeconds) ? timeSeconds : 0;
+    if (disposed || lost || gl.isContextLost() || !program) return;
+    gl.viewport(0, 0, canvas.width, canvas.height);
+    gl.useProgram(program);
+    gl.bindVertexArray(vao);
+    gl.uniform2f(resolutionLoc, canvas.width, canvas.height);
+    gl.uniform1f(timeLoc, lastTime);
+    gl.uniform3f(cameraLoc, yaw, pitch, distance);
+    gl.uniform3fv(targetLoc, target);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+
+  return {
+    render,
+    setView(nextYaw, nextPitch, nextDistance) {
+      yaw = Number.isFinite(nextYaw) ? nextYaw : yaw;
+      pitch = Number.isFinite(nextPitch) ? nextPitch : pitch;
+      distance = Number.isFinite(nextDistance) ? nextDistance : distance;
+      clampView();
+    },
+    getView() {
+      return {yaw, pitch, distance};
+    },
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      canvas.removeEventListener("pointerdown", pointerDown);
+      canvas.removeEventListener("pointermove", pointerMove);
+      canvas.removeEventListener("pointerup", pointerUp);
+      canvas.removeEventListener("pointercancel", pointerUp);
+      canvas.removeEventListener("wheel", wheel);
+      canvas.removeEventListener("keydown", keydown);
+      canvas.removeEventListener("webglcontextlost", contextLost);
+      canvas.removeEventListener("webglcontextrestored", contextRestored);
+      pointers.clear();
+      canvas.style.touchAction = oldTouchAction;
+      if (oldTabIndex === null) canvas.removeAttribute("tabindex");
+      else canvas.setAttribute("tabindex", oldTabIndex);
+      if (!gl.isContextLost()) {
+        if (vao) gl.deleteVertexArray(vao);
+        if (program) gl.deleteProgram(program);
+      }
+      vao = null;
+      program = null;
+    }
+  };
+}

@@ -54,6 +54,7 @@ if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(id || "")) {
 
 const rawDir = path.join(root, "data", "raw", id);
 const responsePath = path.join(rawDir, "response.txt");
+const thinkingPath = path.join(rawDir, "thinking.txt");
 const receiptPath = path.join(rawDir, "receipt.json");
 const artifactPath = path.join(root, "data", "artifacts", id + ".js");
 const resultPath = path.join(root, "data", "results", id + ".json");
@@ -61,10 +62,13 @@ if (await exists(artifactPath) || await exists(resultPath)) {
   throw new Error("Refusing to overwrite an existing artifact or result for " + id);
 }
 
-const raw = await readFile(responsePath);
 const receipt = JSON.parse(await readFile(receiptPath, "utf8"));
 if (receipt.id !== id) throw new Error("Receipt id does not match the requested run");
-if (receipt.response?.sha256 !== sha256(raw)) throw new Error("Raw response hash does not match its receipt");
+// Use the channel the run actually produced: reasoning-only models (e.g. Kimi
+// K3 via OpenRouter) may stream the entire answer as thinking content.
+const artifactSourcePath = receipt.response?.source === "thinking" ? thinkingPath : responsePath;
+const raw = await readFile(artifactSourcePath);
+if (receipt.response?.sha256 !== sha256(raw)) throw new Error("Raw response hash does not match its receipt (source=" + (receipt.response?.source || "text") + ")");
 
 const prompt = await readFile(path.join(root, "benchmark", "prompt.txt"));
 if (receipt.prompt?.sha256 !== sha256(prompt)) throw new Error("Receipt prompt hash does not match benchmark/prompt.txt");
@@ -115,7 +119,7 @@ const result = {
     outputTokens: usage.outputTokens ?? null,
     totalTokens: usage.totalTokens ?? null,
     apiCostUsd: receipt.billing.apiCostUsd,
-    billingMode: receipt.billing.mode,
+    billingMode: receipt.billing.mode === "openrouter" ? "api-metered" : (receipt.billing.mode || "unknown"),
     source: "data/raw/" + id + "/events.jsonl",
     notes: receipt.billing.note,
   },

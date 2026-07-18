@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "id": "deepseek-v4-pro-low-run-01",
+  "model": "deepseek/deepseek-v4-pro",
+  "provider": "OpenRouter via pi SDK",
+  "accent": "#1f6feb",
+  "modelDisplayName": "DeepSeek: DeepSeek V4 Pro",
+  "reasoningEffort": "low",
+  "maxOutputTokens": 32768,
+  "harness": {
+    "name": "pi SDK",
+    "version": "0.80.10",
+    "surface": "pi-coding-agent createAgentSession (in-memory, no tools)",
+    "sandbox": "n/a",
+    "ephemeral": true,
+    "userConfigLoaded": false,
+    "projectRulesLoaded": false
+  },
+  "prompt": {
+    "path": "benchmark/prompt.txt",
+    "bytes": 3387,
+    "sha256": "cd21d5a8bb3956d82ab5650304e7e491063eacdb27dad85be6b4a845512f5e6b"
+  },
+  "response": {
+    "path": "data/raw/deepseek-v4-pro-low-run-01/response.txt",
+    "bytes": 12735,
+    "sha256": "0939a79187f24df6a98a81b275e089fa22b78b6cd9831d7921db9af077cc24c4",
+    "source": "text"
+  },
+  "thinking": {
+    "path": "data/raw/deepseek-v4-pro-low-run-01/thinking.txt",
+    "bytes": 56173,
+    "sha256": "7b09fd013ba10e903169566403866a399e77da471c62bf133c49a578b9edd5b6"
+  },
+  "usage": {
+    "inputTokens": 750,
+    "cachedInputTokens": 0,
+    "reasoningTokens": null,
+    "outputTokens": 21145,
+    "totalTokens": 21895
+  },
+  "billing": {
+    "mode": "openrouter",
+    "apiCostUsd": 0.0187224,
+    "note": "OpenRouter invocation via pi SDK; cost computed by pi from provider pricing (per-million-token rates)."
+  },
+  "startedAt": "2026-07-18T12:44:01.818Z",
+  "completedAt": "2026-07-18T12:50:16.625Z",
+  "durationMs": 374807,
+  "exitCode": 0,
+  "error": null,
+  "eventCount": 6821,
+  "files": {
+    "events": "data/raw/deepseek-v4-pro-low-run-01/events.jsonl",
+    "stderr": "data/raw/deepseek-v4-pro-low-run-01/stderr.txt",
+    "thinking": "data/raw/deepseek-v4-pro-low-run-01/thinking.txt"
+  }
+}

@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "id": "kimi-k3-high-run-01",
+  "model": "moonshotai/kimi-k3",
+  "provider": "OpenRouter via pi SDK",
+  "accent": "#5b3fa8",
+  "modelDisplayName": "MoonshotAI: Kimi K3",
+  "reasoningEffort": "high",
+  "maxOutputTokens": 131072,
+  "harness": {
+    "name": "pi SDK",
+    "version": "0.80.10",
+    "surface": "pi-coding-agent createAgentSession (in-memory, no tools)",
+    "sandbox": "n/a",
+    "ephemeral": true,
+    "userConfigLoaded": false,
+    "projectRulesLoaded": false
+  },
+  "prompt": {
+    "path": "benchmark/prompt.txt",
+    "bytes": 3387,
+    "sha256": "cd21d5a8bb3956d82ab5650304e7e491063eacdb27dad85be6b4a845512f5e6b"
+  },
+  "response": {
+    "path": "data/raw/kimi-k3-high-run-01/response.txt",
+    "bytes": 11439,
+    "sha256": "51e6da2d1be9c997172c32c0c5af8747bc72ff0c9c1c5897ad0f0ddb68507865",
+    "source": "text"
+  },
+  "thinking": {
+    "path": "data/raw/kimi-k3-high-run-01/thinking.txt",
+    "bytes": 103852,
+    "sha256": "5ea2b6f1ea7c6420301e2607d06b329074d25badd7f59004d155cb7cbcf1ce1c"
+  },
+  "usage": {
+    "inputTokens": 51,
+    "cachedInputTokens": 768,
+    "reasoningTokens": null,
+    "outputTokens": 43959,
+    "totalTokens": 44778
+  },
+  "billing": {
+    "mode": "openrouter",
+    "apiCostUsd": 0.6597683999999999,
+    "note": "OpenRouter invocation via pi SDK; cost computed by pi from provider pricing (per-million-token rates)."
+  },
+  "startedAt": "2026-07-18T15:48:02.185Z",
+  "completedAt": "2026-07-18T16:13:36.406Z",
+  "durationMs": 1534221,
+  "exitCode": 0,
+  "error": null,
+  "eventCount": 43941,
+  "files": {
+    "events": "data/raw/kimi-k3-high-run-01/events.jsonl",
+    "stderr": "data/raw/kimi-k3-high-run-01/stderr.txt",
+    "thinking": "data/raw/kimi-k3-high-run-01/thinking.txt"
+  }
+}

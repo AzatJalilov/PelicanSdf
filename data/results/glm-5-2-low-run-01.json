@@ -1,0 +1,77 @@
+{
+  "id": "glm-5-2-low-run-01",
+  "title": "GLM 5.2 (non-CN OpenRouter) / low effort",
+  "model": "z-ai/glm-5.2",
+  "provider": "OpenRouter via pi SDK",
+  "status": "unverified",
+  "track": "one-shot",
+  "promptVersion": "1.0.0",
+  "promptSha256": "cd21d5a8bb3956d82ab5650304e7e491063eacdb27dad85be6b4a845512f5e6b",
+  "artifactSha256": "e29bea48f7f2b12cba1327eb66b00db02f67d3aacbbd35ecaee9858fc34c59c5",
+  "createdAt": "2026-07-18",
+  "artifact": "../artifacts/glm-5-2-low-run-01.js",
+  "description": "Unreviewed one-shot SDF artifact generated at low reasoning effort.",
+  "accent": "#2e7d4f",
+  "generationHarness": {
+    "name": "pi SDK",
+    "version": "0.80.10",
+    "surface": "pi-coding-agent createAgentSession (in-memory, no tools)",
+    "sandbox": "n/a",
+    "notes": "Fresh ephemeral invocation with user config and project rules disabled; orchestrated by Codex."
+  },
+  "generationUsage": {
+    "inputTokens": 730,
+    "cachedInputTokens": 0,
+    "reasoningTokens": null,
+    "outputTokens": 18257,
+    "totalTokens": 18987,
+    "apiCostUsd": 0.054180964799999995,
+    "billingMode": "api-metered",
+    "source": "data/raw/glm-5-2-low-run-01/events.jsonl",
+    "notes": "OpenRouter invocation via pi SDK; cost computed by pi from provider pricing (per-million-token rates)."
+  },
+  "validation": {
+    "state": "untested",
+    "checks": [],
+    "unmetRequirements": [],
+    "warnings": [
+      "Draft; runtime and visual validation have not run."
+    ]
+  },
+  "metrics": {
+    "sourceBytes": 13794,
+    "initMs": 4001.0999999940395,
+    "gpuMsMedian": 8.082374999999999,
+    "gpuMsP95": 9.42887,
+    "throughputFps": 123.72600875361513,
+    "timingMethod": "gpu-query",
+    "environment": {
+      "gpu": "ANGLE (AMD, AMD Radeon(TM) Graphics (0x000015BF) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "browser": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/150.0.0.0 Safari/537.36",
+      "platform": "Windows",
+      "resolution": [
+        960,
+        540
+      ]
+    },
+    "environmentKey": "ANGLE (AMD, AMD Radeon(TM) Graphics (0x000015BF) Direct3D11 vs_5_0 ps_5_0, D3D11)|Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/150.0.0.0 Safari/537.36|960x540",
+    "profile": "pelican-canvas-960x540-v1",
+    "sampleCount": 36,
+    "trials": 3,
+    "measuredAt": "2026-07-18T16:30:22.102Z"
+  },
+  "visual": {
+    "readability": null,
+    "completeness": null,
+    "coherence": null,
+    "craft": null,
+    "inspectability": null,
+    "reviewers": 0
+  },
+  "provenance": {
+    "generatorKind": "model-eval",
+    "method": "Fresh one-shot pi SDK invocation; text-only with tools and skills disabled; removed one surrounding Markdown fence; added trailing LF",
+    "rawResponse": "../raw/glm-5-2-low-run-01/response.txt",
+    "decoding": "reasoning effort: low; other decoding settings not exposed"
+  }
+}
