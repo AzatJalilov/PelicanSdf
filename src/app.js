@@ -4,7 +4,6 @@ import { ArtifactViewer } from "./viewer.js";
 const state = {
   results: [],
   prompt: "",
-  activeId: null,
   selectedIds: [],
   localBenchmarks: new Map(),
   compareLeftId: null,
@@ -18,16 +17,6 @@ const elements = {
   resultSearch: document.querySelector("#result-search"),
   resultSort: document.querySelector("#result-sort"),
   emptyState: document.querySelector("#empty-state"),
-  heroModel: document.querySelector("#hero-model"),
-  heroCanvas: document.querySelector("#hero-canvas"),
-  heroLoading: document.querySelector("#hero-loading"),
-  heroError: document.querySelector("#hero-error"),
-  heroFps: document.querySelector("#hero-fps"),
-  heroView: document.querySelector("#hero-view"),
-  heroPause: document.querySelector("#hero-pause"),
-  heroReset: document.querySelector("#hero-reset"),
-  heroDetails: document.querySelector("#hero-details"),
-  heroBenchmark: document.querySelector("#hero-benchmark"),
   compareSection: document.querySelector("#compare"),
   compareTray: document.querySelector("#compare-tray"),
   traySelection: document.querySelector("#tray-selection"),
@@ -48,8 +37,6 @@ const elements = {
   compareNote: document.querySelector("#compare-note"),
   promptText: document.querySelector("#prompt-text"),
   copyPrompt: document.querySelector("#copy-prompt"),
-  modalCopyPrompt: document.querySelector("#modal-copy-prompt"),
-  addDialog: document.querySelector("#add-dialog"),
   benchmarkOverlay: document.querySelector("#benchmark-overlay"),
   benchmarkStatus: document.querySelector("#benchmark-status"),
   benchmarkDetail: document.querySelector("#benchmark-detail"),
@@ -58,7 +45,6 @@ const elements = {
 };
 
 let toastTimeout = 0;
-let heroViewer;
 let leftViewer;
 let rightViewer;
 
@@ -266,34 +252,6 @@ function renderCompareTray() {
   }).join("");
 }
 
-async function activateResult(id, scroll = false, syncUrl = true) {
-  const result = findResult(id);
-  if (!result) return;
-  state.activeId = id;
-  if (syncUrl) updateUrl({ run: id });
-  elements.heroDetails.href = `./result.html?id=${encodeURIComponent(id)}`;
-  const requirementNote = result.validation.unmetRequirements.length
-    ? ` / ${result.validation.unmetRequirements.length} requirements unmet`
-    : "";
-  elements.heroModel.textContent = `${result.model} / ${result.id}${requirementNote}`;
-  elements.heroModel.title = elements.heroModel.textContent;
-  elements.heroLoading.hidden = false;
-  elements.heroError.hidden = true;
-  elements.heroFps.textContent = "— fps";
-  try {
-    await heroViewer.load(result);
-    elements.heroLoading.hidden = true;
-  } catch (error) {
-    elements.heroLoading.hidden = true;
-    elements.heroError.hidden = false;
-    elements.heroError.querySelector("span").textContent = error.message;
-  }
-  if (scroll) {
-    document.querySelector("#top").scrollIntoView({ behavior: "smooth" });
-    window.setTimeout(() => elements.heroCanvas.focus({ preventScroll: true }), 500);
-  }
-}
-
 function populateCompareSelects() {
   const options = state.results.map((result) => `<option value="${escapeHtml(result.id)}">${escapeHtml(result.model)} — ${escapeHtml(result.id)}</option>`).join("");
   elements.leftSelect.innerHTML = options;
@@ -409,25 +367,6 @@ function hideBenchmark() {
   elements.benchmarkOverlay.hidden = true;
 }
 
-async function benchmarkHero() {
-  const result = findResult(state.activeId);
-  if (!result || !heroViewer.controller) return;
-  showBenchmark(`Measuring ${result.model}`, "Warming twelve canonical views…", 0.02);
-  elements.heroBenchmark.disabled = true;
-  try {
-    const metrics = await heroViewer.benchmark(updateBenchmarkProgress);
-    state.localBenchmarks.set(result.id, metrics);
-    renderCards();
-    updateComparisonTable();
-    showToast(`${result.model}: ${formatFps(metrics.throughputFps)} (${metrics.timingMethod})`);
-  } catch (error) {
-    showToast(`Benchmark failed: ${error.message}`);
-  } finally {
-    elements.heroBenchmark.disabled = false;
-    hideBenchmark();
-  }
-}
-
 async function benchmarkComparison() {
   const left = findResult(state.compareLeftId);
   const right = findResult(state.compareRightId);
@@ -456,17 +395,6 @@ async function benchmarkComparison() {
 }
 
 function setupViewers() {
-  heroViewer = new ArtifactViewer(elements.heroCanvas, {
-    onFps: (fps) => { elements.heroFps.textContent = `${Math.round(fps)} fps`; },
-    onView: (view) => {
-      elements.heroView.textContent = `yaw ${(view.yaw * 180 / Math.PI).toFixed(1)}° · pitch ${(view.pitch * 180 / Math.PI).toFixed(1)}° · zoom ${view.distance.toFixed(2)}`;
-    },
-    onError: (error) => {
-      elements.heroError.hidden = false;
-      elements.heroError.querySelector("span").textContent = error.message;
-    },
-  });
-
   leftViewer = new ArtifactViewer(document.querySelector("#compare-left-canvas"), {
     onFps: (fps) => { elements.leftLive.textContent = `${Math.round(fps)} fps live`; },
     onInteraction: () => { state.compareMaster = "left"; },
@@ -491,14 +419,6 @@ function setupViewers() {
 function setupEvents() {
   elements.resultSearch.addEventListener("input", renderCards);
   elements.resultSort.addEventListener("change", renderCards);
-  elements.heroReset.addEventListener("click", () => heroViewer.resetView());
-  elements.heroPause.addEventListener("click", () => {
-    const paused = elements.heroPause.getAttribute("aria-pressed") !== "true";
-    elements.heroPause.setAttribute("aria-pressed", String(paused));
-    elements.heroPause.setAttribute("aria-label", paused ? "Resume preview" : "Pause preview");
-    heroViewer.setPaused(paused);
-  });
-  elements.heroBenchmark.addEventListener("click", benchmarkHero);
   elements.clearCompare.addEventListener("click", () => {
     state.selectedIds = [];
     renderCards();
@@ -519,32 +439,13 @@ function setupEvents() {
   elements.copyCompareLink.addEventListener("click", () => copyText(window.location.href, "Comparison link copied"));
   elements.benchmarkBoth.addEventListener("click", benchmarkComparison);
   elements.copyPrompt.addEventListener("click", () => copyText(state.prompt, "Canonical prompt copied"));
-  elements.modalCopyPrompt.addEventListener("click", () => copyText(state.prompt, "Canonical prompt copied"));
-  document.querySelectorAll("[data-open-add]").forEach((button) => button.addEventListener("click", () => {
-    elements.addDialog.showModal();
-    document.body.classList.add("modal-open");
-  }));
-  document.querySelector("[data-copy-command]").addEventListener("click", () => copyText("npm run new-result -- my-model-run-01", "Scaffold command copied"));
-  for (const dialog of [elements.addDialog]) {
-    dialog.addEventListener("close", () => document.body.classList.remove("modal-open"));
-    dialog.addEventListener("click", (event) => {
-      const rect = dialog.getBoundingClientRect();
-      const inside = event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom;
-      if (!inside) dialog.close();
-    });
-  }
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) {
-      heroViewer.setPaused(true);
       leftViewer.setPaused(true);
       rightViewer.setPaused(true);
-    } else {
-      const heroPausedByButton = elements.heroPause.getAttribute("aria-pressed") === "true";
-      if (!heroPausedByButton) heroViewer.setPaused(false);
-      if (!elements.compareSection.hidden) {
-        leftViewer.setPaused(false);
-        rightViewer.setPaused(false);
-      }
+    } else if (!elements.compareSection.hidden) {
+      leftViewer.setPaused(false);
+      rightViewer.setPaused(false);
     }
   });
 }
@@ -562,18 +463,13 @@ async function main() {
     renderCards();
 
     const url = new URL(window.location.href);
-    const requestedActive = url.searchParams.get("run");
-    const initial = findResult(requestedActive) || results[0];
-    await activateResult(initial.id, false, false);
+    if (url.searchParams.has("run")) updateUrl({ run: null });
 
     const requestedCompare = url.searchParams.get("compare")?.split(",");
     if (requestedCompare?.length === 2 && requestedCompare[0] !== requestedCompare[1]) {
       await loadComparison(requestedCompare[0], requestedCompare[1]);
     }
   } catch (error) {
-    elements.heroLoading.hidden = true;
-    elements.heroError.hidden = false;
-    elements.heroError.querySelector("span").textContent = error.message;
     elements.resultGrid.innerHTML = `<p class="empty-state">Could not load benchmark data: ${escapeHtml(error.message)}</p>`;
     console.error(error);
   }

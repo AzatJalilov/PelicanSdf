@@ -275,7 +275,9 @@ try {
       resourceCount: resources.length,
       heavyResources: resources.filter((url) => /\\/data\\/(?:manifest\\.json|results\\/|artifacts\\/)|\\/src\\/(?:app|data|viewer)\\.js/.test(url)),
       resultsHref: document.querySelector('.landing-copy a[href="./results.html"]')?.href,
-      licenseHref: document.querySelector('.license-note a')?.href,
+      githubHref: document.querySelector('.site-nav .nav-action')?.href,
+      removedPromos: document.querySelectorAll('.license-note, .contribute-section').length,
+      payloadCopy: document.body.textContent.includes('Landing payload') || document.body.textContent.includes('artifact modules'),
       viewport: { width: innerWidth, height: innerHeight, scrollWidth: document.documentElement.scrollWidth },
       heroBounds: document.querySelector('.landing-hero').getBoundingClientRect().toJSON(),
       contractBounds: document.querySelector('.contract-card').getBoundingClientRect().toJSON(),
@@ -285,7 +287,9 @@ try {
     throw new Error(`Landing page loaded run machinery: ${JSON.stringify(landing)}`);
   }
   if (!landing.resultsHref?.endsWith('/results.html')
-    || landing.licenseHref !== 'https://github.com/AzatJalilov/PelicanSdf/blob/main/LICENSE'
+    || landing.githubHref !== 'https://github.com/AzatJalilov/PelicanSdf'
+    || landing.removedPromos
+    || landing.payloadCopy
     || landing.viewport.scrollWidth > landing.viewport.width) {
     throw new Error(`Landing page navigation or layout failed: ${JSON.stringify(landing)}`);
   }
@@ -296,73 +300,40 @@ try {
   const landingCtaScreenshot = await screenshot(client, "desktop-landing-results-cta.jpg");
   await evaluate(client, `document.querySelector('#top').scrollIntoView({block:'start', behavior:'instant'})`);
   await click(client, '.landing-copy a[href="./results.html"]');
-  await waitFor(client, `document.readyState === 'complete' && document.querySelector('#hero-loading')?.hidden`, 30000);
+  await waitFor(client, `document.readyState === 'complete' && document.querySelectorAll('.result-card').length === ${publishedResultCount}`, 30000);
 
   const initial = await evaluate(client, `(() => {
-    const gl = document.querySelector('#hero-canvas').getContext('webgl2');
-    const debug = gl?.getExtension('WEBGL_debug_renderer_info');
+    const resources = performance.getEntriesByType('resource').map((entry) => entry.name);
     return {
       title: document.title,
       cards: document.querySelectorAll('.result-card').length,
-      heroError: !document.querySelector('#hero-error').hidden,
-      webgl2: Boolean(gl),
-      renderer: debug ? gl.getParameter(debug.UNMASKED_RENDERER_WEBGL) : 'masked',
       viewport: { width: innerWidth, height: innerHeight, scrollWidth: document.documentElement.scrollWidth },
-      heroBounds: document.querySelector('.hero').getBoundingClientRect().toJSON(),
-      canvasDataLength: document.querySelector('#hero-canvas').toDataURL().length,
-      view: document.querySelector('#hero-view').textContent,
+      heroBounds: document.querySelector('.catalog-hero').getBoundingClientRect().toJSON(),
       search: location.search,
       thumbnails: document.querySelectorAll('.poster-thumbnail').length,
       failedPlaceholders: document.querySelectorAll('.result-card .poster-placeholder').length,
       knownFailedPlaceholder: document.querySelectorAll('[data-result-id="claude-sonnet-5-max-run-01"] .poster-placeholder').length,
-      licenseHref: document.querySelector('.license-note a')?.href,
+      heroCanvas: Boolean(document.querySelector('#hero-canvas')),
+      visibleCanvases: [...document.querySelectorAll('canvas')].filter((canvas) => canvas.getClientRects().length).length,
+      artifactRequests: resources.filter((url) => url.includes('/data/artifacts/')),
+      githubHref: document.querySelector('.site-nav .nav-action')?.href,
+      removedPromos: document.querySelectorAll('.license-note, .contribute-section, #add-dialog').length,
     };
   })()`);
-  if (!initial.webgl2
-    || initial.heroError
-    || initial.cards !== publishedResultCount
+  if (initial.cards !== publishedResultCount
     || initial.search !== ''
     || initial.thumbnails !== publishedThumbnailCount
     || initial.failedPlaceholders !== publishedFailureCount
     || initial.knownFailedPlaceholder !== 1
-    || initial.licenseHref !== 'https://github.com/AzatJalilov/PelicanSdf/blob/main/LICENSE') {
+    || initial.heroCanvas
+    || initial.visibleCanvases
+    || initial.artifactRequests.length
+    || initial.githubHref !== 'https://github.com/AzatJalilov/PelicanSdf'
+    || initial.removedPromos) {
     throw new Error(`Initial state failed: ${JSON.stringify(initial)}`);
   }
   if (initial.viewport.scrollWidth > initial.viewport.width) throw new Error("Desktop page has horizontal overflow.");
   const catalogScreenshot = await screenshot(client, "desktop-catalog.jpg");
-
-  await click(client, "#hero-pause");
-  await waitFor(client, `document.querySelector('#hero-pause').getAttribute('aria-pressed') === 'true'`);
-  await click(client, "#hero-pause");
-  await waitFor(client, `document.querySelector('#hero-pause').getAttribute('aria-pressed') === 'false'`);
-
-  const beforeDrag = await evaluate(client, `document.querySelector('#hero-view').textContent`);
-  await drag(client, "#hero-canvas", 140, -45);
-  await delay(350);
-  const afterDrag = await evaluate(client, `document.querySelector('#hero-view').textContent`);
-  await wheel(client, "#hero-canvas", -280);
-  await delay(350);
-  const afterZoom = await evaluate(client, `document.querySelector('#hero-view').textContent`);
-  if (beforeDrag === afterDrag || afterDrag === afterZoom) throw new Error("Orbit or zoom did not update the visible camera readout.");
-  await click(client, "#hero-canvas");
-  await pressKey(client, "ArrowLeft", "ArrowLeft");
-  await delay(200);
-  const afterKeyboardOrbit = await evaluate(client, `document.querySelector('#hero-view').textContent`);
-  await pressKey(client, "+", "Equal");
-  await delay(200);
-  const afterKeyboardZoom = await evaluate(client, `document.querySelector('#hero-view').textContent`);
-  if (afterKeyboardOrbit === afterZoom || afterKeyboardZoom === afterKeyboardOrbit) throw new Error("Keyboard orbit or zoom did not update the camera readout.");
-  await click(client, "#hero-reset");
-  await delay(250);
-  const afterReset = await evaluate(client, `document.querySelector('#hero-view').textContent`);
-  if (afterReset !== beforeDrag) throw new Error(`Reset did not restore the default view (${afterReset}).`);
-  await pinch(client, "#hero-canvas");
-  await delay(300);
-  const afterPinch = await evaluate(client, `document.querySelector('#hero-view').textContent`);
-  if (afterPinch === afterReset) throw new Error("Two-finger pinch did not update the camera readout.");
-  const closeupScreenshot = await screenshot(client, "desktop-closeup.jpg");
-  await click(client, "#hero-reset");
-  await delay(200);
 
   await evaluate(client, `document.querySelector('#results').scrollIntoView({block:'start', behavior:'instant'})`);
   await waitFor(client, `document.querySelectorAll('.result-card').length === ${publishedResultCount}`, 30000);
@@ -405,10 +376,6 @@ try {
   await click(client, "#copy-prompt");
   await waitFor(client, `document.querySelector('#toast').textContent.includes('Canonical prompt copied')`);
   const methodScreenshot = await screenshot(client, "desktop-method.jpg");
-  await click(client, "[data-open-add]");
-  await waitFor(client, `document.querySelector('#add-dialog').open`);
-  await click(client, "#add-dialog .modal-close");
-  await waitFor(client, `!document.querySelector('#add-dialog').open`);
 
   await click(client, '[data-result-id="gpt-5-6-sol-run-01"] .compare-check span');
   await waitFor(client, `document.querySelectorAll('[data-compare-id]:checked').length === 1`);
@@ -645,13 +612,20 @@ try {
   const requirementFindingsScreenshot = await screenshot(client, "desktop-unmet-requirements.jpg");
 
   await client.send("Page.navigate", { url: `${siteUrl}results.html?run=gpt-5-5-run-01` });
-  await waitFor(client, `document.readyState === 'complete' && document.querySelector('#hero-loading')?.hidden`, 30000);
-  const secondRun = await evaluate(client, `({
-    error: !document.querySelector('#hero-error').hidden,
-    view: document.querySelector('#hero-view').textContent,
-    dataLength: document.querySelector('#hero-canvas').toDataURL().length,
-  })`);
-  const secondScreenshot = await screenshot(client, "desktop-second-run.jpg");
+  await waitFor(client, `document.readyState === 'complete' && document.querySelectorAll('.result-card').length === ${publishedResultCount} && location.search === ''`, 30000);
+  const legacyRun = await evaluate(client, `(() => {
+    const resources = performance.getEntriesByType('resource').map((entry) => entry.name);
+    return {
+      search: location.search,
+      cards: document.querySelectorAll('.result-card').length,
+      heroCanvas: Boolean(document.querySelector('#hero-canvas')),
+      artifactRequests: resources.filter((url) => url.includes('/data/artifacts/')),
+    };
+  })()`);
+  if (legacyRun.search || legacyRun.cards !== publishedResultCount || legacyRun.heroCanvas || legacyRun.artifactRequests.length) {
+    throw new Error(`Legacy catalog run parameter was not cleaned: ${JSON.stringify(legacyRun)}`);
+  }
+  const legacyRunScreenshot = await screenshot(client, "desktop-legacy-run-cleaned.jpg");
 
   await client.send("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: true, screenWidth: 390, screenHeight: 844 });
   await client.send("Page.navigate", { url: siteUrl });
@@ -666,9 +640,19 @@ try {
       heavyResources: resources.filter((url) => /\\/data\\/(?:manifest\\.json|results\\/|artifacts\\/)|\\/src\\/(?:app|data|viewer)\\.js/.test(url)),
       heroWidth: document.querySelector('.landing-hero').getBoundingClientRect().width,
       ctaVisible: Boolean(document.querySelector('.landing-copy a[href="./results.html"]')),
+      githubHref: document.querySelector('.site-nav .nav-action')?.href,
+      removedPromos: document.querySelectorAll('.license-note, .contribute-section').length,
+      payloadCopy: document.body.textContent.includes('Landing payload') || document.body.textContent.includes('artifact modules'),
     };
   })()`);
-  if (mobileLanding.scrollWidth > mobileLanding.width || mobileLanding.canvases || mobileLanding.scripts || mobileLanding.heavyResources.length || !mobileLanding.ctaVisible) {
+  if (mobileLanding.scrollWidth > mobileLanding.width
+    || mobileLanding.canvases
+    || mobileLanding.scripts
+    || mobileLanding.heavyResources.length
+    || !mobileLanding.ctaVisible
+    || mobileLanding.githubHref !== 'https://github.com/AzatJalilov/PelicanSdf'
+    || mobileLanding.removedPromos
+    || mobileLanding.payloadCopy) {
     throw new Error(`Mobile landing failed: ${JSON.stringify(mobileLanding)}`);
   }
   const mobileLandingScreenshot = await screenshot(client, "mobile-landing.jpg");
@@ -676,16 +660,28 @@ try {
   const mobileLandingContractScreenshot = await screenshot(client, "mobile-landing-contract.jpg");
   await evaluate(client, `document.querySelector('#top').scrollIntoView({block:'start', behavior:'instant'})`);
   await click(client, '.landing-copy a[href="./results.html"]');
-  await waitFor(client, `document.readyState === 'complete' && document.querySelector('#hero-loading')?.hidden`, 30000);
-  const mobile = await evaluate(client, `({
-    width: innerWidth,
-    scrollWidth: document.documentElement.scrollWidth,
-    headerWidth: document.querySelector('.site-header').getBoundingClientRect().width,
-    canvasWidth: document.querySelector('#hero-canvas').getBoundingClientRect().width,
-    cards: document.querySelectorAll('.result-card').length,
-    error: !document.querySelector('#hero-error').hidden,
-  })`);
-  if (mobile.scrollWidth > mobile.width || mobile.error || mobile.cards !== publishedResultCount) throw new Error(`Mobile state failed: ${JSON.stringify(mobile)}`);
+  await waitFor(client, `document.readyState === 'complete' && document.querySelectorAll('.result-card').length === ${publishedResultCount}`, 30000);
+  const mobile = await evaluate(client, `(() => {
+    const resources = performance.getEntriesByType('resource').map((entry) => entry.name);
+    return {
+      width: innerWidth,
+      scrollWidth: document.documentElement.scrollWidth,
+      headerWidth: document.querySelector('.site-header').getBoundingClientRect().width,
+      cards: document.querySelectorAll('.result-card').length,
+      heroCanvas: Boolean(document.querySelector('#hero-canvas')),
+      visibleCanvases: [...document.querySelectorAll('canvas')].filter((canvas) => canvas.getClientRects().length).length,
+      artifactRequests: resources.filter((url) => url.includes('/data/artifacts/')),
+      githubHref: document.querySelector('.site-nav .nav-action')?.href,
+    };
+  })()`);
+  if (mobile.scrollWidth > mobile.width
+    || mobile.cards !== publishedResultCount
+    || mobile.heroCanvas
+    || mobile.visibleCanvases
+    || mobile.artifactRequests.length
+    || mobile.githubHref !== 'https://github.com/AzatJalilov/PelicanSdf') {
+    throw new Error(`Mobile state failed: ${JSON.stringify(mobile)}`);
+  }
   const mobileScreenshot = await screenshot(client, "mobile-catalog.jpg");
   await evaluate(client, `document.querySelector('#results').scrollIntoView({block:'start', behavior:'instant'})`);
   await waitFor(client, `document.querySelector('.poster-thumbnail')?.naturalWidth === 480`, 30000);
@@ -760,7 +756,6 @@ try {
   const report = {
     landing,
     initial,
-    interaction: { beforeDrag, afterDrag, afterZoom, afterKeyboardOrbit, afterKeyboardZoom, afterReset, afterPinch },
     compare,
     benchmarkRuns,
     runDetail,
@@ -769,14 +764,14 @@ try {
     sourceLoaded,
     missingRun,
     requirementRunDetail,
-    secondRun,
+    legacyRun,
     mobileLanding,
     mobile,
     mobileCompare,
     mobileRun,
     mobileRequirementRun,
     browserErrors,
-    screenshots: [landingScreenshot, landingMethodScreenshot, landingCtaScreenshot, catalogScreenshot, closeupScreenshot, resultsScreenshot, renderFailureCardScreenshot, resultRequirementCardScreenshot, methodScreenshot, compareScreenshot, compareLedgerScreenshot, runDetailScreenshot, runGenerationScreenshot, solCostScreenshot, runSourceScreenshot, requirementRunScreenshot, requirementFindingsScreenshot, secondScreenshot, mobileLandingScreenshot, mobileLandingContractScreenshot, mobileScreenshot, mobileResultsScreenshot, mobileCompareScreenshot, mobileRunScreenshot, mobileRunGenerationScreenshot, mobileRequirementScreenshot, mobileRequirementEvidenceScreenshot],
+    screenshots: [landingScreenshot, landingMethodScreenshot, landingCtaScreenshot, catalogScreenshot, resultsScreenshot, renderFailureCardScreenshot, resultRequirementCardScreenshot, methodScreenshot, compareScreenshot, compareLedgerScreenshot, runDetailScreenshot, runGenerationScreenshot, solCostScreenshot, runSourceScreenshot, requirementRunScreenshot, requirementFindingsScreenshot, legacyRunScreenshot, mobileLandingScreenshot, mobileLandingContractScreenshot, mobileScreenshot, mobileResultsScreenshot, mobileCompareScreenshot, mobileRunScreenshot, mobileRunGenerationScreenshot, mobileRequirementScreenshot, mobileRequirementEvidenceScreenshot],
   };
   console.log(JSON.stringify(report, null, 2));
   if (browserErrors.length) process.exitCode = 1;

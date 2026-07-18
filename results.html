@@ -25,12 +25,12 @@
       <nav class="site-nav" aria-label="Primary navigation">
         <a href="#results">Results</a>
         <a href="#method">Method</a>
-        <button class="nav-action" type="button" data-open-add>Add a result <span aria-hidden="true">↗</span></button>
+        <a class="nav-action" href="https://github.com/AzatJalilov/PelicanSdf">GitHub <span aria-hidden="true">↗</span></a>
       </nav>
     </header>
 
     <main id="main">
-      <section class="hero section-shell" id="top" aria-labelledby="hero-title">
+      <section class="hero catalog-hero section-shell" id="top" aria-labelledby="hero-title">
         <div class="hero-copy">
           <p class="eyebrow"><span>RESULTS</span><span>WEBGL2 / SDF</span></p>
           <h1 id="hero-title">Benchmark results</h1>
@@ -46,44 +46,6 @@
           </dl>
         </div>
 
-        <div class="viewer-card" data-viewer-card>
-          <div class="viewer-topbar">
-            <div>
-              <span class="signal-dot" aria-hidden="true"></span>
-              <span id="hero-model">Loading artifact</span>
-            </div>
-            <div class="viewer-actions">
-              <button class="icon-button" id="hero-reset" type="button" title="Reset camera" aria-label="Reset camera">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11a8 8 0 1 1 2.3 6M4 5v6h6"></path></svg>
-              </button>
-              <button class="icon-button" id="hero-pause" type="button" title="Pause preview" aria-label="Pause preview">
-                <svg class="pause-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14"></path></svg>
-              </button>
-            </div>
-          </div>
-          <div class="canvas-stage" id="hero-stage">
-            <canvas id="hero-canvas" tabindex="0" aria-label="Interactive 3D SDF result. Drag to orbit, scroll to zoom, and use arrow or plus and minus keys."></canvas>
-            <div class="canvas-grid" aria-hidden="true"></div>
-            <div class="viewer-loading" id="hero-loading" role="status"><span></span>Compiling the model’s canvas…</div>
-            <div class="canvas-error" id="hero-error" hidden>
-              <strong>Artifact did not render</strong>
-              <span></span>
-            </div>
-            <div class="live-meter" aria-label="Live preview diagnostics">
-              <span>Live</span>
-              <strong id="hero-fps">— fps</strong>
-              <small>display-capped</small>
-            </div>
-            <p class="orbit-hint"><span aria-hidden="true">↔</span> drag: orbit · wheel/pinch: zoom</p>
-          </div>
-          <div class="viewer-footer">
-            <div><span>View</span><strong id="hero-view">yaw 0.0° · pitch 0.0°</strong></div>
-            <div class="viewer-footer-actions">
-              <a class="text-button" id="hero-details" href="./result.html">Full run record <span aria-hidden="true">→</span></a>
-              <button class="text-button" id="hero-benchmark" type="button">Run local benchmark <span aria-hidden="true">→</span></button>
-            </div>
-          </div>
-        </div>
       </section>
 
       <section class="calibration-strip" aria-label="Dataset statistics">
@@ -201,22 +163,6 @@
         </div>
       </section>
 
-      <section class="contribute-section section-shell" id="contribute" aria-labelledby="contribute-title">
-        <div class="contribute-card">
-          <p class="eyebrow">CONTRIBUTE</p>
-          <h2 id="contribute-title">Add a benchmark result</h2>
-          <p>Run the canonical prompt, preserve the unmodified first response, record provenance and usage metadata, validate the module, and submit a pull request.</p>
-          <div class="command-line"><code>npm run new-result -- my-model-run-01</code><button type="button" data-copy-command aria-label="Copy scaffold command">Copy</button></div>
-          <div class="contribute-actions">
-            <button class="button button-primary" type="button" data-open-add>Submission guide</button>
-            <a class="button button-quiet" href="./CONTRIBUTING.md">Read CONTRIBUTING.md</a>
-          </div>
-        </div>
-        <aside class="license-note">
-          <svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="27"></circle><path d="M21 42V22h6l5 9 5-9h6v20M17 47h30"></path></svg>
-          <div><strong>MIT licensed</strong><p>Benchmark code, harness, data schema, and site are available for reuse.</p><a href="https://github.com/AzatJalilov/PelicanSdf/blob/main/LICENSE">LICENSE ↗</a></div>
-        </aside>
-      </section>
     </main>
 
     <footer class="site-footer section-shell">
@@ -233,20 +179,6 @@
       <button class="button button-primary" id="open-compare" type="button" disabled>Compare selected <span aria-hidden="true">→</span></button>
       <button class="tray-clear" id="clear-compare" type="button">Clear</button>
     </div>
-
-    <dialog class="modal add-modal" id="add-dialog">
-      <form method="dialog"><button class="modal-close" aria-label="Close submission guide">×</button></form>
-      <p class="eyebrow">Submit a run</p>
-      <h2>Add a benchmark result</h2>
-      <p>Use the exact prompt in a fresh conversation. Save the untouched response and record the model, provider, generation harness, decoding settings, date, tokens, and cost—even when the module does not render.</p>
-      <ol class="submit-list">
-        <li><span>1</span><div><strong>Scaffold</strong><code>npm run new-result -- your-run-id</code></div></li>
-        <li><span>2</span><div><strong>Add the raw module</strong><code>data/artifacts/your-run-id.js</code></div></li>
-        <li><span>3</span><div><strong>Validate</strong><code>npm test</code></div></li>
-        <li><span>4</span><div><strong>Open a pull request</strong><p>Include provenance; never invent missing values.</p></div></li>
-      </ol>
-      <div class="modal-actions"><button class="button button-primary" id="modal-copy-prompt" type="button">Copy exact prompt</button><a class="button button-quiet" href="./CONTRIBUTING.md">Full guide</a></div>
-    </dialog>
 
     <div class="benchmark-overlay" id="benchmark-overlay" hidden aria-live="polite">
       <div class="benchmark-box">

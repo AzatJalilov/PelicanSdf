@@ -4,20 +4,27 @@ import test from "node:test";
 
 test("landing page is static and does not load benchmark runs", async () => {
   const html = await readFile(new URL("../index.html", import.meta.url), "utf8");
-  for (const id of ["landing-title", "method", "contribute"]) {
+  for (const id of ["landing-title", "method"]) {
     assert.match(html, new RegExp(`id=["']${id}["']`));
   }
   assert.match(html, /href=["']\.\/results\.html["']/);
   assert.doesNotMatch(html, /<canvas\b/);
   assert.doesNotMatch(html, /<script\b/);
   assert.doesNotMatch(html, /data\/(?:results|artifacts)|src\/app\.js/);
+  assert.doesNotMatch(html, /Landing payload|artifact modules|ARTIFACTS NOT LOADED/i);
 });
 
-test("results catalog owns the interactive benchmark surfaces", async () => {
-  const html = await readFile(new URL("../results.html", import.meta.url), "utf8");
-  for (const id of ["hero-canvas", "result-grid", "compare-left-canvas", "compare-right-canvas", "prompt-text"]) {
+test("results catalog lists runs without loading a default artifact", async () => {
+  const [html, app] = await Promise.all([
+    readFile(new URL("../results.html", import.meta.url), "utf8"),
+    readFile(new URL("../src/app.js", import.meta.url), "utf8"),
+  ]);
+  for (const id of ["result-grid", "compare-left-canvas", "compare-right-canvas", "prompt-text"]) {
     assert.match(html, new RegExp(`id=["']${id}["']`));
   }
+  assert.doesNotMatch(html, /id=["']hero-canvas["']/);
+  assert.doesNotMatch(app, /heroViewer|activateResult|benchmarkHero/);
+  assert.match(app, /url\.searchParams\.has\("run"\).*updateUrl\(\{ run: null \}\)/);
   assert.match(html, /src=["']\.\/src\/app\.js["']/);
 });
 
@@ -57,20 +64,17 @@ test("license is the standard MIT grant", async () => {
   assert.match(license, /Permission is hereby granted, free of charge/);
 });
 
-test("public license calls to action link to the GitHub license", async () => {
-  const expected = "https://github.com/AzatJalilov/PelicanSdf/blob/main/LICENSE";
+test("public pages link to GitHub without contribution or license promos", async () => {
+  const expected = "https://github.com/AzatJalilov/PelicanSdf";
   const pages = await Promise.all([
     readFile(new URL("../index.html", import.meta.url), "utf8"),
     readFile(new URL("../results.html", import.meta.url), "utf8"),
-    readFile(new URL("../README.md", import.meta.url), "utf8"),
+    readFile(new URL("../result.html", import.meta.url), "utf8"),
   ]);
-  for (const page of pages) assert.match(page, new RegExp(expected.replaceAll(".", "\\.")));
-});
-
-test("catalog keeps its default run out of a clean URL", async () => {
-  const app = await readFile(new URL("../src/app.js", import.meta.url), "utf8");
-  assert.match(app, /activateResult\(initial\.id, false, false\)/);
-  assert.match(app, /if \(syncUrl\) updateUrl\(\{ run: id \}\)/);
+  for (const page of pages) {
+    assert.match(page, new RegExp(expected.replaceAll(".", "\\.")));
+    assert.doesNotMatch(page, /Add a result|Add a benchmark result|license-note|MIT licensed/i);
+  }
 });
 
 function jpegDimensions(buffer) {
