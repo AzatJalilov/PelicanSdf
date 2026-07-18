@@ -1,0 +1,34 @@
+services:
+  pelican:
+    image: ghcr.io/azatjalilov/pelican-sdf:${IMAGE_TAG:-latest}
+    container_name: pelican-sdf
+    restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    expose:
+      - "8080"
+    tmpfs:
+      - /config:size=1m,mode=0700,uid=1000,gid=1000
+      - /data:size=1m,mode=0700,uid=1000,gid=1000
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "--quiet", "http://127.0.0.1:8080/"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 5s
+    networks:
+      edge:
+        aliases:
+          - pelican-sdf
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  edge:
+    external: true
+    name: vibe-overflow-edge

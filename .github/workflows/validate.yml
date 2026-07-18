@@ -15,9 +15,25 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Scan repository history for secrets
+        uses: gitleaks/gitleaks-action@dcedce43c6f43de0b836d1fe38946645c9c638dc
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Use Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
       - name: Test repository contracts
         run: npm test
+      - name: Build and verify public bundle
+        run: |
+          npm run build:site
+          npm run verify:site
+      - name: Scan generated public bundle
+        run: >-
+          docker run --rm
+          -v "$PWD/dist:/scan:ro"
+          zricethezav/gitleaks@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
+          dir /scan --redact --no-banner --exit-code 2

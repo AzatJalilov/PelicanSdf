@@ -6,6 +6,8 @@
 
 **One bird. Two wheels. Infinite signed distances.**
 
+**Live website:** [pelican.vibe-overflow.com](https://pelican.vibe-overflow.com/)
+
 Pelican SDF is an open, end-to-end benchmark for model-generated interactive 3D
 art. Every model gets the same byte-exact prompt and one blank canvas. It must
 build its own SDF primitives, ray marcher, camera, lighting, materials, orbit
@@ -56,9 +58,11 @@ Published runs have shareable URLs such as
 `result.html?id=gpt-5-6-sol-run-01`; the result cards and active viewer link to
 these full records directly.
 
-The site can also be hosted directly from the repository root on GitHub Pages,
-Cloudflare Pages, Netlify, or any static file server. It uses relative URLs and
-needs no server-side routing.
+The canonical public deployment is
+[pelican.vibe-overflow.com](https://pelican.vibe-overflow.com/). The site can
+also be hosted directly from the repository root on GitHub Pages, Cloudflare
+Pages, Netlify, or any static file server. It uses relative URLs and needs no
+server-side routing.
 
 ## The thin-canvas contract
 

@@ -4,6 +4,12 @@ node_modules/
 coverage/
 dist/
 *.log
+.env
+.env.*
+*.key
+*.pem
+*.p12
+*.pfx
 .vscode/
 .idea/
 /artifacts/

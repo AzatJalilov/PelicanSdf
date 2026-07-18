@@ -6,6 +6,8 @@
   "type": "module",
   "scripts": {
     "start": "node scripts/serve.mjs",
+    "build:site": "node scripts/build-site.mjs",
+    "verify:site": "node scripts/verify-public-bundle.mjs",
     "eval:run": "node scripts/run-model-eval.mjs",
     "eval:ingest": "node scripts/ingest-model-eval.mjs",
     "eval:measure": "node scripts/measure-results.mjs",
