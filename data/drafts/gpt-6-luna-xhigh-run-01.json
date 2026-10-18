@@ -1,0 +1,76 @@
+{
+  "id": "gpt-6-luna-xhigh-run-01",
+  "title": "GPT-6 Luna / xhigh effort",
+  "model": "gpt-6-luna",
+  "provider": "OpenAI via Codex CLI",
+  "status": "unverified",
+  "track": "one-shot",
+  "promptVersion": "1.0.0",
+  "promptSha256": "cd21d5a8bb3956d82ab5650304e7e491063eacdb27dad85be6b4a845512f5e6b",
+  "artifactSha256": "1989e9ef1143f2c9f975bbdec5de73677607cad07d1f491a301d7b4a5f919564",
+  "createdAt": "2026-10-18",
+  "artifact": "./artifacts/gpt-6-luna-xhigh-run-01.js",
+  "description": "The module cannot be parsed because contextLost is declared both as a local variable and as a function in the same scope.",
+  "accent": "#446aa8",
+  "generationHarness": {
+    "name": "Codex CLI",
+    "version": "0.163.0",
+    "surface": "codex exec --json",
+    "sandbox": "read-only",
+    "notes": "Fresh ephemeral Codex CLI invocation with user config and exec-policy rules disabled, using the default CLI system/skill context; exact canonical prompt supplied through stdin. First final response preserved without repairs."
+  },
+  "generationUsage": {
+    "inputTokens": 18674,
+    "cachedInputTokens": 0,
+    "reasoningTokens": 16019,
+    "outputTokens": 24352,
+    "totalTokens": 43026,
+    "apiCostUsd": 0.0140434,
+    "billingMode": "subscription",
+    "source": "data/raw/gpt-6-luna-xhigh-run-01/events.jsonl",
+    "notes": "Codex CLI subscription invocation; API-equivalent standard price estimated from captured tokens at OpenAI's published gpt-6-luna rates ($0.1/M uncached input, $0.01/M cached input, $0.5/M output); not a separate API charge."
+  },
+  "validation": {
+    "state": "failed",
+    "checks": [
+      "prompt and response receipt hashes"
+    ],
+    "unmetRequirements": [
+      {
+        "requirement": "Valid JavaScript module",
+        "evidence": "Node's JavaScript syntax check reports Identifier 'contextLost' has already been declared at the contextLost function declaration. No code was repaired and the artifact was not executed."
+      }
+    ],
+    "warnings": [
+      "Not added to the catalog because the unchanged response does not pass executable-artifact publication constraints."
+    ]
+  },
+  "metrics": {
+    "sourceBytes": 21103,
+    "initMs": null,
+    "gpuMsMedian": null,
+    "gpuMsP95": null,
+    "throughputFps": null,
+    "timingMethod": null,
+    "environment": null,
+    "environmentKey": null,
+    "profile": "pelican-canvas-960x540-v1",
+    "sampleCount": null,
+    "trials": null,
+    "measuredAt": null
+  },
+  "visual": {
+    "readability": null,
+    "completeness": null,
+    "coherence": null,
+    "craft": null,
+    "inspectability": null,
+    "reviewers": 0
+  },
+  "provenance": {
+    "generatorKind": "model-eval",
+    "method": "Fresh one-shot Codex CLI invocation; read-only ephemeral sandbox; added trailing LF",
+    "rawResponse": "../raw/gpt-6-luna-xhigh-run-01/response.txt",
+    "decoding": "reasoning effort: xhigh; other decoding settings not exposed"
+  }
+}

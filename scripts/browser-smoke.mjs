@@ -573,6 +573,60 @@ try {
     evaluatedRuns.push({ ...generatedRun, record, before, afterDrag, afterWheel, afterKeyboard, afterReset, afterPinch });
   }
 
+  const evaluatedGpt6Runs = [];
+  for (const item of publishedResults.filter((result) => /^gpt-6(?:\.|-)/.test(result.model))) {
+    await client.send("Page.navigate", { url: `${siteUrl}result.html?id=${item.id}` });
+    await waitFor(client, `document.readyState === 'complete' && !document.querySelector('#run-page').hidden && document.querySelector('#run-viewer-loading').hidden`, 60000);
+    const record = await evaluate(client, `({
+      model: document.querySelector('#run-title').textContent,
+      viewerError: !document.querySelector('#run-viewer-error').hidden,
+      failedClass: document.querySelector('#run-status').classList.contains('state-failed'),
+      sourceLoaded: document.querySelector('#run-source').textContent.length,
+      invocation: document.querySelector('#invocation-record').textContent,
+      usage: document.querySelector('#usage-record').textContent,
+      requirements: document.querySelectorAll('#validation-requirements li').length,
+      width: innerWidth, scrollWidth: document.documentElement.scrollWidth,
+    })`);
+    const failed = item.validation.state === "failed";
+    const totalTokens = item.generationUsage.totalTokens;
+    const cost = item.generationUsage.apiCostUsd;
+    const expectedCost = Number.isFinite(cost)
+      ? `$${cost.toFixed(cost < 1 ? 4 : 2)}${item.generationUsage.billingMode === "subscription" ? " est." : ""}`
+      : null;
+    if (record.model !== item.model || record.viewerError !== failed || record.failedClass !== failed
+      || record.sourceLoaded < 100 || !record.invocation.includes(item.provenance.decoding)
+      || (Number.isInteger(totalTokens) && !record.usage.includes(totalTokens.toLocaleString("en-US")))
+      || (expectedCost && !record.usage.includes(expectedCost))
+      || record.requirements !== item.validation.unmetRequirements.length
+      || record.scrollWidth > record.width) {
+      throw new Error(`GPT-6 run record failed: ${JSON.stringify({ id: item.id, record })}`);
+    }
+    const controls = {};
+    if (!failed) {
+      await evaluate(client, `document.querySelector('.run-hero').scrollIntoView({block:'start', behavior:'instant'})`);
+      const view = () => evaluate(client, `document.querySelector('#run-view').textContent`);
+      controls.before = await view();
+      await drag(client, "#run-canvas", 105, -30); await delay(220); controls.drag = await view();
+      await wheel(client, "#run-canvas", -190); await delay(220); controls.wheel = await view();
+      await click(client, "#run-canvas"); await pressKey(client, "ArrowLeft", "ArrowLeft");
+      await delay(180); controls.keyboard = await view();
+      await click(client, "#run-reset"); await delay(180); controls.reset = await view();
+      await pinch(client, "#run-canvas"); await delay(240); controls.pinch = await view();
+      for (const [requirement, works] of [
+        ["Pointer orbit", controls.before !== controls.drag],
+        ["Wheel zoom", controls.drag !== controls.wheel],
+        ["Keyboard camera", controls.wheel !== controls.keyboard],
+        ["Two-finger pinch", controls.reset !== controls.pinch],
+      ]) {
+        if (!works && !item.validation.unmetRequirements.some((finding) => finding.requirement === requirement)) {
+          throw new Error(`${item.id}: undisclosed failure of ${requirement}`);
+        }
+      }
+      if (controls.reset !== controls.before) throw new Error(`${item.id}: host reset failed`);
+    }
+    evaluatedGpt6Runs.push({ id: item.id, record, controls });
+  }
+
   await client.send("Page.navigate", { url: `${siteUrl}result.html?id=not-a-published-run` });
   await waitFor(client, `document.readyState === 'complete' && !document.querySelector('#run-error').hidden`, 30000);
   const missingRun = await evaluate(client, `({
@@ -778,6 +832,7 @@ try {
     runDetail,
     runInteraction: { beforeRunDrag, afterRunDrag, afterRunZoom, afterRunReset },
     evaluatedRuns,
+    evaluatedGpt6Runs,
     sourceLoaded,
     missingRun,
     requirementRunDetail,

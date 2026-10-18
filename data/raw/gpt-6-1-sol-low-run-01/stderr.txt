@@ -1,0 +1,1 @@
+2026-10-18T11:30:22.579625Z ERROR codex_core::tools::router: error=exec_command failed: CreateProcess { message: "Rejected(\"`\\\"C:\\\\\\\\windows\\\\\\\\System32\\\\\\\\WindowsPowerShell\\\\\\\\v1.0\\\\\\\\powershell.exe\\\" -Command 'Get-Content C:/Users/azatj/.agents/skills/iquilez-sdf/SKILL.md'` rejected: blocked by policy\")" }

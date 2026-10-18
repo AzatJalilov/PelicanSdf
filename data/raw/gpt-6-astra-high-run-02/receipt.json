@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "id": "gpt-6-astra-high-run-02",
+  "model": "gpt-6-astra",
+  "reasoningEffort": "high",
+  "harness": {
+    "name": "Codex CLI",
+    "version": "0.163.0",
+    "surface": "codex exec --json",
+    "sandbox": "read-only",
+    "ephemeral": true,
+    "userConfigLoaded": false,
+    "projectRulesLoaded": false
+  },
+  "prompt": {
+    "path": "benchmark/prompt.txt",
+    "bytes": 3387,
+    "sha256": "cd21d5a8bb3956d82ab5650304e7e491063eacdb27dad85be6b4a845512f5e6b"
+  },
+  "response": {
+    "path": "data/raw/gpt-6-astra-high-run-02/response.txt",
+    "bytes": 30136,
+    "sha256": "2e4b34b1ef531f5b373e0da2588af98b48431362df30f25fbda1e580512e1702"
+  },
+  "usage": {
+    "inputTokens": 61797,
+    "cachedInputTokens": 38528,
+    "reasoningTokens": 12574,
+    "outputTokens": 24465,
+    "totalTokens": 86262
+  },
+  "billing": {
+    "mode": "subscription",
+    "apiCostUsd": 1.494468,
+    "note": "Codex CLI subscription invocation; API-equivalent standard price estimated from captured tokens at OpenAI's published gpt-6-astra rates ($10/M uncached input, $1/M cached input, $50/M output); not a separate API charge.",
+    "pricing": {
+      "inputUsdPerMillion": 10,
+      "cachedInputUsdPerMillion": 1,
+      "outputUsdPerMillion": 50,
+      "source": "https://developers.openai.com/api/docs/pricing",
+      "publishedAt": null
+    }
+  },
+  "startedAt": "2026-10-18T11:26:17.459Z",
+  "completedAt": "2026-10-18T11:33:34.121Z",
+  "durationMs": 436662,
+  "exitCode": 0,
+  "eventCount": 6,
+  "files": {
+    "events": "data/raw/gpt-6-astra-high-run-02/events.jsonl",
+    "stderr": "data/raw/gpt-6-astra-high-run-02/stderr.txt"
+  }
+}

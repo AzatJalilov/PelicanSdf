@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "id": "gpt-6-luna-max-run-01",
+  "model": "gpt-6-luna",
+  "reasoningEffort": "max",
+  "harness": {
+    "name": "Codex CLI",
+    "version": "0.163.0",
+    "surface": "codex exec --json",
+    "sandbox": "read-only",
+    "ephemeral": true,
+    "userConfigLoaded": false,
+    "projectRulesLoaded": false
+  },
+  "prompt": {
+    "path": "benchmark/prompt.txt",
+    "bytes": 3387,
+    "sha256": "cd21d5a8bb3956d82ab5650304e7e491063eacdb27dad85be6b4a845512f5e6b"
+  },
+  "response": {
+    "path": "data/raw/gpt-6-luna-max-run-01/response.txt",
+    "bytes": 18550,
+    "sha256": "bd81db7e47c8fcb49a29b2f92ef8ce40c7a59701dc05c288f8716e5a184ac88a"
+  },
+  "usage": {
+    "inputTokens": 16387,
+    "cachedInputTokens": 0,
+    "reasoningTokens": 14146,
+    "outputTokens": 20577,
+    "totalTokens": 36964
+  },
+  "billing": {
+    "mode": "subscription",
+    "apiCostUsd": 0.0119272,
+    "note": "Codex CLI subscription invocation; API-equivalent standard price estimated from captured tokens at OpenAI's published gpt-6-luna rates ($0.1/M uncached input, $0.01/M cached input, $0.5/M output); not a separate API charge.",
+    "pricing": {
+      "inputUsdPerMillion": 0.1,
+      "cachedInputUsdPerMillion": 0.01,
+      "outputUsdPerMillion": 0.5,
+      "source": "https://developers.openai.com/api/docs/pricing",
+      "publishedAt": null
+    }
+  },
+  "startedAt": "2026-10-18T11:35:03.341Z",
+  "completedAt": "2026-10-18T11:38:07.240Z",
+  "durationMs": 183899,
+  "exitCode": 0,
+  "eventCount": 4,
+  "files": {
+    "events": "data/raw/gpt-6-luna-max-run-01/events.jsonl",
+    "stderr": "data/raw/gpt-6-luna-max-run-01/stderr.txt"
+  }
+}

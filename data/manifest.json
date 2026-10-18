@@ -40,5 +40,22 @@
   "results/gemini-3-5-flash-low-run-01.json",
   "results/gemini-3-5-flash-high-run-01.json",
   "results/grok-4-5-low-run-01.json",
-  "results/grok-4-5-high-run-01.json"
+  "results/grok-4-5-high-run-01.json",
+  "results/gpt-6-astra-low-run-01.json",
+  "results/gpt-6-astra-medium-run-01.json",
+  "results/gpt-6-astra-high-run-02.json",
+  "results/gpt-6-astra-xhigh-run-01.json",
+  "results/gpt-6-astra-max-run-01.json",
+  "results/gpt-6-1-sol-low-run-01.json",
+  "results/gpt-6-1-sol-medium-run-01.json",
+  "results/gpt-6-1-sol-high-run-01.json",
+  "results/gpt-6-1-sol-xhigh-run-01.json",
+  "results/gpt-6-1-sol-max-run-01.json",
+  "results/gpt-6-sol-low-run-01.json",
+  "results/gpt-6-sol-medium-run-01.json",
+  "results/gpt-6-sol-high-run-01.json",
+  "results/gpt-6-sol-xhigh-run-01.json",
+  "results/gpt-6-sol-max-run-01.json",
+  "results/gpt-6-luna-medium-run-01.json",
+  "results/gpt-6-luna-max-run-01.json"
 ]

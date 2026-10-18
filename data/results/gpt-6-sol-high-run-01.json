@@ -1,0 +1,100 @@
+{
+  "id": "gpt-6-sol-high-run-01",
+  "title": "GPT-6 Sol / high effort",
+  "model": "gpt-6-sol",
+  "provider": "OpenAI via Codex CLI",
+  "status": "unverified",
+  "track": "one-shot",
+  "promptVersion": "1.0.0",
+  "promptSha256": "cd21d5a8bb3956d82ab5650304e7e491063eacdb27dad85be6b4a845512f5e6b",
+  "artifactSha256": "cdd493aa087a245c5a2013e03ec08c4a1c51fc0932f2948b8b294912bbb20994",
+  "createdAt": "2026-10-18",
+  "artifact": "../artifacts/gpt-6-sol-high-run-01.js",
+  "description": "A cream pelican with a blue cap and neck ribbon riding a red bicycle with gold fork and hubs; the opening framing crops the cap and front wheel.",
+  "accent": "#c94f2d",
+  "generationHarness": {
+    "name": "Codex CLI",
+    "version": "0.163.0",
+    "surface": "codex exec --json",
+    "sandbox": "read-only",
+    "notes": "Fresh ephemeral Codex CLI invocation with user config and exec-policy rules disabled, using the default CLI system/skill context; exact canonical prompt supplied through stdin. First final response preserved without repairs."
+  },
+  "generationUsage": {
+    "inputTokens": 16568,
+    "cachedInputTokens": 0,
+    "reasoningTokens": 7900,
+    "outputTokens": 14347,
+    "totalTokens": 30915,
+    "apiCostUsd": 0.176606,
+    "billingMode": "subscription",
+    "source": "data/raw/gpt-6-sol-high-run-01/events.jsonl",
+    "notes": "Codex CLI subscription invocation; API-equivalent standard price estimated from captured tokens at OpenAI's published gpt-6-sol rates ($2/M uncached input, $0.2/M cached input, $10/M output); not a separate API charge."
+  },
+  "validation": {
+    "state": "warnings",
+    "checks": [
+      "JavaScript syntax",
+      "static module and API inspection",
+      "prompt and response receipt hashes",
+      "WebGL2 compilation",
+      "initial composition",
+      "twelve canonical views",
+      "three close inspection views",
+      "three serial GPU timer-query trials",
+      "Pointer orbit",
+      "Wheel zoom",
+      "Keyboard camera",
+      "Two-finger pinch",
+      "Focusable canvas",
+      "Fixed drawing-buffer resolution",
+      "Clean WebGL rendering",
+      "Context-loss handling",
+      "Listener cleanup and disposal",
+      "Deterministic repeated-frame readback",
+      "Camera frame response"
+    ],
+    "unmetRequirements": [
+      {
+        "requirement": "Useful full-subject framing",
+        "evidence": "The initial 960x540 view clips the top of the cap and the lower part of the front wheel. Several level and raised canonical views also crop the bicycle or rider at the canvas edges."
+      }
+    ],
+    "warnings": []
+  },
+  "metrics": {
+    "sourceBytes": 18532,
+    "initMs": 3340.7999999970198,
+    "gpuMsMedian": 2.06886,
+    "gpuMsP95": 2.1992,
+    "throughputFps": 483.35798459054746,
+    "timingMethod": "gpu-query",
+    "environment": {
+      "gpu": "ANGLE (AMD, AMD Radeon(TM) Graphics (0x000015BF) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "browser": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36",
+      "platform": "Windows",
+      "resolution": [
+        960,
+        540
+      ]
+    },
+    "environmentKey": "ANGLE (AMD, AMD Radeon(TM) Graphics (0x000015BF) Direct3D11 vs_5_0 ps_5_0, D3D11)|Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36|960x540",
+    "profile": "pelican-canvas-960x540-v1",
+    "sampleCount": 36,
+    "trials": 3,
+    "measuredAt": "2026-10-18T11:36:57.536Z"
+  },
+  "visual": {
+    "readability": null,
+    "completeness": null,
+    "coherence": null,
+    "craft": null,
+    "inspectability": null,
+    "reviewers": 0
+  },
+  "provenance": {
+    "generatorKind": "model-eval",
+    "method": "Fresh one-shot Codex CLI invocation; read-only ephemeral sandbox; added trailing LF",
+    "rawResponse": "../raw/gpt-6-sol-high-run-01/response.txt",
+    "decoding": "reasoning effort: high; other decoding settings not exposed"
+  }
+}

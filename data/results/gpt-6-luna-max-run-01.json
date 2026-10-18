@@ -1,0 +1,95 @@
+{
+  "id": "gpt-6-luna-max-run-01",
+  "title": "GPT-6 Luna / max effort",
+  "model": "gpt-6-luna",
+  "provider": "OpenAI via Codex CLI",
+  "status": "unverified",
+  "track": "one-shot",
+  "promptVersion": "1.0.0",
+  "promptSha256": "cd21d5a8bb3956d82ab5650304e7e491063eacdb27dad85be6b4a845512f5e6b",
+  "artifactSha256": "494e19cb2b3c09e64690a393e7052174b8be5677faacbdb2d3750c35e93758dd",
+  "createdAt": "2026-10-18",
+  "artifact": "../artifacts/gpt-6-luna-max-run-01.js",
+  "description": "A small white pelican with layered folded wings, a narrow orange bill, and a rounded throat pouch riding a teal bicycle with dark tires and a cast ground shadow.",
+  "accent": "#446aa8",
+  "generationHarness": {
+    "name": "Codex CLI",
+    "version": "0.163.0",
+    "surface": "codex exec --json",
+    "sandbox": "read-only",
+    "notes": "Fresh ephemeral Codex CLI invocation with user config and exec-policy rules disabled, using the default CLI system/skill context; exact canonical prompt supplied through stdin. First final response preserved without repairs."
+  },
+  "generationUsage": {
+    "inputTokens": 16387,
+    "cachedInputTokens": 0,
+    "reasoningTokens": 14146,
+    "outputTokens": 20577,
+    "totalTokens": 36964,
+    "apiCostUsd": 0.0119272,
+    "billingMode": "subscription",
+    "source": "data/raw/gpt-6-luna-max-run-01/events.jsonl",
+    "notes": "Codex CLI subscription invocation; API-equivalent standard price estimated from captured tokens at OpenAI's published gpt-6-luna rates ($0.1/M uncached input, $0.01/M cached input, $0.5/M output); not a separate API charge."
+  },
+  "validation": {
+    "state": "passed",
+    "checks": [
+      "JavaScript syntax",
+      "static module and API inspection",
+      "prompt and response receipt hashes",
+      "WebGL2 compilation",
+      "initial composition",
+      "twelve canonical views",
+      "three close inspection views",
+      "three serial GPU timer-query trials",
+      "Pointer orbit",
+      "Wheel zoom",
+      "Keyboard camera",
+      "Two-finger pinch",
+      "Focusable canvas",
+      "Fixed drawing-buffer resolution",
+      "Clean WebGL rendering",
+      "Context-loss handling",
+      "Listener cleanup and disposal",
+      "Deterministic repeated-frame readback",
+      "Camera frame response"
+    ],
+    "unmetRequirements": [],
+    "warnings": []
+  },
+  "metrics": {
+    "sourceBytes": 18551,
+    "initMs": 3393.10000000149,
+    "gpuMsMedian": 9.92408,
+    "gpuMsP95": 11.81621,
+    "throughputFps": 100.76500794028263,
+    "timingMethod": "gpu-query",
+    "environment": {
+      "gpu": "ANGLE (AMD, AMD Radeon(TM) Graphics (0x000015BF) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "browser": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36",
+      "platform": "Windows",
+      "resolution": [
+        960,
+        540
+      ]
+    },
+    "environmentKey": "ANGLE (AMD, AMD Radeon(TM) Graphics (0x000015BF) Direct3D11 vs_5_0 ps_5_0, D3D11)|Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36|960x540",
+    "profile": "pelican-canvas-960x540-v1",
+    "sampleCount": 36,
+    "trials": 3,
+    "measuredAt": "2026-10-18T11:38:14.352Z"
+  },
+  "visual": {
+    "readability": null,
+    "completeness": null,
+    "coherence": null,
+    "craft": null,
+    "inspectability": null,
+    "reviewers": 0
+  },
+  "provenance": {
+    "generatorKind": "model-eval",
+    "method": "Fresh one-shot Codex CLI invocation; read-only ephemeral sandbox; added trailing LF",
+    "rawResponse": "../raw/gpt-6-luna-max-run-01/response.txt",
+    "decoding": "reasoning effort: max; other decoding settings not exposed"
+  }
+}

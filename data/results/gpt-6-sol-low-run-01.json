@@ -1,0 +1,100 @@
+{
+  "id": "gpt-6-sol-low-run-01",
+  "title": "GPT-6 Sol / low effort",
+  "model": "gpt-6-sol",
+  "provider": "OpenAI via Codex CLI",
+  "status": "unverified",
+  "track": "one-shot",
+  "promptVersion": "1.0.0",
+  "promptSha256": "cd21d5a8bb3956d82ab5650304e7e491063eacdb27dad85be6b4a845512f5e6b",
+  "artifactSha256": "521cfd99fb692cf002046da54eede8e32d60ef737362697808d25242a345d5ba",
+  "createdAt": "2026-10-18",
+  "artifact": "../artifacts/gpt-6-sol-low-run-01.js",
+  "description": "A white pelican with a yellow bill and orange pouch above a turquoise bicycle with dark spoked wheels. Parts of the rider and bicycle disappear or disconnect at several inspection angles.",
+  "accent": "#c94f2d",
+  "generationHarness": {
+    "name": "Codex CLI",
+    "version": "0.163.0",
+    "surface": "codex exec --json",
+    "sandbox": "read-only",
+    "notes": "Fresh ephemeral Codex CLI invocation with user config and exec-policy rules disabled, using the default CLI system/skill context; exact canonical prompt supplied through stdin. First final response preserved without repairs."
+  },
+  "generationUsage": {
+    "inputTokens": 16564,
+    "cachedInputTokens": 0,
+    "reasoningTokens": 917,
+    "outputTokens": 6091,
+    "totalTokens": 22655,
+    "apiCostUsd": 0.094038,
+    "billingMode": "subscription",
+    "source": "data/raw/gpt-6-sol-low-run-01/events.jsonl",
+    "notes": "Codex CLI subscription invocation; API-equivalent standard price estimated from captured tokens at OpenAI's published gpt-6-sol rates ($2/M uncached input, $0.2/M cached input, $10/M output); not a separate API charge."
+  },
+  "validation": {
+    "state": "warnings",
+    "checks": [
+      "JavaScript syntax",
+      "static module and API inspection",
+      "prompt and response receipt hashes",
+      "WebGL2 compilation",
+      "initial composition",
+      "twelve canonical views",
+      "three close inspection views",
+      "three serial GPU timer-query trials",
+      "Pointer orbit",
+      "Wheel zoom",
+      "Keyboard camera",
+      "Two-finger pinch",
+      "Focusable canvas",
+      "Fixed drawing-buffer resolution",
+      "Clean WebGL rendering",
+      "Context-loss handling",
+      "Listener cleanup and disposal",
+      "Deterministic repeated-frame readback",
+      "Camera frame response"
+    ],
+    "unmetRequirements": [
+      {
+        "requirement": "Coherent scene from every angle",
+        "evidence": "In raised-00 and raised-01, the head and much of the body disappear while the bill and bicycle pieces remain floating. The initial and some raised views also show missing arcs in the front wheel or gaps in the frame."
+      }
+    ],
+    "warnings": []
+  },
+  "metrics": {
+    "sourceBytes": 15193,
+    "initMs": 4770.60000000149,
+    "gpuMsMedian": 2.5724799999999997,
+    "gpuMsP95": 3.0606,
+    "throughputFps": 388.72994153501685,
+    "timingMethod": "gpu-query",
+    "environment": {
+      "gpu": "ANGLE (AMD, AMD Radeon(TM) Graphics (0x000015BF) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "browser": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36",
+      "platform": "Windows",
+      "resolution": [
+        960,
+        540
+      ]
+    },
+    "environmentKey": "ANGLE (AMD, AMD Radeon(TM) Graphics (0x000015BF) Direct3D11 vs_5_0 ps_5_0, D3D11)|Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36|960x540",
+    "profile": "pelican-canvas-960x540-v1",
+    "sampleCount": 36,
+    "trials": 3,
+    "measuredAt": "2026-10-18T11:31:41.302Z"
+  },
+  "visual": {
+    "readability": null,
+    "completeness": null,
+    "coherence": null,
+    "craft": null,
+    "inspectability": null,
+    "reviewers": 0
+  },
+  "provenance": {
+    "generatorKind": "model-eval",
+    "method": "Fresh one-shot Codex CLI invocation; read-only ephemeral sandbox; added trailing LF",
+    "rawResponse": "../raw/gpt-6-sol-low-run-01/response.txt",
+    "decoding": "reasoning effort: low; other decoding settings not exposed"
+  }
+}

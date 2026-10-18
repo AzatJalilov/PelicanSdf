@@ -1,0 +1,96 @@
+{
+  "id": "gpt-6-1-sol-low-run-01",
+  "title": "GPT-6.1 Sol / low effort",
+  "model": "gpt-6.1-sol",
+  "provider": "OpenAI via Codex CLI",
+  "status": "unverified",
+  "track": "one-shot",
+  "promptVersion": "1.0.0",
+  "promptSha256": "cd21d5a8bb3956d82ab5650304e7e491063eacdb27dad85be6b4a845512f5e6b",
+  "artifactSha256": "a6f9609aebb911dc397803a97b002597745321851d8fc4054ec346ce9d81fcc1",
+  "createdAt": "2026-10-18",
+  "artifact": "../artifacts/gpt-6-1-sol-low-run-01.js",
+  "description": "A white pelican with a long yellow bill and throat pouch riding a teal bicycle with thin spokes, visible pedals, and wings extended to the handlebar.",
+  "accent": "#c94f2d",
+  "generationHarness": {
+    "name": "Codex CLI",
+    "version": "0.163.0",
+    "surface": "codex exec --json",
+    "sandbox": "read-only",
+    "notes": "Fresh ephemeral Codex CLI invocation with user config and exec-policy rules disabled, using the default CLI system/skill context; exact canonical prompt supplied through stdin. First final response preserved without repairs. Execution policy denied attempted tool access; the denial is preserved in stderr.txt."
+  },
+  "generationUsage": {
+    "inputTokens": 34331,
+    "cachedInputTokens": 16896,
+    "reasoningTokens": 955,
+    "outputTokens": 8724,
+    "totalTokens": 43055,
+    "apiCostUsd": 0.1237996,
+    "billingMode": "subscription",
+    "source": "data/raw/gpt-6-1-sol-low-run-01/events.jsonl",
+    "notes": "Codex CLI subscription invocation; API-equivalent standard price estimated from captured tokens at OpenAI's published gpt-6.1-sol rates ($2/M uncached input, $0.1/M cached input, $10/M output); not a separate API charge."
+  },
+  "validation": {
+    "state": "warnings",
+    "checks": [
+      "JavaScript syntax",
+      "static module and API inspection",
+      "prompt and response receipt hashes",
+      "WebGL2 compilation",
+      "initial composition",
+      "twelve canonical views",
+      "three close inspection views",
+      "three serial GPU timer-query trials",
+      "Pointer orbit",
+      "Wheel zoom",
+      "Keyboard camera",
+      "Two-finger pinch",
+      "Focusable canvas",
+      "Fixed drawing-buffer resolution",
+      "Clean WebGL rendering",
+      "Context-loss handling",
+      "Listener cleanup and disposal",
+      "Camera frame response"
+    ],
+    "unmetRequirements": [],
+    "warnings": [
+      "Identical-view render readback differed in 16 color channels by at most 1/255; camera response was measured separately."
+    ]
+  },
+  "metrics": {
+    "sourceBytes": 20805,
+    "initMs": 25093.80000000447,
+    "gpuMsMedian": 2.62358,
+    "gpuMsP95": 3.02536,
+    "throughputFps": 381.15856958812003,
+    "timingMethod": "gpu-query",
+    "environment": {
+      "gpu": "ANGLE (AMD, AMD Radeon(TM) Graphics (0x000015BF) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "browser": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36",
+      "platform": "Windows",
+      "resolution": [
+        960,
+        540
+      ]
+    },
+    "environmentKey": "ANGLE (AMD, AMD Radeon(TM) Graphics (0x000015BF) Direct3D11 vs_5_0 ps_5_0, D3D11)|Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36|960x540",
+    "profile": "pelican-canvas-960x540-v1",
+    "sampleCount": 36,
+    "trials": 3,
+    "measuredAt": "2026-10-18T11:33:24.045Z"
+  },
+  "visual": {
+    "readability": null,
+    "completeness": null,
+    "coherence": null,
+    "craft": null,
+    "inspectability": null,
+    "reviewers": 0
+  },
+  "provenance": {
+    "generatorKind": "model-eval",
+    "method": "Fresh one-shot Codex CLI invocation; read-only ephemeral sandbox; added trailing LF",
+    "rawResponse": "../raw/gpt-6-1-sol-low-run-01/response.txt",
+    "decoding": "reasoning effort: low; other decoding settings not exposed"
+  }
+}

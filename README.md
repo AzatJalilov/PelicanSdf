@@ -31,7 +31,7 @@ harder, inspectable 3D task.
 - Explicit generation-harness metadata, including Codex CLI version/surface
 - Provider-reported token usage, billing mode, and actual or API-equivalent cost metadata
 - JSON result records, artifact hashes, schema, and repository validation
-- 42 one-shot runs across 15 model identifiers, including matched five-effort Sol and Claude sweeps
+- 59 one-shot runs across 19 model identifiers, including matched five-effort Sol and Claude sweeps
 - SDF-rendered catalog thumbnails generated from each renderable first response
 - MIT licensing and contribution/security guidance
 
@@ -112,6 +112,7 @@ benchmark/                 versioned prompt, schema, and methodology
 data/artifacts/             untouched generated ES modules
 data/raw/                   raw responses, event streams, and run receipts
 data/results/               provenance and measurement records
+data/drafts/                preserved submissions blocked by publication checks
 data/manifest.json          published result index
 assets/thumbnails/          generated 480×270 previews of renderable SDF runs
 index.html                  static landing page; no result code is loaded
@@ -138,7 +139,9 @@ npm run eval:measure -- provider-model-effort-run-01
 `eval:run` sends the byte-exact `benchmark/prompt.txt` to a fresh, ephemeral,
 read-only invocation with user configuration and project rules disabled. It
 refuses to overwrite a run and preserves `response.txt`, `events.jsonl`,
-`stderr.txt`, and `receipt.json` under `data/raw/<id>/`. `eval:ingest` verifies
+`stderr.txt`, and `receipt.json` under `data/raw/<id>/`. Event and stderr logs
+are saved as they arrive so they remain available if a run is interrupted.
+`eval:ingest` verifies
 the receipt and permits only recorded transport normalization; it creates an
 unpublished draft artifact and result record. `eval:measure` runs three serial
 GPU trials and captures canonical and close views under `artifacts/evals/` for
@@ -146,14 +149,13 @@ review. Review the generated record and screenshots before adding it to the
 manifest.
 
 Codex JSON events expose input, cached-input, reasoning, output, and total token
-counts. For GPT-5.6 Sol, the runner also calculates the standard API-equivalent
-cost using OpenAI's published rates: `$5/M` uncached input, `$0.50/M` cached
-input, and `$30/M` output:
-`((input - cached) × 5 + cached × 0.5 + output × 30) / 1,000,000`.
-The receipt cites the [official model pricing
-page](https://developers.openai.com/api/docs/models/gpt-5.6-sol) and labels the
-value as an estimate because the benchmark invocation itself uses a Codex
-subscription. Recalculate a stored run with `npm run eval:price -- <run-id>`.
+counts. The runner calculates Standard API-equivalent estimates for GPT-6 Astra,
+GPT-6.1 Sol, GPT-6 Sol, and GPT-6 Luna using [OpenAI's published
+rates](https://developers.openai.com/api/docs/pricing). Receipts retain the rates
+and source used; historical GPT-5.6 Sol entries keep their recorded price
+snapshot. Estimates are not separate API charges: generation uses the existing
+Codex subscription. Recalculate a stored run with
+`npm run eval:price -- <run-id>`.
 
 After measuring and publishing a result in the manifest, generate its card image
 from the SDF with `npm run thumbnails -- <run-id>`; omit the id to regenerate
@@ -178,7 +180,7 @@ view and close zoom in a browser, and open a pull request. See
 
 ## Evaluation caveat
 
-The 42 included entries were produced one-shot through Codex CLI, Claude Code
+The 59 included entries were produced one-shot through Codex CLI, Claude Code
 CLI, or the pi SDK with OpenRouter. Raw first responses, available event streams,
 and receipts are retained; two early seed entries predate the receipted runner
 and explicitly keep their missing usage fields. Renderable runs include
@@ -186,6 +188,26 @@ same-profile measurements, while compilation failures remain published with the
 failure evidence and no fabricated timing or thumbnail. Results remain
 `unverified` until provenance is independently reproduced. Blind visual scores
 stay `null`; the repository never fills gaps with plausible guesses.
+
+The [GPT-6 comparison report](benchmark/gpt6-2026-10-18.html) covers four models
+at five reasoning efforts. The user selected
+parallel generation after the initial Astra trials; all GPU measurements and
+render audits remained serial. Generation elapsed times therefore reflect
+concurrent requests. The default Codex CLI system/skill context was present,
+and denied tool attempts remain in the logs. Responses blocked by the existing
+publication checks are preserved under `data/drafts/` outside the executable
+public bundle, with no code repairs.
+
+An earlier Astra high attempt was interrupted by a diagnostic wrapper error
+before returning an artifact. Its infrastructure-failure receipt is preserved
+separately with unknown usage and cost. The completed high result is explicitly
+identified as run-02; the interrupted attempt is excluded from completed-run
+totals and is not classified as a model failure.
+
+Accumulated CLI input usage can exceed a per-request pricing threshold through
+many short requests. When that happens and request-level counts are unavailable,
+the API-equivalent cost stays `null`; the original estimate is retained in a
+separate receipt before its pricing annotation is corrected.
 
 ## Security
 

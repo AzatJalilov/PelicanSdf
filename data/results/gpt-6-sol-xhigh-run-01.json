@@ -1,0 +1,100 @@
+{
+  "id": "gpt-6-sol-xhigh-run-01",
+  "title": "GPT-6 Sol / xhigh effort",
+  "model": "gpt-6-sol",
+  "provider": "OpenAI via Codex CLI",
+  "status": "unverified",
+  "track": "one-shot",
+  "promptVersion": "1.0.0",
+  "promptSha256": "cd21d5a8bb3956d82ab5650304e7e491063eacdb27dad85be6b4a845512f5e6b",
+  "artifactSha256": "36aa2f71a065b1bf57c0955086a7d6753d96bfa1ffbc25d2d677c8d22418a11e",
+  "createdAt": "2026-10-18",
+  "artifact": "../artifacts/gpt-6-sol-xhigh-run-01.js",
+  "description": "A white pelican with an orange bill riding a teal bicycle, with substantial missing or disconnected rider, frame, and wheel geometry from several angles.",
+  "accent": "#c94f2d",
+  "generationHarness": {
+    "name": "Codex CLI",
+    "version": "0.163.0",
+    "surface": "codex exec --json",
+    "sandbox": "read-only",
+    "notes": "Fresh ephemeral Codex CLI invocation with user config and exec-policy rules disabled, using the default CLI system/skill context; exact canonical prompt supplied through stdin. First final response preserved without repairs. Execution policy denied attempted tool access; the denial is preserved in stderr.txt."
+  },
+  "generationUsage": {
+    "inputTokens": 33551,
+    "cachedInputTokens": 16384,
+    "reasoningTokens": 8373,
+    "outputTokens": 15672,
+    "totalTokens": 49223,
+    "apiCostUsd": 0.1943308,
+    "billingMode": "subscription",
+    "source": "data/raw/gpt-6-sol-xhigh-run-01/events.jsonl",
+    "notes": "Codex CLI subscription invocation; API-equivalent standard price estimated from captured tokens at OpenAI's published gpt-6-sol rates ($2/M uncached input, $0.2/M cached input, $10/M output); not a separate API charge."
+  },
+  "validation": {
+    "state": "warnings",
+    "checks": [
+      "JavaScript syntax",
+      "static module and API inspection",
+      "prompt and response receipt hashes",
+      "WebGL2 compilation",
+      "initial composition",
+      "twelve canonical views",
+      "three close inspection views",
+      "three serial GPU timer-query trials",
+      "Pointer orbit",
+      "Wheel zoom",
+      "Keyboard camera",
+      "Two-finger pinch",
+      "Focusable canvas",
+      "Fixed drawing-buffer resolution",
+      "Clean WebGL rendering",
+      "Context-loss handling",
+      "Listener cleanup and disposal",
+      "Deterministic repeated-frame readback",
+      "Camera frame response"
+    ],
+    "unmetRequirements": [
+      {
+        "requirement": "Coherent scene from every angle",
+        "evidence": "The head and neck disappear in raised-00 through raised-03 while the bill floats separately. Close-00 and close-01 lose large sections of the front wheel and frame; some level views also disconnect the legs from the body."
+      }
+    ],
+    "warnings": []
+  },
+  "metrics": {
+    "sourceBytes": 21200,
+    "initMs": 3392.4000000059605,
+    "gpuMsMedian": 0.90542,
+    "gpuMsP95": 1.17928,
+    "throughputFps": 1104.459808707561,
+    "timingMethod": "gpu-query",
+    "environment": {
+      "gpu": "ANGLE (AMD, AMD Radeon(TM) Graphics (0x000015BF) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "browser": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36",
+      "platform": "Windows",
+      "resolution": [
+        960,
+        540
+      ]
+    },
+    "environmentKey": "ANGLE (AMD, AMD Radeon(TM) Graphics (0x000015BF) Direct3D11 vs_5_0 ps_5_0, D3D11)|Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36|960x540",
+    "profile": "pelican-canvas-960x540-v1",
+    "sampleCount": 36,
+    "trials": 3,
+    "measuredAt": "2026-10-18T11:40:35.156Z"
+  },
+  "visual": {
+    "readability": null,
+    "completeness": null,
+    "coherence": null,
+    "craft": null,
+    "inspectability": null,
+    "reviewers": 0
+  },
+  "provenance": {
+    "generatorKind": "model-eval",
+    "method": "Fresh one-shot Codex CLI invocation; read-only ephemeral sandbox; added trailing LF",
+    "rawResponse": "../raw/gpt-6-sol-xhigh-run-01/response.txt",
+    "decoding": "reasoning effort: xhigh; other decoding settings not exposed"
+  }
+}

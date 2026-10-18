@@ -1,0 +1,95 @@
+{
+  "id": "gpt-6-astra-high-run-02",
+  "title": "GPT-6 Astra / high effort",
+  "model": "gpt-6-astra",
+  "provider": "OpenAI via Codex CLI",
+  "status": "unverified",
+  "track": "one-shot",
+  "promptVersion": "1.0.0",
+  "promptSha256": "cd21d5a8bb3956d82ab5650304e7e491063eacdb27dad85be6b4a845512f5e6b",
+  "artifactSha256": "2a095a1e52f11483ab1e3cef0e37f99f9d8e982356b670eeaf93d7b3bc727d32",
+  "createdAt": "2026-10-18",
+  "artifact": "../artifacts/gpt-6-astra-high-run-02.js",
+  "description": "A white pelican with a long yellow bill, throat pouch, layered wings, and articulated legs riding a teal bicycle with fenders, brake cables, pedals, and a detailed chain drive.",
+  "accent": "#0b6e75",
+  "generationHarness": {
+    "name": "Codex CLI",
+    "version": "0.163.0",
+    "surface": "codex exec --json",
+    "sandbox": "read-only",
+    "notes": "Fresh ephemeral Codex CLI invocation with user config and exec-policy rules disabled, using the default CLI system/skill context; exact canonical prompt supplied through stdin. First final response preserved without repairs. Execution policy denied attempted tool access; the denial is preserved in stderr.txt. This is the first completed response after run-01 was interrupted by a diagnostic wrapper error before returning an artifact; the earlier infrastructure failure is preserved separately and is not a model failure."
+  },
+  "generationUsage": {
+    "inputTokens": 61797,
+    "cachedInputTokens": 38528,
+    "reasoningTokens": 12574,
+    "outputTokens": 24465,
+    "totalTokens": 86262,
+    "apiCostUsd": 1.494468,
+    "billingMode": "subscription",
+    "source": "data/raw/gpt-6-astra-high-run-02/events.jsonl",
+    "notes": "Codex CLI subscription invocation; API-equivalent standard price estimated from captured tokens at OpenAI's published gpt-6-astra rates ($10/M uncached input, $1/M cached input, $50/M output); not a separate API charge."
+  },
+  "validation": {
+    "state": "passed",
+    "checks": [
+      "JavaScript syntax",
+      "static module and API inspection",
+      "prompt and response receipt hashes",
+      "WebGL2 compilation",
+      "initial composition",
+      "twelve canonical views",
+      "three close inspection views",
+      "three serial GPU timer-query trials",
+      "Pointer orbit",
+      "Wheel zoom",
+      "Keyboard camera",
+      "Two-finger pinch",
+      "Focusable canvas",
+      "Fixed drawing-buffer resolution",
+      "Clean WebGL rendering",
+      "Context-loss handling",
+      "Listener cleanup and disposal",
+      "Deterministic repeated-frame readback",
+      "Camera frame response"
+    ],
+    "unmetRequirements": [],
+    "warnings": []
+  },
+  "metrics": {
+    "sourceBytes": 30137,
+    "initMs": 7649.69999999553,
+    "gpuMsMedian": 1.66778,
+    "gpuMsP95": 2.19946,
+    "throughputFps": 599.5994675556728,
+    "timingMethod": "gpu-query",
+    "environment": {
+      "gpu": "ANGLE (AMD, AMD Radeon(TM) Graphics (0x000015BF) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "browser": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36",
+      "platform": "Windows",
+      "resolution": [
+        960,
+        540
+      ]
+    },
+    "environmentKey": "ANGLE (AMD, AMD Radeon(TM) Graphics (0x000015BF) Direct3D11 vs_5_0 ps_5_0, D3D11)|Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36|960x540",
+    "profile": "pelican-canvas-960x540-v1",
+    "sampleCount": 36,
+    "trials": 3,
+    "measuredAt": "2026-10-18T11:34:00.944Z"
+  },
+  "visual": {
+    "readability": null,
+    "completeness": null,
+    "coherence": null,
+    "craft": null,
+    "inspectability": null,
+    "reviewers": 0
+  },
+  "provenance": {
+    "generatorKind": "model-eval",
+    "method": "Fresh one-shot Codex CLI invocation; read-only ephemeral sandbox; added trailing LF",
+    "rawResponse": "../raw/gpt-6-astra-high-run-02/response.txt",
+    "decoding": "reasoning effort: high; other decoding settings not exposed"
+  }
+}

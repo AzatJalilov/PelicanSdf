@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "id": "gpt-6-sol-xhigh-run-01",
+  "model": "gpt-6-sol",
+  "reasoningEffort": "xhigh",
+  "harness": {
+    "name": "Codex CLI",
+    "version": "0.163.0",
+    "surface": "codex exec --json",
+    "sandbox": "read-only",
+    "ephemeral": true,
+    "userConfigLoaded": false,
+    "projectRulesLoaded": false
+  },
+  "prompt": {
+    "path": "benchmark/prompt.txt",
+    "bytes": 3387,
+    "sha256": "cd21d5a8bb3956d82ab5650304e7e491063eacdb27dad85be6b4a845512f5e6b"
+  },
+  "response": {
+    "path": "data/raw/gpt-6-sol-xhigh-run-01/response.txt",
+    "bytes": 21199,
+    "sha256": "cafb52f0346205b8c9258e32d322d9dff4233e168f926fd7b419dfb5c8a42901"
+  },
+  "usage": {
+    "inputTokens": 33551,
+    "cachedInputTokens": 16384,
+    "reasoningTokens": 8373,
+    "outputTokens": 15672,
+    "totalTokens": 49223
+  },
+  "billing": {
+    "mode": "subscription",
+    "apiCostUsd": 0.1943308,
+    "note": "Codex CLI subscription invocation; API-equivalent standard price estimated from captured tokens at OpenAI's published gpt-6-sol rates ($2/M uncached input, $0.2/M cached input, $10/M output); not a separate API charge.",
+    "pricing": {
+      "inputUsdPerMillion": 2,
+      "cachedInputUsdPerMillion": 0.2,
+      "outputUsdPerMillion": 10,
+      "source": "https://developers.openai.com/api/docs/pricing",
+      "publishedAt": null
+    }
+  },
+  "startedAt": "2026-10-18T11:36:52.217Z",
+  "completedAt": "2026-10-18T11:40:27.200Z",
+  "durationMs": 214983,
+  "exitCode": 0,
+  "eventCount": 5,
+  "files": {
+    "events": "data/raw/gpt-6-sol-xhigh-run-01/events.jsonl",
+    "stderr": "data/raw/gpt-6-sol-xhigh-run-01/stderr.txt"
+  }
+}

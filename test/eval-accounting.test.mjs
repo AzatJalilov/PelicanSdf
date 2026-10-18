@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { extractCodexUsage, parseJsonLines } from "../scripts/eval-usage.mjs";
-import { calculateApiCostUsd, getModelPricing } from "../scripts/model-pricing.mjs";
+import { apiPricingNote, calculateApiCostUsd, getModelPricing } from "../scripts/model-pricing.mjs";
 
 test("Codex JSON events expose cached, reasoning, output, and total tokens", () => {
   const events = parseJsonLines([
@@ -27,6 +27,34 @@ test("Sol API-equivalent cost discounts cached input and prices output once", ()
     reasoningTokens: 2908,
     outputTokens: 8278,
   }), 0.271195);
+});
+
+for (const [model, shortCost, longCost] of [
+  ["gpt-6-astra", 0.132, 4.95],
+  ["gpt-6.1-sol", 0.0262, 0.97],
+  ["gpt-6-sol", 0.0264, 0.99],
+  ["gpt-6-luna", 0.00132, 0.0495],
+]) {
+  test(`${model} estimates captured usage at Standard API rates`, () => {
+    assert.equal(calculateApiCostUsd(model, {
+      inputTokens: 10_000, cachedInputTokens: 2_000,
+      outputTokens: 1_000, reasoningTokens: 600,
+    }), shortCost);
+    assert.equal(calculateApiCostUsd(model, {
+      inputTokens: 300_000, cachedInputTokens: 100_000,
+      outputTokens: 10_000, reasoningTokens: 6_000,
+    }), longCost);
+    assert.equal(calculateApiCostUsd(model, { inputTokens: null, outputTokens: 1_000 }), null);
+  });
+}
+
+test("aggregate CLI usage cannot determine a per-request long-context pricing tier", () => {
+  const usage = { inputTokens: 482174, cachedInputTokens: 408832, outputTokens: 55883 };
+  assert.equal(calculateApiCostUsd("gpt-6-astra", usage, { aggregate: true }), null);
+  assert.match(apiPricingNote("gpt-6-astra", usage), /per-request.*unknown/i);
+  assert.equal(calculateApiCostUsd("gpt-6-astra", {
+    inputTokens: 10000, cachedInputTokens: 2000, outputTokens: 1000,
+  }, { aggregate: true }), 0.132);
 });
 
 test("Sol publishes the same five effort levels as each Claude sweep", async () => {

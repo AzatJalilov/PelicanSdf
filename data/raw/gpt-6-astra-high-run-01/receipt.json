@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "id": "gpt-6-astra-high-run-01",
+  "model": "gpt-6-astra",
+  "reasoningEffort": "high",
+  "status": "infrastructure-failed",
+  "harness": {
+    "name": "Codex CLI",
+    "version": "0.163.0",
+    "surface": "codex exec --json",
+    "sandbox": "read-only",
+    "ephemeral": true,
+    "userConfigLoaded": false,
+    "projectRulesLoaded": false,
+    "notes": "The orchestration wrapper was interrupted by a diagnostic Node inspector exception before any final response or usage receipt was retained. This is a harness failure, not a model result. The next immutable attempt is run-02."
+  },
+  "prompt": {
+    "path": "benchmark/prompt.txt",
+    "bytes": 3387,
+    "sha256": "cd21d5a8bb3956d82ab5650304e7e491063eacdb27dad85be6b4a845512f5e6b"
+  },
+  "response": {
+    "path": null,
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "usage": {
+    "inputTokens": null,
+    "cachedInputTokens": null,
+    "reasoningTokens": null,
+    "outputTokens": null,
+    "totalTokens": null
+  },
+  "billing": {
+    "mode": "subscription",
+    "apiCostUsd": null,
+    "note": "Usage and API-equivalent cost were not captured for the interrupted attempt; no zero-cost assumption is made."
+  },
+  "startedAt": "2026-10-18T11:07:56.214Z",
+  "completedAt": "2026-10-18T11:22:27.754Z",
+  "durationMs": 871540,
+  "exitCode": 1,
+  "eventCount": null,
+  "files": {
+    "events": null,
+    "stderr": null,
+    "harnessError": "data/raw/gpt-6-astra-high-run-01/harness-error.txt"
+  }
+}

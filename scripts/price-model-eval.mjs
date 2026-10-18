@@ -39,9 +39,12 @@ for (const id of ids) {
 
   const events = parseJsonLines(await readFile(eventsPath, "utf8"));
   receipt.usage = mergeUsage(receipt.usage, extractCodexUsage(events));
-  const apiCostUsd = calculateApiCostUsd(receipt.model, receipt.usage);
-  if (!Number.isFinite(apiCostUsd)) throw new Error(`${id}: captured input/output token counts are required`);
-  const note = apiPricingNote(receipt.model);
+  if (!Number.isInteger(receipt.usage.inputTokens) || receipt.usage.inputTokens < 0
+    || !Number.isInteger(receipt.usage.outputTokens) || receipt.usage.outputTokens < 0) {
+    throw new Error(`${id}: captured input/output token counts are required`);
+  }
+  const apiCostUsd = calculateApiCostUsd(receipt.model, receipt.usage, { aggregate: true });
+  const note = apiPricingNote(receipt.model, receipt.usage);
   receipt.billing = {
     ...(receipt.billing || {}),
     mode: "subscription",

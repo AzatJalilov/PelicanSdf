@@ -1,0 +1,96 @@
+{
+  "id": "gpt-6-astra-low-run-01",
+  "title": "GPT-6 Astra / low effort",
+  "model": "gpt-6-astra",
+  "provider": "OpenAI via Codex CLI",
+  "status": "unverified",
+  "track": "one-shot",
+  "promptVersion": "1.0.0",
+  "promptSha256": "cd21d5a8bb3956d82ab5650304e7e491063eacdb27dad85be6b4a845512f5e6b",
+  "artifactSha256": "3c511e8b7fdffae18d45a35033deb7c8173a1c66ccd426ee7a06bce55eed7888",
+  "createdAt": "2026-10-18",
+  "artifact": "../artifacts/gpt-6-astra-low-run-01.js",
+  "description": "A white pelican with a long yellow beak, ribbed throat pouch, and articulated wings riding a turquoise bicycle with spokes, fenders, and visible pedals.",
+  "accent": "#0b6e75",
+  "generationHarness": {
+    "name": "Codex CLI",
+    "version": "0.163.0",
+    "surface": "codex exec --json",
+    "sandbox": "read-only",
+    "notes": "Fresh ephemeral Codex CLI invocation with user config and exec-policy rules disabled, using the default CLI system/skill context; exact canonical prompt supplied through stdin. First final response preserved without repairs. Execution policy denied attempted tool access; the denial is preserved in stderr.txt."
+  },
+  "generationUsage": {
+    "inputTokens": 38832,
+    "cachedInputTokens": 26368,
+    "reasoningTokens": 1587,
+    "outputTokens": 9964,
+    "totalTokens": 48796,
+    "apiCostUsd": 0.649208,
+    "billingMode": "subscription",
+    "source": "data/raw/gpt-6-astra-low-run-01/events.jsonl",
+    "notes": "Codex CLI subscription invocation; API-equivalent standard price estimated from captured tokens at OpenAI's published gpt-6-astra rates ($10/M uncached input, $1/M cached input, $50/M output); not a separate API charge."
+  },
+  "validation": {
+    "state": "warnings",
+    "checks": [
+      "JavaScript syntax",
+      "static module and API inspection",
+      "prompt and response receipt hashes",
+      "WebGL2 compilation",
+      "initial composition",
+      "twelve canonical views",
+      "three close inspection views",
+      "three serial GPU timer-query trials",
+      "Pointer orbit",
+      "Wheel zoom",
+      "Keyboard camera",
+      "Two-finger pinch",
+      "Focusable canvas",
+      "Fixed drawing-buffer resolution",
+      "Clean WebGL rendering",
+      "Context-loss handling",
+      "Listener cleanup and disposal",
+      "Camera frame response"
+    ],
+    "unmetRequirements": [],
+    "warnings": [
+      "Identical-view render readback differed in 7 color channels by at most 1/255; camera response was measured separately."
+    ]
+  },
+  "metrics": {
+    "sourceBytes": 22515,
+    "initMs": 19345.70000000298,
+    "gpuMsMedian": 2.53776,
+    "gpuMsP95": 3.63182,
+    "throughputFps": 394.0482945589811,
+    "timingMethod": "gpu-query",
+    "environment": {
+      "gpu": "ANGLE (AMD, AMD Radeon(TM) Graphics (0x000015BF) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "browser": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36",
+      "platform": "Windows",
+      "resolution": [
+        960,
+        540
+      ]
+    },
+    "environmentKey": "ANGLE (AMD, AMD Radeon(TM) Graphics (0x000015BF) Direct3D11 vs_5_0 ps_5_0, D3D11)|Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36|960x540",
+    "profile": "pelican-canvas-960x540-v1",
+    "sampleCount": 36,
+    "trials": 3,
+    "measuredAt": "2026-10-18T11:04:08.178Z"
+  },
+  "visual": {
+    "readability": null,
+    "completeness": null,
+    "coherence": null,
+    "craft": null,
+    "inspectability": null,
+    "reviewers": 0
+  },
+  "provenance": {
+    "generatorKind": "model-eval",
+    "method": "Fresh one-shot Codex CLI invocation; read-only ephemeral sandbox; added trailing LF",
+    "rawResponse": "../raw/gpt-6-astra-low-run-01/response.txt",
+    "decoding": "reasoning effort: low; other decoding settings not exposed"
+  }
+}

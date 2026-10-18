@@ -1,0 +1,608 @@
+export function createPelicanSdf(canvas) {
+  const gl = canvas.getContext("webgl2", {
+    alpha: false,
+    antialias: false,
+    depth: false,
+    stencil: false,
+    preserveDrawingBuffer: true
+  });
+  if (!gl) throw new Error("This artwork requires WebGL2.");
+
+  const vertexSource = `#version 300 es
+  void main() {
+    vec2 p = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2);
+    gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
+  }`;
+
+  const fragmentSource = `#version 300 es
+  precision highp float;
+  out vec4 fragColor;
+  uniform vec2 uResolution;
+  uniform float uTime;
+  uniform vec3 uView;
+  uniform vec3 uTarget;
+
+  const float PI = 3.14159265359;
+
+  float capsule(vec3 p, vec3 a, vec3 b, float radius) {
+    vec3 ab = b - a;
+    float h = clamp(dot(p - a, ab) / dot(ab, ab), 0.0, 1.0);
+    return length(p - a - h * ab) - radius;
+  }
+
+  float taper(vec3 p, vec3 a, vec3 b, float ra, float rb) {
+    vec3 ab = b - a;
+    float h = clamp(dot(p - a, ab) / dot(ab, ab), 0.0, 1.0);
+    return length(p - a - h * ab) - mix(ra, rb, h);
+  }
+
+  float ellipsoid(vec3 q, vec3 r) {
+    float k0 = length(q / r);
+    float k1 = length(q / (r * r));
+    if (k1 < 0.0001) return -min(r.x, min(r.y, r.z));
+    return k0 * (k0 - 1.0) / k1;
+  }
+
+  vec2 add(vec2 result, float d, float material) {
+    return d < result.x ? vec2(d, material) : result;
+  }
+
+  vec2 wheel(vec3 p, float x) {
+    vec3 q = p - vec3(x, 0.70, 0.0);
+    float r = length(q.xy);
+    vec2 result = vec2(10.0, 0.0);
+
+    result = add(result, length(vec2(r - 0.68, q.z)) - 0.075, 2.0);
+    result = add(result, length(vec2(r - 0.606, q.z)) - 0.036, 3.0);
+
+    float sidewall = min(
+      length(vec2(r - 0.675, q.z - 0.066)),
+      length(vec2(r - 0.675, q.z + 0.066))
+    ) - 0.012;
+    result = add(result, sidewall, 14.0);
+
+    float interval = PI / 6.0;
+    float angle = mod(atan(q.y, q.x) - uTime * 1.35
+                    + interval * 0.5, interval) - interval * 0.5;
+    float spoke = max(
+      length(vec2(sin(angle) * r, q.z)) - 0.012,
+      max(0.11 - r, r - 0.59)
+    );
+    result = add(result, spoke, 12.0);
+    result = add(result, length(vec3(q.xy, q.z * 1.3)) - 0.105, 12.0);
+    return result;
+  }
+
+  vec2 scene(vec3 p) {
+    float ground = p.y + 0.09;
+    float bound = length(p - vec3(0.0, 1.69, 0.0)) - 2.95;
+    if (bound > 0.12) {
+      return ground < bound ? vec2(ground, 1.0) : vec2(bound, 0.0);
+    }
+
+    vec2 result = vec2(ground, 1.0);
+
+    if (p.y < 1.85 && abs(p.z) < 0.84) {
+      vec2 rear = wheel(p, -1.30);
+      vec2 front = wheel(p, 1.30);
+      if (rear.x < result.x) result = rear;
+      if (front.x < result.x) result = front;
+
+      vec3 rearHub = vec3(-1.30, 0.70, 0.0);
+      vec3 frontHub = vec3(1.30, 0.70, 0.0);
+      vec3 crank = vec3(-0.27, 0.77, 0.0);
+      vec3 seatJoint = vec3(-0.54, 1.55, 0.0);
+      vec3 headJoint = vec3(0.70, 1.60, 0.0);
+
+      float frame = capsule(p, rearHub, seatJoint, 0.045);
+      frame = min(frame, capsule(p, rearHub, crank, 0.051));
+      frame = min(frame, capsule(p, crank, seatJoint, 0.061));
+      frame = min(frame, capsule(p, seatJoint, headJoint, 0.055));
+      frame = min(frame, capsule(p, headJoint, crank, 0.063));
+      result = add(result, frame, 4.0);
+
+      float fork = capsule(p, headJoint + vec3(0.0, 0.0, 0.09),
+                           frontHub + vec3(0.0, 0.0, 0.09), 0.044);
+      fork = min(fork, capsule(p, headJoint - vec3(0.0, 0.0, 0.09),
+                              frontHub - vec3(0.0, 0.0, 0.09), 0.044));
+      result = add(result, fork, 12.0);
+
+      result = add(result,
+        capsule(p, vec3(-0.48, 1.43, 0.0),
+                vec3(-0.56, 1.72, 0.0), 0.044), 12.0);
+      result = add(result,
+        ellipsoid(p - vec3(-0.62, 1.75, 0.0),
+                  vec3(0.35, 0.075, 0.25)), 5.0);
+
+      float chainring = length(vec2(length(p.xy - crank.xy) - 0.225,
+                                     p.z - 0.14)) - 0.025;
+      result = add(result, chainring, 12.0);
+      result = add(result, length(p - vec3(-0.27, 0.77, 0.16)) - 0.07, 12.0);
+      result = add(result,
+        capsule(p, vec3(-1.30, 0.70, 0.14),
+                   vec3(-0.27, 0.99, 0.14), 0.012), 5.0);
+      result = add(result,
+        capsule(p, vec3(-1.30, 0.70, 0.14),
+                   vec3(-0.27, 0.55, 0.14), 0.012), 5.0);
+    }
+
+    if (p.y > 1.60 && p.y < 2.12 && abs(p.z) < 0.72) {
+      float handle = capsule(p, vec3(0.70, 1.60, 0.0),
+                               vec3(0.83, 1.95, 0.0), 0.045);
+      handle = min(handle, capsule(p, vec3(0.83, 1.95, -0.48),
+                                   vec3(0.83, 1.95, 0.48), 0.045));
+      handle = min(handle, capsule(p, vec3(0.83, 1.95, -0.48),
+                                   vec3(1.06, 1.96, -0.48), 0.052));
+      handle = min(handle, capsule(p, vec3(0.83, 1.95, 0.48),
+                                   vec3(1.06, 1.96, 0.48), 0.052));
+      result = add(result, handle, 12.0);
+      result = add(result,
+        capsule(p, vec3(0.96, 1.96, -0.48),
+                   vec3(1.08, 1.96, -0.48), 0.060), 5.0);
+      result = add(result,
+        capsule(p, vec3(0.96, 1.96, 0.48),
+                   vec3(1.08, 1.96, 0.48), 0.060), 5.0);
+    }
+
+    if (p.y > 0.35 && p.y < 2.16 && abs(p.z) < 0.80) {
+      for (int side = 0; side < 2; ++side) {
+        float s = side == 0 ? -1.0 : 1.0;
+        float phase = uTime * 1.35 + (side == 0 ? PI : 0.0);
+        vec3 pedal = vec3(-0.27 + 0.23 * cos(phase),
+                           0.77 + 0.23 * sin(phase), s * 0.38);
+        vec3 hip = vec3(-0.48, 1.93, s * 0.25);
+        vec3 knee = vec3(0.01 + 0.12 * cos(phase),
+                          1.40 + 0.09 * sin(phase), s * 0.34);
+
+        result = add(result,
+          capsule(p, vec3(-0.27, 0.77, s * 0.19),
+                     pedal - vec3(0.0, 0.0, s * 0.06), 0.035), 12.0);
+        result = add(result,
+          capsule(p, pedal + vec3(0.0, 0.0, -s * 0.12),
+                     pedal + vec3(0.0, 0.0, s * 0.12), 0.045), 13.0);
+        result = add(result, capsule(p, hip, knee, 0.074), 11.0);
+        result = add(result, capsule(p, knee, pedal, 0.066), 11.0);
+        result = add(result,
+          ellipsoid(p - pedal - vec3(0.13, 0.04, s * 0.01),
+                    vec3(0.23, 0.068, 0.12)), 11.0);
+      }
+    }
+
+    if (p.y > 1.63 && abs(p.z) < 0.98) {
+      float body = ellipsoid(p - vec3(-0.38, 2.30, 0.0),
+                             vec3(0.78, 0.57, 0.46));
+      body = min(body, taper(p, vec3(-0.06, 2.42, 0.0),
+                               vec3(0.19, 2.82, 0.0), 0.25, 0.17));
+      body = min(body, capsule(p, vec3(0.19, 2.80, 0.0),
+                                 vec3(0.18, 3.04, 0.0), 0.17));
+      body = min(body, ellipsoid(p - vec3(0.35, 3.10, 0.0),
+                                 vec3(0.32, 0.29, 0.27)));
+      result = add(result, body, 6.0);
+
+      float tail = taper(p, vec3(-0.94, 2.39, 0.0),
+                            vec3(-1.43, 2.50, 0.0), 0.22, 0.025);
+      result = add(result, tail, 7.0);
+
+      for (int side = 0; side < 2; ++side) {
+        float s = side == 0 ? -1.0 : 1.0;
+        float wing = ellipsoid(
+          p - vec3(-0.55, 2.32, s * 0.42),
+          vec3(0.58, 0.26, 0.15));
+        wing = min(wing,
+          taper(p, vec3(-0.12, 2.34, s * 0.43),
+                   vec3(0.35, 2.16, s * 0.48), 0.17, 0.10));
+        wing = min(wing,
+          taper(p, vec3(0.35, 2.16, s * 0.48),
+                   vec3(0.88, 1.97, s * 0.48), 0.11, 0.055));
+        result = add(result, wing, 7.0);
+
+        for (int feather = 0; feather < 3; ++feather) {
+          float f = float(feather);
+          result = add(result,
+            taper(p, vec3(-0.82 + 0.10 * f, 2.22 - 0.09 * f,
+                           s * 0.49),
+                     vec3(-1.24 + 0.12 * f, 2.14 - 0.16 * f,
+                           s * 0.48), 0.085, 0.012), 7.0);
+        }
+
+        result = add(result,
+          ellipsoid(p - vec3(0.51, 3.17, s * 0.247),
+                    vec3(0.078, 0.078, 0.041)), 14.0);
+        result = add(result,
+          length(p - vec3(0.532, 3.17, s * 0.278)) - 0.046, 10.0);
+      }
+
+      result = add(result,
+        taper(p, vec3(0.28, 3.32, -0.08),
+                 vec3(0.13, 3.52, -0.08), 0.075, 0.005), 6.0);
+      result = add(result,
+        taper(p, vec3(0.34, 3.34, 0.08),
+                 vec3(0.24, 3.55, 0.08), 0.067, 0.005), 6.0);
+
+      vec3 pouchQ = p - vec3(1.16, 2.76, 0.0);
+      pouchQ.y += 0.13 * pouchQ.x;
+      result = add(result,
+        ellipsoid(pouchQ, vec3(0.64, 0.29, 0.205)), 9.0);
+
+      float beak = taper(p, vec3(0.55, 3.035, 0.0),
+                           vec3(1.88, 2.855, 0.0), 0.115, 0.032);
+      beak = min(beak, taper(p, vec3(1.86, 2.86, 0.0),
+                               vec3(1.94, 2.77, 0.0), 0.041, 0.009));
+      result = add(result, beak, 8.0);
+    }
+
+    return result;
+  }
+
+  vec3 normalAt(vec3 p) {
+    const float e = 0.002;
+    vec2 k = vec2(1.0, -1.0);
+    return normalize(
+      k.xyy * scene(p + k.xyy * e).x +
+      k.yyx * scene(p + k.yyx * e).x +
+      k.yxy * scene(p + k.yxy * e).x +
+      k.xxx * scene(p + k.xxx * e).x
+    );
+  }
+
+  vec3 materialColor(float id) {
+    if (id < 1.5) return vec3(0.88, 0.84, 0.73);
+    if (id < 2.5) return vec3(0.105, 0.16, 0.19);
+    if (id < 3.5) return vec3(0.95, 0.69, 0.30);
+    if (id < 4.5) return vec3(0.18, 0.65, 0.64);
+    if (id < 5.5) return vec3(0.18, 0.27, 0.31);
+    if (id < 6.5) return vec3(0.98, 0.94, 0.80);
+    if (id < 7.5) return vec3(0.86, 0.84, 0.72);
+    if (id < 8.5) return vec3(0.96, 0.39, 0.19);
+    if (id < 9.5) return vec3(0.98, 0.67, 0.28);
+    if (id < 10.5) return vec3(0.075, 0.11, 0.13);
+    if (id < 11.5) return vec3(0.91, 0.39, 0.18);
+    if (id < 12.5) return vec3(0.74, 0.79, 0.76);
+    if (id < 13.5) return vec3(0.16, 0.23, 0.25);
+    return vec3(0.99, 0.96, 0.85);
+  }
+
+  vec3 background(vec3 rd) {
+    float h = smoothstep(-0.32, 0.75, rd.y);
+    return mix(vec3(0.97, 0.87, 0.72),
+               vec3(0.64, 0.83, 0.89), h);
+  }
+
+  void main() {
+    vec2 uv = (gl_FragCoord.xy - 0.5 * uResolution)
+              / uResolution.y;
+    float yaw = uView.x;
+    float pitch = uView.y;
+    vec3 outward = vec3(sin(yaw) * cos(pitch),
+                        sin(pitch),
+                        cos(yaw) * cos(pitch));
+    vec3 ro = uTarget + outward * uView.z;
+    vec3 forward = -outward;
+    vec3 right = vec3(cos(yaw), 0.0, -sin(yaw));
+    vec3 up = cross(right, forward);
+    vec3 rd = normalize(forward + 0.79 * (uv.x * right + uv.y * up));
+
+    float t = 0.0;
+    float material = -1.0;
+    for (int i = 0; i < 100; ++i) {
+      vec2 hit = scene(ro + rd * t);
+      if (hit.x < 0.0012 * (1.0 + 0.06 * t)) {
+        material = hit.y;
+        break;
+      }
+      t += max(hit.x * 0.83, 0.003);
+      if (t > 32.0) break;
+    }
+
+    vec3 color = background(rd);
+    if (material >= 0.0) {
+      vec3 p = ro + rd * t;
+      vec3 n = normalAt(p);
+      vec3 light = normalize(vec3(-0.48, 0.82, 0.55));
+      float diffuse = max(dot(n, light), 0.0);
+      float ambient = 0.52 + 0.11 * n.y;
+      float ao = clamp(1.0 - max(0.0, 0.14 - scene(p + n * 0.14).x)
+                       * 1.55, 0.72, 1.0);
+      vec3 base = materialColor(material);
+      float specular = pow(max(dot(reflect(-light, n), -rd), 0.0),
+                           material == 12.0 ? 32.0 : 22.0);
+      color = base * (ambient + 0.60 * diffuse) * ao;
+      color += vec3(1.0, 0.92, 0.78) * specular *
+               (material == 12.0 ? 0.38 : 0.15);
+
+      if (material == 1.0) {
+        vec2 q = p.xz;
+        float rearShadow = exp(-3.8 * length((q - vec2(-1.30, 0.0))
+                                           * vec2(1.0, 2.7)));
+        float frontShadow = exp(-3.8 * length((q - vec2(1.30, 0.0))
+                                            * vec2(1.0, 2.7)));
+        float bodyShadow = exp(-1.35 * length((q - vec2(-0.25, 0.0))
+                                            * vec2(1.0, 2.1)));
+        color *= 1.0 - 0.30 * max(max(rearShadow, frontShadow),
+                                  bodyShadow);
+        float grain = sin(p.x * 19.0) * sin(p.z * 17.0);
+        color *= 1.0 + 0.012 * grain;
+      }
+
+      color = mix(color, background(rd), 1.0 - exp(-0.0008 * t * t));
+    }
+
+    color = pow(clamp(color, 0.0, 1.0), vec3(0.90));
+    fragColor = vec4(color, 1.0);
+  }`;
+
+  let program = null;
+  let vao = null;
+  let uniforms = null;
+  let lost = false;
+  let disposed = false;
+  let lastTime = 0;
+
+  function compile(type, source) {
+    const shader = gl.createShader(type);
+    gl.shaderSource(shader, source);
+    gl.compileShader(shader);
+    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+      const log = gl.getShaderInfoLog(shader) || "unknown error";
+      gl.deleteShader(shader);
+      throw new Error("Pelican SDF shader compilation failed: " + log);
+    }
+    return shader;
+  }
+
+  function initializeResources() {
+    const vs = compile(gl.VERTEX_SHADER, vertexSource);
+    let fs;
+    try {
+      fs = compile(gl.FRAGMENT_SHADER, fragmentSource);
+      program = gl.createProgram();
+      gl.attachShader(program, vs);
+      gl.attachShader(program, fs);
+      gl.linkProgram(program);
+      if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+        throw new Error("Pelican SDF shader link failed: " +
+                        (gl.getProgramInfoLog(program) || "unknown error"));
+      }
+      vao = gl.createVertexArray();
+      uniforms = {
+        resolution: gl.getUniformLocation(program, "uResolution"),
+        time: gl.getUniformLocation(program, "uTime"),
+        view: gl.getUniformLocation(program, "uView"),
+        target: gl.getUniformLocation(program, "uTarget")
+      };
+    } catch (error) {
+      if (program) gl.deleteProgram(program);
+      program = null;
+      throw error;
+    } finally {
+      gl.deleteShader(vs);
+      if (fs) gl.deleteShader(fs);
+    }
+  }
+
+  initializeResources();
+
+  let yaw = 0.48;
+  let pitch = 0.13;
+  let distance = 7.7;
+  const target = [0.17, 1.69, 0];
+  const defaultTarget = [0.17, 1.69, 0];
+  const pointers = new Map();
+  let pinch = null;
+
+  function render(timeSeconds) {
+    if (disposed || lost || gl.isContextLost() || !program) return;
+    lastTime = Number.isFinite(timeSeconds) ? timeSeconds : 0;
+    const width = gl.drawingBufferWidth;
+    const height = gl.drawingBufferHeight;
+    if (!width || !height) return;
+
+    gl.viewport(0, 0, width, height);
+    gl.useProgram(program);
+    gl.bindVertexArray(vao);
+    gl.uniform2f(uniforms.resolution, width, height);
+    gl.uniform1f(uniforms.time, lastTime);
+    gl.uniform3f(uniforms.view, yaw, pitch, distance);
+    gl.uniform3f(uniforms.target, target[0], target[1], target[2]);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+
+  function redraw() {
+    render(lastTime);
+  }
+
+  function setView(nextYaw, nextPitch, nextDistance) {
+    if (Number.isFinite(nextYaw)) yaw = nextYaw;
+    if (Number.isFinite(nextPitch))
+      pitch = Math.max(-1.48, Math.min(1.48, nextPitch));
+    if (Number.isFinite(nextDistance))
+      distance = Math.max(1.8, Math.min(20, nextDistance));
+    target[0] = defaultTarget[0];
+    target[1] = defaultTarget[1];
+    target[2] = defaultTarget[2];
+    redraw();
+  }
+
+  function getView() {
+    return { yaw, pitch, distance };
+  }
+
+  function cameraAxes() {
+    return {
+      right: [Math.cos(yaw), 0, -Math.sin(yaw)],
+      up: [-Math.sin(yaw) * Math.sin(pitch),
+            Math.cos(pitch),
+           -Math.cos(yaw) * Math.sin(pitch)]
+    };
+  }
+
+  function zoomAt(clientX, clientY, factor) {
+    const previous = distance;
+    distance = Math.max(1.8, Math.min(20, distance * factor));
+    const rect = canvas.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const nx = 2 * (clientX - rect.left) / rect.width - 1;
+    const ny = 1 - 2 * (clientY - rect.top) / rect.height;
+    const aspect = gl.drawingBufferWidth / Math.max(1, gl.drawingBufferHeight);
+    const shift = (previous - distance) * 0.395;
+    const axes = cameraAxes();
+    for (let i = 0; i < 3; i++) {
+      target[i] += shift * (nx * aspect * axes.right[i] +
+                            ny * axes.up[i]);
+    }
+    redraw();
+  }
+
+  function pan(dx, dy) {
+    const rect = canvas.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const axes = cameraAxes();
+    const scaleX = 0.79 * distance *
+                   (gl.drawingBufferWidth /
+                    Math.max(1, gl.drawingBufferHeight)) / rect.width;
+    const scaleY = 0.79 * distance / rect.height;
+    for (let i = 0; i < 3; i++) {
+      target[i] += -dx * scaleX * axes.right[i] +
+                    dy * scaleY * axes.up[i];
+    }
+    redraw();
+  }
+
+  function pinchState() {
+    const points = [...pointers.values()];
+    if (points.length < 2) return null;
+    return {
+      x: (points[0].x + points[1].x) * 0.5,
+      y: (points[0].y + points[1].y) * 0.5,
+      span: Math.hypot(points[0].x - points[1].x,
+                       points[0].y - points[1].y)
+    };
+  }
+
+  function onPointerDown(event) {
+    if (disposed) return;
+    event.preventDefault();
+    canvas.focus({ preventScroll: true });
+    canvas.setPointerCapture(event.pointerId);
+    pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    pinch = pinchState();
+  }
+
+  function onPointerMove(event) {
+    const old = pointers.get(event.pointerId);
+    if (!old) return;
+    event.preventDefault();
+    pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (pointers.size >= 2) {
+      const next = pinchState();
+      if (pinch && next) {
+        pan(next.x - pinch.x, next.y - pinch.y);
+        if (next.span > 1 && pinch.span > 1)
+          zoomAt(next.x, next.y, pinch.span / next.span);
+      }
+      pinch = next;
+    } else {
+      yaw += (event.clientX - old.x) * 0.007;
+      pitch = Math.max(-1.48, Math.min(1.48,
+        pitch + (event.clientY - old.y) * 0.007));
+      redraw();
+    }
+  }
+
+  function onPointerEnd(event) {
+    if (!pointers.has(event.pointerId)) return;
+    event.preventDefault();
+    pointers.delete(event.pointerId);
+    pinch = pinchState();
+  }
+
+  function onWheel(event) {
+    event.preventDefault();
+    const unit = event.deltaMode === 1 ? 16 :
+                 event.deltaMode === 2 ? canvas.clientHeight : 1;
+    const amount = Math.max(-2, Math.min(2,
+      event.deltaY * unit * 0.0015));
+    zoomAt(event.clientX, event.clientY, Math.exp(amount));
+  }
+
+  function onKeyDown(event) {
+    let handled = true;
+    if (event.key === "ArrowLeft") yaw -= 0.12;
+    else if (event.key === "ArrowRight") yaw += 0.12;
+    else if (event.key === "ArrowUp")
+      pitch = Math.max(-1.48, pitch - 0.10);
+    else if (event.key === "ArrowDown")
+      pitch = Math.min(1.48, pitch + 0.10);
+    else if (event.key === "+" || event.key === "=")
+      zoomAt(canvas.getBoundingClientRect().left + canvas.clientWidth / 2,
+             canvas.getBoundingClientRect().top + canvas.clientHeight / 2,
+             0.82);
+    else if (event.key === "-" || event.key === "_")
+      zoomAt(canvas.getBoundingClientRect().left + canvas.clientWidth / 2,
+             canvas.getBoundingClientRect().top + canvas.clientHeight / 2,
+             1.22);
+    else handled = false;
+
+    if (handled) {
+      event.preventDefault();
+      redraw();
+    }
+  }
+
+  function onContextLost(event) {
+    event.preventDefault();
+    lost = true;
+    program = null;
+    vao = null;
+  }
+
+  function onContextRestored() {
+    if (disposed) return;
+    try {
+      initializeResources();
+      lost = false;
+      redraw();
+    } catch (_) {
+      lost = true;
+    }
+  }
+
+  const oldTouchAction = canvas.style.touchAction;
+  const hadTabIndex = canvas.hasAttribute("tabindex");
+  const oldTabIndex = canvas.getAttribute("tabindex");
+  canvas.style.touchAction = "none";
+  canvas.tabIndex = 0;
+  canvas.addEventListener("pointerdown", onPointerDown);
+  canvas.addEventListener("pointermove", onPointerMove);
+  canvas.addEventListener("pointerup", onPointerEnd);
+  canvas.addEventListener("pointercancel", onPointerEnd);
+  canvas.addEventListener("wheel", onWheel, { passive: false });
+  canvas.addEventListener("keydown", onKeyDown);
+  canvas.addEventListener("webglcontextlost", onContextLost);
+  canvas.addEventListener("webglcontextrestored", onContextRestored);
+
+  function dispose() {
+    if (disposed) return;
+    disposed = true;
+    canvas.removeEventListener("pointerdown", onPointerDown);
+    canvas.removeEventListener("pointermove", onPointerMove);
+    canvas.removeEventListener("pointerup", onPointerEnd);
+    canvas.removeEventListener("pointercancel", onPointerEnd);
+    canvas.removeEventListener("wheel", onWheel);
+    canvas.removeEventListener("keydown", onKeyDown);
+    canvas.removeEventListener("webglcontextlost", onContextLost);
+    canvas.removeEventListener("webglcontextrestored", onContextRestored);
+    canvas.style.touchAction = oldTouchAction;
+    if (hadTabIndex) canvas.setAttribute("tabindex", oldTabIndex);
+    else canvas.removeAttribute("tabindex");
+    pointers.clear();
+    if (!lost && !gl.isContextLost()) {
+      if (vao) gl.deleteVertexArray(vao);
+      if (program) gl.deleteProgram(program);
+    }
+    vao = null;
+    program = null;
+  }
+
+  return { render, setView, getView, dispose };
+}

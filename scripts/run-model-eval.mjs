@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
+import { appendFileSync } from "node:fs";
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -80,6 +81,8 @@ const args = [
   "-",
 ];
 
+await writeFile(eventsPath, "", { flag: "wx" });
+await writeFile(stderrPath, "", { flag: "wx" });
 const startedAt = new Date();
 const child = spawn(codexCommand, args, {
   cwd: root,
@@ -90,9 +93,13 @@ const child = spawn(codexCommand, args, {
 });
 
 const stdoutChunks = [];
-const stderrChunks = [];
-child.stdout.on("data", (chunk) => stdoutChunks.push(chunk));
-child.stderr.on("data", (chunk) => stderrChunks.push(chunk));
+child.stdout.on("data", (chunk) => {
+  appendFileSync(eventsPath, chunk);
+  stdoutChunks.push(chunk);
+});
+child.stderr.on("data", (chunk) => {
+  appendFileSync(stderrPath, chunk);
+});
 child.stdin.end(prompt);
 
 let exitCode;
@@ -107,15 +114,12 @@ try {
 
 const completedAt = new Date();
 const stdout = Buffer.concat(stdoutChunks).toString("utf8");
-const stderr = Buffer.concat(stderrChunks).toString("utf8");
-await writeFile(eventsPath, stdout, "utf8");
-await writeFile(stderrPath, stderr, "utf8");
 
 const events = parseJsonLines(stdout);
 const response = await readFile(responsePath).catch(() => Buffer.alloc(0));
 const usage = extractCodexUsage(events);
 const pricing = getModelPricing(model);
-const apiCostUsd = calculateApiCostUsd(model, usage);
+const apiCostUsd = calculateApiCostUsd(model, usage, { aggregate: true });
 const receipt = {
   schemaVersion: 1,
   id,
@@ -144,7 +148,7 @@ const receipt = {
   billing: {
     mode: "subscription",
     apiCostUsd,
-    note: apiPricingNote(model),
+    note: apiPricingNote(model, usage),
     pricing: pricing ? {
       inputUsdPerMillion: pricing.inputUsdPerMillion,
       cachedInputUsdPerMillion: pricing.cachedInputUsdPerMillion,

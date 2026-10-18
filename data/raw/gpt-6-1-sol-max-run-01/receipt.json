@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "id": "gpt-6-1-sol-max-run-01",
+  "model": "gpt-6.1-sol",
+  "reasoningEffort": "max",
+  "harness": {
+    "name": "Codex CLI",
+    "version": "0.163.0",
+    "surface": "codex exec --json",
+    "sandbox": "read-only",
+    "ephemeral": true,
+    "userConfigLoaded": false,
+    "projectRulesLoaded": false
+  },
+  "prompt": {
+    "path": "benchmark/prompt.txt",
+    "bytes": 3387,
+    "sha256": "cd21d5a8bb3956d82ab5650304e7e491063eacdb27dad85be6b4a845512f5e6b"
+  },
+  "response": {
+    "path": "data/raw/gpt-6-1-sol-max-run-01/response.txt",
+    "bytes": 30119,
+    "sha256": "6b80b99012e1d1d9017145eddb326349bdfbaaaea9c1653ddb14465bad2a4ade"
+  },
+  "usage": {
+    "inputTokens": 391496,
+    "cachedInputTokens": 305536,
+    "reasoningTokens": 36516,
+    "outputTokens": 69386,
+    "totalTokens": 460882
+  },
+  "billing": {
+    "mode": "subscription",
+    "apiCostUsd": null,
+    "note": "Codex CLI subscription invocation; accumulated input usage exceeds the long-context pricing threshold, but per-request token counts are unknown. API-equivalent cost is not reported because the applicable pricing tier cannot be determined; not a separate API charge.",
+    "pricing": {
+      "inputUsdPerMillion": 2,
+      "cachedInputUsdPerMillion": 0.1,
+      "outputUsdPerMillion": 10,
+      "source": "https://developers.openai.com/api/docs/pricing",
+      "publishedAt": null
+    },
+    "correction": "Original aggregate-threshold estimate preserved in receipt-before-pricing-correction.json. It cannot determine the per-request pricing tier; captured usage and source hashes are unchanged."
+  },
+  "startedAt": "2026-10-18T11:52:02.566Z",
+  "completedAt": "2026-10-18T12:20:20.061Z",
+  "durationMs": 1697495,
+  "exitCode": 0,
+  "eventCount": 7,
+  "files": {
+    "events": "data/raw/gpt-6-1-sol-max-run-01/events.jsonl",
+    "stderr": "data/raw/gpt-6-1-sol-max-run-01/stderr.txt"
+  }
+}

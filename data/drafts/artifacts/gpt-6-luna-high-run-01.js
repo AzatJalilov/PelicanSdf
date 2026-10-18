@@ -1,0 +1,412 @@
+export function createPelicanSdf(canvas) {
+  const gl = canvas.getContext("webgl2", { antialias: false, alpha: false, depth: false, stencil: false });
+  if (!gl) throw new Error("Pelican SDF requires WebGL2.");
+
+  const vertexSource = `#version 300 es
+  precision highp float;
+  void main() {
+    vec2 p = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2);
+    gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
+  }`;
+
+  const fragmentSource = `#version 300 es
+  precision highp float;
+  out vec4 outColor;
+  uniform vec2 uResolution;
+  uniform float uYaw;
+  uniform float uPitch;
+  uniform float uDistance;
+  uniform float uTime;
+
+  const float PI = 3.14159265359;
+
+  float sdCapsule(vec3 p, vec3 a, vec3 b, float r) {
+    vec3 pa = p - a, ba = b - a;
+    float h = clamp(dot(pa, ba) / max(dot(ba, ba), 1e-6), 0.0, 1.0);
+    return length(pa - ba * h) - r;
+  }
+
+  float sdEllipsoid(vec3 p, vec3 r) {
+    float k0 = length(p / r);
+    float k1 = length(p / (r * r));
+    return k0 * (k0 - 1.0) / max(k1, 1e-5);
+  }
+
+  float sdTorus(vec3 p, float majorR, float minorR) {
+    return length(vec2(length(p.xy) - majorR, p.z)) - minorR;
+  }
+
+  vec2 take(vec2 a, float d, float m) {
+    return d < a.x ? vec2(d, m) : a;
+  }
+
+  vec2 scene(vec3 p) {
+    vec2 h = vec2(1e4, 0.0);
+
+    // Bicycle tires, rims, hubs and rotating spokes.
+    vec3 q = p - vec3(-1.15, 0.62, 0.0);
+    h = take(h, sdTorus(q, 0.555, 0.047), 1.0);
+    h = take(h, sdTorus(q, 0.493, 0.018), 2.0);
+    h = take(h, sdEllipsoid(q, vec3(0.09, 0.09, 0.12)), 3.0);
+    q = p - vec3(1.15, 0.62, 0.0);
+    h = take(h, sdTorus(q, 0.555, 0.047), 1.0);
+    h = take(h, sdTorus(q, 0.493, 0.018), 2.0);
+    h = take(h, sdEllipsoid(q, vec3(0.09, 0.09, 0.12)), 3.0);
+    for (int w = 0; w < 2; w++) {
+      float cx = w == 0 ? -1.15 : 1.15;
+      float spin = uTime * 0.72;
+      for (int i = 0; i < 10; i++) {
+        float a = float(i) * PI / 5.0 + spin;
+        vec3 end = vec3(cx + cos(a) * 0.49, 0.62 + sin(a) * 0.49, 0.0);
+        h = take(h, sdCapsule(p, vec3(cx, 0.62, 0.0), end, 0.009), 3.0);
+      }
+    }
+
+    // Frame: rear triangle, seat tube, top tube, fork and steering tube.
+    h = take(h, sdCapsule(p, vec3(-1.15,0.62,0.0), vec3(-0.38,1.34,0.0), 0.035), 4.0);
+    h = take(h, sdCapsule(p, vec3(-0.38,1.34,0.0), vec3(0.02,0.62,0.0), 0.038), 4.0);
+    h = take(h, sdCapsule(p, vec3(-1.15,0.62,0.0), vec3(0.02,0.62,0.0), 0.032), 4.0);
+    h = take(h, sdCapsule(p, vec3(-0.38,1.34,0.0), vec3(0.84,1.30,0.0), 0.04), 4.0);
+    h = take(h, sdCapsule(p, vec3(0.84,1.30,0.0), vec3(0.02,0.62,0.0), 0.038), 4.0);
+    h = take(h, sdCapsule(p, vec3(0.84,1.30,0.0), vec3(1.15,0.62,0.0), 0.033), 4.0);
+    h = take(h, sdCapsule(p, vec3(0.84,1.30,0.0), vec3(0.96,1.48,0.0), 0.04), 4.0);
+    h = take(h, sdCapsule(p, vec3(-0.38,1.34,0.0), vec3(-0.42,1.49,0.0), 0.035), 4.0);
+
+    // Saddle, grips and handlebars spanning the bicycle.
+    h = take(h, sdCapsule(p, vec3(-0.60,1.50,0.0), vec3(-0.27,1.50,0.0), 0.055), 5.0);
+    h = take(h, sdCapsule(p, vec3(0.96,1.48,0.0), vec3(1.07,1.48,0.0), 0.035), 6.0);
+    h = take(h, sdCapsule(p, vec3(1.02,1.48,-0.32), vec3(1.02,1.48,0.32), 0.027), 6.0);
+    h = take(h, sdCapsule(p, vec3(1.02,1.48,-0.32), vec3(0.95,1.39,-0.32), 0.026), 6.0);
+    h = take(h, sdCapsule(p, vec3(1.02,1.48,0.32), vec3(0.95,1.39,0.32), 0.026), 6.0);
+
+    // Crank and opposing pedals.
+    float phase = uTime * 1.1 + 0.3;
+    vec3 crank = vec3(0.02, 0.62, 0.0);
+    vec3 feet[2];
+    for (int i = 0; i < 2; i++) {
+      float a = phase + float(i) * PI;
+      vec3 foot = vec3(0.02 + cos(a) * 0.27, 0.62 + sin(a) * 0.27, i == 0 ? 0.19 : -0.19);
+      feet[i] = foot;
+      h = take(h, sdCapsule(p, crank, foot, 0.023), 3.0);
+      h = take(h, sdCapsule(p, foot + vec3(-0.09,0.0,0.0), foot + vec3(0.09,0.0,0.0), 0.035), 6.0);
+    }
+
+    // Pelican's rounded body, layered wings, neck and head.
+    h = take(h, sdEllipsoid(p - vec3(-0.19,1.78,0.0), vec3(0.53,0.39,0.31)), 7.0);
+    h = take(h, sdEllipsoid(p - vec3(0.26,2.12,0.0), vec3(0.30,0.34,0.27)), 7.0);
+    h = take(h, sdCapsule(p, vec3(0.02,1.87,0.0), vec3(0.18,2.02,0.0), 0.16), 7.0);
+    for (int side = 0; side < 2; side++) {
+      float z = side == 0 ? 0.275 : -0.275;
+      h = take(h, sdEllipsoid(p - vec3(-0.30,1.78,z), vec3(0.40,0.22,0.105)), 8.0);
+      for (int f = 0; f < 3; f++) {
+        float x = -0.49 + float(f) * 0.13;
+        h = take(h, sdCapsule(p, vec3(x,1.72,z + (side == 0 ? 0.055 : -0.055)),
+                                   vec3(x - 0.17,1.62,z + (side == 0 ? 0.055 : -0.055)), 0.012), 7.0);
+      }
+      h = take(h, sdEllipsoid(p - vec3(0.35,2.20,z * 0.95), vec3(0.043,0.047,0.027)), 11.0);
+      h = take(h, sdEllipsoid(p - vec3(0.365,2.215,z * 0.95 + (side == 0 ? 0.019 : -0.019)),
+                              vec3(0.012,0.014,0.009)), 12.0);
+    }
+
+    // Long bill and the distinctive hanging throat pouch.
+    h = take(h, sdCapsule(p, vec3(0.47,2.08,0.0), vec3(1.04,2.03,0.0), 0.061), 9.0);
+    h = take(h, sdEllipsoid(p - vec3(0.67,2.00,0.0), vec3(0.23,0.055,0.105)), 9.0);
+    h = take(h, sdEllipsoid(p - vec3(0.63,1.78,0.0), vec3(0.20,0.27,0.18)), 10.0);
+    h = take(h, sdEllipsoid(p - vec3(0.57,1.89,0.0), vec3(0.22,0.15,0.175)), 10.0);
+
+    // Bent arms reach the grips; legs follow the moving pedals.
+    for (int side = 0; side < 2; side++) {
+      float s = side == 0 ? 1.0 : -1.0;
+      float z = s * 0.24;
+      vec3 shoulder = vec3(0.10,1.93,z);
+      vec3 elbow = vec3(0.51,1.72,s * 0.29);
+      vec3 hand = vec3(0.96,1.47,s * 0.30);
+      h = take(h, sdCapsule(p, shoulder, elbow, 0.073), 7.0);
+      h = take(h, sdCapsule(p, elbow, hand, 0.061), 7.0);
+      vec3 hip = vec3(-0.02,1.48,s * 0.20);
+      vec3 foot = feet[side];
+      vec3 knee = mix(hip, foot, 0.53) + vec3(-0.08,0.04,0.0);
+      h = take(h, sdCapsule(p, hip, knee, 0.062), 13.0);
+      h = take(h, sdCapsule(p, knee, foot, 0.052), 13.0);
+      h = take(h, sdEllipsoid(p - (foot + vec3(0.04,-0.015,0.0)), vec3(0.12,0.055,0.075)), 13.0);
+    }
+
+    // Matte studio floor.
+    h = take(h, p.y, 14.0);
+    return h;
+  }
+
+  vec3 material(float m, vec3 p) {
+    if (m < 1.5) return vec3(0.055,0.065,0.075);
+    if (m < 2.5) return vec3(0.48,0.62,0.67);
+    if (m < 3.5) return vec3(0.22,0.34,0.37);
+    if (m < 4.5) return vec3(0.035,0.48,0.48);
+    if (m < 5.5) return vec3(0.19,0.095,0.045);
+    if (m < 6.5) return vec3(0.09,0.12,0.13);
+    if (m < 7.5) return vec3(0.91,0.87,0.75);
+    if (m < 8.5) return vec3(0.77,0.73,0.62);
+    if (m < 9.5) return vec3(0.92,0.57,0.12);
+    if (m < 10.5) return vec3(0.88,0.29,0.12);
+    if (m < 11.5) return vec3(0.025,0.024,0.02);
+    if (m < 12.5) return vec3(1.0,0.84,0.38);
+    if (m < 13.5) return vec3(0.91,0.43,0.16);
+    return vec3(0.24,0.30,0.34) + 0.035 * sin(p.xz * 1.6);
+  }
+
+  vec3 normalAt(vec3 p) {
+    const float e = 0.0015;
+    return normalize(vec3(
+      scene(p + vec3(e,0,0)).x - scene(p - vec3(e,0,0)).x,
+      scene(p + vec3(0,e,0)).x - scene(p - vec3(0,e,0)).x,
+      scene(p + vec3(0,0,e)).x - scene(p - vec3(0,0,e)).x
+    ));
+  }
+
+  float shadow(vec3 ro, vec3 rd) {
+    float t = 0.025;
+    float result = 1.0;
+    for (int i = 0; i < 18; i++) {
+      float d = scene(ro + rd * t).x;
+      if (d < 0.001) return 0.28;
+      result = min(result, 9.0 * d / t);
+      t += clamp(d, 0.025, 0.22);
+      if (t > 5.0) break;
+    }
+    return clamp(result, 0.35, 1.0);
+  }
+
+  void main() {
+    vec2 uv = (gl_FragCoord.xy * 2.0 - uResolution) / uResolution.y;
+    float cp = cos(uPitch), sp = sin(uPitch);
+    vec3 ro = vec3(sin(uYaw) * cp, sp, cos(uYaw) * cp) * uDistance + vec3(0.0,1.23,0.0);
+    vec3 forward = normalize(vec3(0.0,1.23,0.0) - ro);
+    vec3 right = normalize(cross(forward, vec3(0,1,0)));
+    vec3 up = cross(right, forward);
+    vec3 rd = normalize(forward * 1.55 + right * uv.x + up * uv.y);
+
+    vec3 sky = mix(vec3(0.74,0.84,0.88), vec3(0.31,0.48,0.59), clamp(uv.y * 0.38 + 0.45, 0.0, 1.0));
+    float t = 0.0;
+    float m = 0.0;
+    bool hit = false;
+    for (int i = 0; i < 86; i++) {
+      vec2 h = scene(ro + rd * t);
+      if (h.x < 0.0015) { m = h.y; hit = true; break; }
+      t += max(h.x * 0.82, 0.001);
+      if (t > 12.0) break;
+    }
+    if (!hit) {
+      outColor = vec4(sky, 1.0);
+      return;
+    }
+
+    vec3 p = ro + rd * t;
+    vec3 n = normalAt(p);
+    vec3 lightDir = normalize(vec3(-0.48,0.82,0.62));
+    float diff = max(dot(n, lightDir), 0.0);
+    float sh = shadow(p + n * 0.006, lightDir);
+    vec3 viewDir = -rd;
+    float spec = pow(max(dot(reflect(-lightDir,n), viewDir), 0.0), 36.0);
+    vec3 base = material(m, p);
+    vec3 col = base * (0.34 + 0.72 * diff * sh) + vec3(0.22,0.28,0.31) * pow(max(n.y,0.0), 2.0);
+    col += spec * (m > 1.5 && m < 6.5 ? 0.30 : 0.10);
+
+    float fog = 1.0 - exp(-0.012 * t * t);
+    col = mix(col, sky, fog);
+    col = col / (col + vec3(0.85));
+    col = pow(max(col,0.0), vec3(0.88));
+    outColor = vec4(col, 1.0);
+  }`;
+
+  function compile(type, source) {
+    const shader = gl.createShader(type);
+    gl.shaderSource(shader, source);
+    gl.compileShader(shader);
+    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+      const message = gl.getShaderInfoLog(shader) || "unknown shader error";
+      gl.deleteShader(shader);
+      throw new Error("Pelican SDF shader compilation failed: " + message);
+    }
+    return shader;
+  }
+
+  let program = null;
+  let vao = null;
+  let locations = null;
+  let lost = false;
+  let disposed = false;
+
+  function initialize() {
+    const vs = compile(gl.VERTEX_SHADER, vertexSource);
+    const fs = compile(gl.FRAGMENT_SHADER, fragmentSource);
+    const next = gl.createProgram();
+    gl.attachShader(next, vs);
+    gl.attachShader(next, fs);
+    gl.linkProgram(next);
+    gl.deleteShader(vs);
+    gl.deleteShader(fs);
+    if (!gl.getProgramParameter(next, gl.LINK_STATUS)) {
+      const message = gl.getProgramInfoLog(next) || "unknown link error";
+      gl.deleteProgram(next);
+      throw new Error("Pelican SDF shader link failed: " + message);
+    }
+    if (program) gl.deleteProgram(program);
+    if (vao) gl.deleteVertexArray(vao);
+    program = next;
+    vao = gl.createVertexArray();
+    locations = {
+      resolution: gl.getUniformLocation(program, "uResolution"),
+      yaw: gl.getUniformLocation(program, "uYaw"),
+      pitch: gl.getUniformLocation(program, "uPitch"),
+      distance: gl.getUniformLocation(program, "uDistance"),
+      time: gl.getUniformLocation(program, "uTime")
+    };
+  }
+
+  initialize();
+
+  let yaw = 0.48;
+  let pitch = 0.18;
+  let distance = 5.1;
+  const pointers = new Map();
+  let drag = null;
+  let pinchSpan = 0;
+  const oldTabIndex = canvas.getAttribute("tabindex");
+  const oldTouchAction = canvas.style.touchAction;
+  if (oldTabIndex === null) canvas.setAttribute("tabindex", "0");
+  canvas.style.touchAction = "none";
+
+  function clampView() {
+    pitch = Math.max(-1.15, Math.min(1.15, pitch));
+    distance = Math.max(2.45, Math.min(11.0, distance));
+  }
+
+  function pointerDown(e) {
+    e.preventDefault();
+    canvas.focus({ preventScroll: true });
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+    if (pointers.size === 1) drag = { x: e.clientX, y: e.clientY };
+    if (pointers.size === 2) {
+      const a = Array.from(pointers.values());
+      pinchSpan = Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y);
+      drag = null;
+    }
+  }
+
+  function pointerMove(e) {
+    if (!pointers.has(e.pointerId)) return;
+    e.preventDefault();
+    const prev = pointers.get(e.pointerId);
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.size >= 2) {
+      const a = Array.from(pointers.values());
+      const span = Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y);
+      if (pinchSpan > 0 && span > 0) distance *= pinchSpan / span;
+      pinchSpan = span;
+      clampView();
+    } else if (drag) {
+      yaw += (e.clientX - prev.x) * 0.008;
+      pitch -= (e.clientY - prev.y) * 0.008;
+      clampView();
+    }
+  }
+
+  function pointerUp(e) {
+    pointers.delete(e.pointerId);
+    try { if (canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId); } catch (_) {}
+    drag = null;
+    pinchSpan = 0;
+    if (pointers.size === 1) {
+      const only = Array.from(pointers.values())[0];
+      drag = { x: only.x, y: only.y };
+    }
+  }
+
+  function wheel(e) {
+    e.preventDefault();
+    distance *= Math.exp(e.deltaY * 0.001);
+    clampView();
+  }
+
+  function keydown(e) {
+    if (document.activeElement !== canvas) return;
+    let used = true;
+    if (e.key === "ArrowLeft") yaw -= 0.08;
+    else if (e.key === "ArrowRight") yaw += 0.08;
+    else if (e.key === "ArrowUp") pitch += 0.07;
+    else if (e.key === "ArrowDown") pitch -= 0.07;
+    else if (e.key === "+" || e.key === "=") distance *= 0.9;
+    else if (e.key === "-" || e.key === "_") distance *= 1.1;
+    else used = false;
+    if (used) {
+      e.preventDefault();
+      clampView();
+    }
+  }
+
+  function contextLost(e) {
+    e.preventDefault();
+    lost = true;
+  }
+  function contextRestored() {
+    try {
+      initialize();
+      lost = false;
+    } catch (_) {
+      lost = true;
+    }
+  }
+
+  canvas.addEventListener("pointerdown", pointerDown);
+  canvas.addEventListener("pointermove", pointerMove);
+  canvas.addEventListener("pointerup", pointerUp);
+  canvas.addEventListener("pointercancel", pointerUp);
+  canvas.addEventListener("wheel", wheel, { passive: false });
+  canvas.addEventListener("keydown", keydown);
+  canvas.addEventListener("webglcontextlost", contextLost);
+  canvas.addEventListener("webglcontextrestored", contextRestored);
+
+  return {
+    render(timeSeconds) {
+      if (disposed || lost || gl.isContextLost()) return;
+      gl.viewport(0, 0, canvas.width, canvas.height);
+      gl.disable(gl.DEPTH_TEST);
+      gl.disable(gl.BLEND);
+      gl.useProgram(program);
+      gl.bindVertexArray(vao);
+      gl.uniform2f(locations.resolution, canvas.width, canvas.height);
+      gl.uniform1f(locations.yaw, yaw);
+      gl.uniform1f(locations.pitch, pitch);
+      gl.uniform1f(locations.distance, distance);
+      gl.uniform1f(locations.time, Number.isFinite(timeSeconds) ? timeSeconds : 0);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+    },
+    setView(nextYaw, nextPitch, nextDistance) {
+      yaw = Number.isFinite(nextYaw) ? nextYaw : yaw;
+      pitch = Number.isFinite(nextPitch) ? nextPitch : pitch;
+      distance = Number.isFinite(nextDistance) ? nextDistance : distance;
+      clampView();
+    },
+    getView() {
+      return { yaw, pitch, distance };
+    },
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      canvas.removeEventListener("pointerdown", pointerDown);
+      canvas.removeEventListener("pointermove", pointerMove);
+      canvas.removeEventListener("pointerup", pointerUp);
+      canvas.removeEventListener("pointercancel", pointerUp);
+      canvas.removeEventListener("wheel", wheel);
+      canvas.removeEventListener("keydown", keydown);
+      canvas.removeEventListener("webglcontextlost", contextLost);
+      canvas.removeEventListener("webglcontextrestored", contextRestored);
+      canvas.style.touchAction = oldTouchAction;
+      if (oldTabIndex === null) canvas.removeAttribute("tabindex");
+      if (program && !gl.isContextLost()) gl.deleteProgram(program);
+      if (vao && !gl.isContextLost()) gl.deleteVertexArray(vao);
+      program = null;
+      vao = null;
+    }
+  };
+}
