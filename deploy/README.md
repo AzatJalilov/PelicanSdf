@@ -16,6 +16,10 @@ Configure these Actions secrets in the PelicanSdf repository:
 Pushes to `main` run repository tests, scan the repository and generated public
 bundle for secrets, publish SHA-tagged images, and deploy automatically.
 
+Public responses use `Cache-Control: no-cache` so browsers revalidate files after
+deployment. Catalog JSON also bypasses the browser cache to avoid retaining an
+older result list between releases.
+
 ## Server layout
 
 The Compose file lives in `/opt/vibe-overflow/pelican-sdf`. The container joins

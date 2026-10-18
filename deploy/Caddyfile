@@ -9,6 +9,7 @@
 	file_server
 
 	header {
+		Cache-Control "no-cache"
 		Cross-Origin-Resource-Policy "same-origin"
 		Referrer-Policy "strict-origin-when-cross-origin"
 		X-Content-Type-Options "nosniff"

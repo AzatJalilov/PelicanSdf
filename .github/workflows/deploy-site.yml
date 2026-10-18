@@ -148,6 +148,10 @@ jobs:
             if curl -fsS --max-time 15 -o /dev/null https://pelican.vibe-overflow.com/ \
               && curl -fsS --max-time 15 -o /dev/null https://pelican.vibe-overflow.com/results.html \
               && curl -fsS --max-time 15 -o /dev/null https://pelican.vibe-overflow.com/data/manifest.json; then
+              for resource in results.html src/data.js data/manifest.json; do
+                curl -fsSI --max-time 15 "https://pelican.vibe-overflow.com/$resource" \
+                  | grep -qi '^cache-control:.*no-cache' || exit 1
+              done
               echo "Pelican SDF is live"
               exit 0
             fi
