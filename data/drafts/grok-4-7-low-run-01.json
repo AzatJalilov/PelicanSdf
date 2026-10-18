@@ -1,0 +1,75 @@
+{
+  "id": "grok-4-7-low-run-01",
+  "title": "SpaceXAI: Grok 4.7 / low effort",
+  "model": "x-ai/grok-4.7",
+  "provider": "OpenRouter via pi SDK",
+  "status": "unverified",
+  "track": "one-shot",
+  "promptVersion": "1.0.0",
+  "promptSha256": "cd21d5a8bb3956d82ab5650304e7e491063eacdb27dad85be6b4a845512f5e6b",
+  "artifactSha256": "e20c377b78564b4c9cbee7a5f78c24ef8406ae7fc7a882f0388e7c95bbd2c4f3",
+  "createdAt": "2026-10-18",
+  "artifact": "./artifacts/grok-4-7-low-run-01.js",
+  "description": "The first response stops at a one-sentence lead-in; the module code is never emitted. The extended design reasoning was streamed as thinking content, ending at \"The code is ready to be written.\" without a module, so the unchanged response is retained as a draft.",
+  "accent": "#0b6e75",
+  "generationHarness": {
+    "name": "pi SDK",
+    "version": "0.84.3",
+    "surface": "pi-coding-agent createAgentSession (in-memory, no tools)",
+    "sandbox": "n/a",
+    "notes": "Fresh ephemeral invocation with user config and project rules disabled; orchestrated by Codex."
+  },
+  "generationUsage": {
+    "inputTokens": 823,
+    "cachedInputTokens": 1152,
+    "reasoningTokens": null,
+    "outputTokens": 29599,
+    "totalTokens": 31574,
+    "apiCostUsd": 0.179816,
+    "billingMode": "api-metered",
+    "source": "data/raw/grok-4-7-low-run-01/events.jsonl",
+    "notes": "OpenRouter invocation via pi SDK; cost computed by pi from provider pricing (per-million-token rates)."
+  },
+  "validation": {
+    "state": "failed",
+    "checks": [
+      "prompt and response receipt hashes"
+    ],
+    "unmetRequirements": [
+      {
+        "requirement": "Self-contained JavaScript ES module",
+        "evidence": "The complete first response is the 116-byte sentence \"I'll build a self-contained WebGL2 ray-marched pelican-on-a-bicycle scene and verify it stays within the size limit.\" Around 45 KB of design reasoning arrived as thinking content and the transcript ends at \"The code is ready to be written.\" No JavaScript module was emitted."
+      }
+    ],
+    "warnings": [
+      "Not added to the catalog because the unchanged response does not pass executable-artifact publication constraints."
+    ]
+  },
+  "metrics": {
+    "sourceBytes": 117,
+    "initMs": null,
+    "gpuMsMedian": null,
+    "gpuMsP95": null,
+    "timingMethod": null,
+    "environment": null,
+    "environmentKey": null,
+    "profile": "pelican-canvas-960x540-v1",
+    "sampleCount": null,
+    "trials": null,
+    "measuredAt": null
+  },
+  "visual": {
+    "readability": null,
+    "completeness": null,
+    "coherence": null,
+    "craft": null,
+    "inspectability": null,
+    "reviewers": 0
+  },
+  "provenance": {
+    "generatorKind": "model-eval",
+    "method": "Fresh one-shot pi SDK invocation; text-only with tools and skills disabled; added trailing LF",
+    "rawResponse": "../raw/grok-4-7-low-run-01/response.txt",
+    "decoding": "reasoning effort: low; other decoding settings not exposed"
+  }
+}

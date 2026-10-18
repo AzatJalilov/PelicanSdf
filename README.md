@@ -31,7 +31,7 @@ harder, inspectable 3D task.
 - Explicit generation-harness metadata, including Codex CLI version/surface
 - Provider-reported token usage, billing mode, and actual or API-equivalent cost metadata
 - JSON result records, artifact hashes, schema, and repository validation
-- 72 one-shot runs across 23 model identifiers, including matched five-effort Sol and Claude sweeps
+- 76 one-shot runs across 25 model identifiers, including matched five-effort Sol and Claude sweeps
 - SDF-rendered catalog thumbnails generated from each renderable first response
 - MIT licensing and contribution/security guidance
 
@@ -180,7 +180,9 @@ view and close zoom in a browser, and open a pull request. See
 
 ## Evaluation caveat
 
-The 72 included entries were produced one-shot through Codex CLI, Claude Code
+The [October 2026 release sweep](benchmark/oct2026-models.html) adds DeepSeek V4.1 Flash and Muse Wonder at low and high effort, generated through the pi SDK with OpenRouter and measured on the same local GPU profile. Gemini 4 Argon also responded, but both of its first responses exceed the prompt's 32,768-byte module cap (42,006 and 45,761 bytes); one-shot responses are never trimmed, so they are preserved under `data/drafts/` with the size finding. Grok 4.7 responded twice (low and high) with only a one-sentence lead-in and no emitted module; those are preserved under `data/drafts/` as well. No newer Kimi has shipped since the July K3 sweep, so Kimi was not re-run.
+
+The 76 included entries were produced one-shot through Codex CLI, Claude Code
 CLI, or the pi SDK with OpenRouter. Raw first responses, available event streams,
 and receipts are retained; two early seed entries predate the receipted runner
 and explicitly keep their missing usage fields. Renderable runs include

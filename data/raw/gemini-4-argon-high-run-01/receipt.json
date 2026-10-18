@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "id": "gemini-4-argon-high-run-01",
+  "model": "google/gemini-4-argon",
+  "provider": "OpenRouter via pi SDK",
+  "accent": "#0b6e75",
+  "modelDisplayName": "Google: Gemini 4 Argon",
+  "reasoningEffort": "high",
+  "maxOutputTokens": 65536,
+  "harness": {
+    "name": "pi SDK",
+    "version": "0.84.3",
+    "surface": "pi-coding-agent createAgentSession (in-memory, no tools)",
+    "sandbox": "n/a",
+    "ephemeral": true,
+    "userConfigLoaded": false,
+    "projectRulesLoaded": false
+  },
+  "prompt": {
+    "path": "benchmark/prompt.txt",
+    "bytes": 3387,
+    "sha256": "cd21d5a8bb3956d82ab5650304e7e491063eacdb27dad85be6b4a845512f5e6b"
+  },
+  "response": {
+    "path": "data/raw/gemini-4-argon-high-run-01/response.txt",
+    "bytes": 45760,
+    "sha256": "1121b140bc94f607923f9401e3db59ba0cc384053c28d393b107bbb3e350af07",
+    "source": "text"
+  },
+  "thinking": {
+    "path": "data/raw/gemini-4-argon-high-run-01/thinking.txt",
+    "bytes": 62661,
+    "sha256": "e38c25433421a49e219b97142bf35a29f538677ef656e452f067635fe98aecc5"
+  },
+  "usage": {
+    "inputTokens": 794,
+    "cachedInputTokens": 0,
+    "reasoningTokens": null,
+    "outputTokens": 49719,
+    "totalTokens": 50513
+  },
+  "billing": {
+    "mode": "openrouter",
+    "apiCostUsd": 0.498778,
+    "note": "OpenRouter invocation via pi SDK; cost computed by pi from provider pricing (per-million-token rates)."
+  },
+  "startedAt": "2026-10-18T19:55:38.569Z",
+  "completedAt": "2026-10-18T20:05:25.593Z",
+  "durationMs": 587024,
+  "exitCode": 0,
+  "error": null,
+  "eventCount": 306,
+  "files": {
+    "events": "data/raw/gemini-4-argon-high-run-01/events.jsonl",
+    "stderr": "data/raw/gemini-4-argon-high-run-01/stderr.txt",
+    "thinking": "data/raw/gemini-4-argon-high-run-01/thinking.txt"
+  }
+}

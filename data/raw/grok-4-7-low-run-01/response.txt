@@ -1,0 +1,1 @@
+I'll build a self-contained WebGL2 ray-marched pelican-on-a-bicycle scene and verify it stays within the size limit.

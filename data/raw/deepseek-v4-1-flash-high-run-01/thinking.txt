@@ -1,0 +1,2605 @@
+I need to produce a single self-contained JS ES module exporting createPelicanSdf(canvas). Let me plan carefully.
+
+Key components:
+- WebGL2 setup: canvas.getContext('webgl2'), fullscreen triangle/quad, fragment shader with SDF raymarching.
+- Camera: orbit yaw/pitch/distance, target near bicycle center.
+- Controls: pointer drag orbit (360°), wheel + pinch zoom, arrow keys orbit, +/- zoom, focusable canvas (tabindex), preventDefault on wheel/touch.
+- Context loss handling.
+- dispose().
+
+Let me design the SDF scene.
+
+Coordinate system: world up = +Y. Bicycle facing... "setView(0,0,distance) must show the bicycle from its right side; positive yaw orbits around world-up."
+
+So at yaw=0, camera should be at bicycle's right side. Let's set bicycle oriented so it travels along +X (forward = +X). Then rider's right side... Actually if the bike faces +X, the right side of the bike (from rider's viewpoint) is -Z. So camera at yaw=0 should be at -Z looking at origin. Hmm, "right side" — the bicycle's right side. Let's define: bike forward along +X. Camera at yaw 0 positioned at (0,0,-distance)... that would look at the bike from behind-right? Let's think: bike forward = +X. A viewer standing on the right side of the bike (the side the rider's right hand is on) — the rider faces +X, so rider's right is... if up is +Y and forward is +X, then right = forward × up? Actually right = forward cross up in left-handed... Let's use standard: for a person facing direction f=(1,0,0) with up u=(0,1,0), their right hand points to r = f × u? f × u = (1,0,0)×(0,1,0) = (0*0-0*1, 0*0-1*0, 1*1-0*0) = (0,0,1). Hmm, cross product (1,0,0)×(0,1,0) = (0,0,1). Let's verify: x × y = z. Yes. And for a person, right = forward × up in a right-handed coordinate system? Consider person facing +X, up +Y. Their right side... If I face +X (east) with up +Y, my right hand points south which in standard math coords with x east, y up, z... hmm, in a right-handed system with x=east, y=up, z=south (since x cross y = z, east cross up = south... ). Actually east × up: east=(1,0,0), up=(0,1,0), result = (0,0,1). In geographic terms with right-handed coords where x=east, y=north, z=up, it differs. Forget it. Let's just define: camera at yaw=0 is at position (0, 0, -d) or (0,0,+d)?
+
+Simple approach: camera position = target + d * (sin(yaw)*cos(pitch), sin(pitch), cos(yaw)*cos(pitch)). At yaw=0, pitch=0: camera at (0,0,d) looking toward origin, i.e., looking in -Z. The bike faces +X (to the viewer's ... ). Camera looks along -Z; camera's right is +X (standard: view direction -Z, up +Y, right +X). So bike facing +X appears pointing to the right of the screen. Rider seen from the side. Which side? The camera at +Z looking toward -Z. The bike faces +X. The rider faces +X. Camera sees the rider's ... The camera is at +Z. Rider's right side: for a rider facing +X with up +Y, is the right side toward +Z or -Z? Use the standard "right-hand rule" for a person: if you face +X and your up is +Y, then your right is -Z? Let's compute with the formula right = forward × up? (1,0,0)×(0,1,0) = (0,0,1) → +Z. But is right = forward × up correct? For a person facing -Z (default camera forward) with up +Y, right should be +X. forward × up = (0,0,-1)×(0,1,0) = (0*0 - (-1)*1, (-1)*0 - 0*0, 0*1-0*0) = (1, 0, 0) = +X. Yes! So right = forward × up. Great.
+
+So rider facing +X, up +Y → right = +X × +Y = +Z. So the rider's right side faces +Z. Camera at +Z at yaw 0 → sees the bike from its right side. 
+
+So: camera pos = target + distance * (sin(yaw)*cos(pitch), sin(pitch), cos(yaw)*cos(pitch)). Good. Positive yaw orbits around world-up: at yaw=90°, camera at (d,0,0) — in front of the bike... hmm that's the front. Anyway, "positive yaw orbits around world-up" — direction of orbit isn't strictly specified beyond that. Fine.
+
+Default view: appealing three-quarter view: yaw ≈ -0.6 rad (or +0.6), pitch ≈ 0.25.
+
+Now the scene layout. Let's model with a center at origin, ground at y=0 roughly. Actually let's put the ground plane... the task says background needed but the scene doesn't require a ground. A subtle ground with shadow could help but adds cost. Let's include a simple ground plane with soft shadow (cheap-ish) or skip shadow. Maybe include a simple radial ground with ambient occlusion-ish. I'll include a ground plane at y=0 with a soft shadow from a sphere approximation — could be expensive. Let's just do a plane with a subtle vignette and fake contact shadow (analytic soft shadow of a sphere at bike center). Simple: shadow = smoothstep based on distance in XZ from center. That's cheap and looks okay.
+
+Hmm, but the wheels touch the ground. Wheel radius 0.42, wheel centers at y=0.42.
+
+Bicycle design (side view, x forward, z lateral):
+- Rear wheel center: x = -0.6, y = 0.42, radius 0.42, tire tube radius ~0.045.
+- Front wheel center: x = +0.6, y = 0.42.
+- Wheelbase 1.2, wheel radius 0.42. Reasonable.
+
+Frame (diamond frame), tubes as capsules:
+- Bottom bracket (crank center) at x = -0.1, y = 0.30.
+- Seat tube from bottom bracket up to seat post top at x = -0.32, y = 0.95. Seat at y ~1.0.
+- Down tube from bottom bracket to head tube bottom at x = 0.42, y = 0.85.
+- Top tube from seat cluster (x=-0.30, y=0.92) to head tube top (x=0.42, y=1.0).
+- Head tube from (0.42,0.85) to (0.45,1.02).
+- Fork from head tube bottom down to front wheel center (0.6,0.42).
+- Chainstays from bottom bracket (-0.1,0.30) to rear wheel center (-0.6,0.42).
+- Seat stays from seat cluster (-0.30,0.92) to rear wheel center (-0.6,0.42).
+- Handlebar: stem from head tube top (0.45,1.02) forward/up to (0.52,1.12), then bar going laterally in ±Z.
+
+Hmm wait, if the bike faces +X, the handlebar is at the front, higher than the seat roughly. Let me re-examine: seat at y≈1.0, handlebar at y≈1.1. Fine.
+
+Pedals: crank arms from bottom bracket, length 0.16, one forward-up, one backward-down. Pedals at the ends.
+
+Pelican:
+- Body: ellipsoid centered around (x=-0.15, y=1.35, z=0) — sitting on the seat. Body size ~ (0.42, 0.32, 0.30).
+- Actually, a riding pelican: torso leaning forward slightly. Let's make body an ellipsoid rotated slightly.
+- Neck: from body front-top up and forward to head.
+- Head at approximately (0.28, 1.85, 0).
+- Beak: long, pointing forward +X and slightly down. Pelican beak from head at (0.35,1.8) extending to (0.85, 1.62). Cone-ish.
+- Throat pouch: below beak, a drooping ellipsoid from (0.4,1.72) to (0.75,1.6).
+- Eye: small sphere on the head side.
+- Wings: two flattened ellipsoids on either side of the body, rotated, with tips reaching back/down toward the handlebar area? Actually riding — the wings could hold the handlebars, or tucked. Let's have wings tucked along the sides of the body, with tips extending forward toward the handlebar. Nice detail: wing tip near the handlebar.
+- Legs: from body lower area down to the pedals. Two legs, each with thigh (capsule) from hip to knee, and shin from knee to pedal. Pedals at crank ends. The pelican's feet are big webbed.
+
+Hmm, a pelican on a bicycle with legs reaching the pedals whose positions are near the bottom bracket. Hip at (-0.15, 1.1, ±0.18). Knee at (0.0, 0.75, ±0.18). Foot at pedal position (crank ends). Crank radius 0.16, bottom bracket at (-0.1, 0.30). Pedals: crank angle θ, pedal1 at (-0.1 + 0.16cos θ, 0.30 + 0.16 sin θ, ±0.12). Hmm, legs from y=1.1 down to y~0.3-0.45 is a long leg. That's fine for a cartoon pelican? Pelican legs are short. But it must be plausible riding pose. Let's lower the seat a bit and let the legs be somewhat long. Alternatively make the pelican small relative to the bike. Let's scale: body center at y=1.15, hip at y=0.95, seat top at y=0.9.
+
+Let me restructure with a somewhat compact bike:
+- wheel radius R = 0.40, wheel centers y = 0.40.
+- rear wheel x = -0.62, front wheel x = +0.62.
+- bottom bracket: (-0.08, 0.26).
+- seat cluster: (-0.30, 0.78); seat post to (-0.34, 0.92); saddle at y≈0.95, x≈-0.36.
+- head tube: bottom (0.40, 0.72), top (0.44, 0.90).
+- handlebar stem to (0.50, 1.00), bar spread in z ±0.22 at y≈1.0, x≈0.50.
+- fork: head bottom (0.40,0.72) → front hub (0.62, 0.40).
+- down tube: BB (-0.08,0.26) → head bottom (0.40,0.72).
+- top tube: seat cluster (-0.30,0.78) → head top (0.44,0.90).
+- seat tube: BB → seat cluster.
+- chainstays: BB → rear hub (-0.62,0.40).
+- seat stays: seat cluster → rear hub.
+
+Pelican:
+- hip/torso bottom at y ≈ 0.95 (sitting on saddle at y 0.95, x -0.36). Body center: (-0.30, 1.22, 0), radii (0.30, 0.26, 0.24) — oriented along +X tilted. Actually pelican body should be a bit egg-shaped, larger at back.
+- The body leans forward: center at (-0.22, 1.24).
+- Head: (0.22, 1.78, 0). Neck connecting (0.0, 1.45) → (0.20, 1.72).
+- Beak: from head front (0.30, 1.76) forward to (0.78, 1.62), thin.
+- Pouch: below beak, ellipsoid center (0.5, 1.62) radii (0.22, 0.11, 0.09).
+- Wings: ellipsoids at z = ±0.24, center (-0.25, 1.25), radii (0.26, 0.18, 0.07), rotated. Wing tips forward-down to (0.15, 1.05, ±0.22) — near the handlebar. Nice.
+
+Hmm, but the handlebar is at x=0.50, y=1.00, z=±0.22. Wing tip at (0.15,1.05) wouldn't reach. Maybe let wings reach the handlebar: the pelican's wings grip the handlebars. That's charming. Let's make the wing a capsule-ish shape from shoulder (−0.22, 1.35, ±0.20) to handlebar grip (0.48, 1.00, ±0.22), flattened. That's a long wing but works for a pelican? Pelican wings are long. It'd look like arms holding the bars. Might look odd from the side. Alternatively, keep the wings folded against the body and have the "hands" (wing tips) resting on the bars. Let's do a two-part wing: upper arm from shoulder (−0.20, 1.38, ±0.20) to elbow (−0.02, 1.12, ±0.26), then forearm from elbow to wing tip at handlebar (0.46, 1.01, ±0.22). Flattened capsules. Add a few feather detail via a slight bump or just keep smooth. Actually with SDF, wings can be flattened ellipsoids that are stretched along the arm — that reads as a folded wing holding the bar.
+
+Hmm, this may look like arms. It's fine — charming cartoon.
+
+Legs: hip at (-0.28, 1.02, ±0.16). Knee at (-0.05, 0.62, ±0.18). Foot/pedal at crank ends. Bottom bracket (-0.08, 0.26). Crank radius 0.15. Pedal positions: with a crank angle φ (animated? The task says render(timeSeconds) — deterministic for same time. Could animate pedaling! That would be nice: the legs and pedals move with time. But then "deterministic for the same time" is satisfied. And "unchanged frames after camera moves" is about camera. Animating with time adds life. But careful: the raymarching SDF with pedaling is fine — just compute crank angle = time * something. But then leg IK needs to be done in the shader. That's a bit of work but doable in 2D-ish: the legs are planar in x-y with fixed z. Thigh from hip to knee, shin from knee to pedal. Two-bone IK in the shader is fine.
+
+Hmm, but complexity/risk. Simpler: keep legs static but posed on pedals in a natural asymmetric position (one pedal forward-up, one back-down). Static is safer and looks fine. But animation makes it "functional bicycle" reading better. I'll do a simple animated crank: the crank rotates, pedals rotate with it, and the shin is a capsule from knee to pedal (knee fixed, shin stretches slightly — actually that changes leg length visually). Better: compute knee via 2-bone IK in the shader so thigh and shin lengths are constant.
+
+Two-bone IK in 3D for a planar leg (leg moves in the x-y plane at fixed z): Given hip H, foot F, lengths L1, L2, and a bend direction, knee = H + ... Standard: d = |F-H|, clamp to [|L1-L2|+eps, L1+L2-eps]. cos angle a at hip: (L1²+d²-L2²)/(2 L1 d). Then knee = H + L1*(cos(a)*u + sin(a)*v) where u = normalize(F-H) and v is the perpendicular in the plane pointing backward (knee points forward for cycling? Actually for cycling, the knee points forward and up). Let's choose v = direction perpendicular to u in the x-y plane, rotated so knee comes forward (+x). u is the direction from hip to foot (mostly downward). Perp in xy plane: v = (u.y, -u.x, 0) normalized? For u pointing down (0,-1,0), v = (-1, 0, 0) which points backward. We want knee forward (+x). So use v = (-u.y, u.x, 0) → for u=(0,-1,0), v = (1,0,0) = +x forward. Good.
+
+That's nice. Let's do animated pedaling: crank angle = time * 2.2. Legs follow. The pelican pedals. Charming. Also wheels could spin — but a rotating wheel is not visible in the SDF unless we add spokes... Actually a wheel with spokes rotating would be visible. But wheels with spokes via SDF are tricky. I could add a few spokes as thin capsules rotating with time. That's cheap-ish. But aliasing at distance. Maybe add a hub and a few spokes (5-6 per side per wheel) as thin cylinders. With raymarching, thin features alias badly. Hmm. I'll add spokes as slightly thicker and rely on it. Maybe skip spin, keep spokes static — still "functional bicycle". Actually spinning wheels would be a nice touch and demonstrates animation. Let me add 6 spokes per side, radius 0.012, and rotate them by time * (speed). With SDF smooth-min they'd merge into a disc a bit. Let's use max/min union without smoothing for spokes. Risk of aliasing. I'll include them but thin: radius 0.013. Ray marching will handle it, maybe with artifacts. Alternatively, spokes not needed. Let's include a moderate number (8 per wheel, one side only? no, both sides at z=±0.03). Hmm, complexity budget.
+
+Let me keep it simpler: wheel = torus tire + rim torus + hub cylinder + a few spokes. Actually to reduce shader cost, I can compute wheels with a specialized function.
+
+I think spokes are worth it visually. I'll do 6 spokes per wheel per side... that's 24 capsules. Too many for a shader that's already heavy. Alternative: use an angular function — compute the SDF of the spoke set analytically: for a point in the wheel plane, compute polar angle, use a periodic pattern. E.g., distance to nearest spoke line: for direction angle θ, spokes at angles θ0 + k*2π/N. A cheap approach: rotate the point by -θ0 in the wheel plane, then compute angle φ = atan2(p.y, p.x), then a "spoke" distance = length of the perpendicular component relative to the nearest spoke direction... Hmm.
+
+Simpler: use the trick: spokes as a function of angle: take the wheel-plane point q = (dx, dy). Let a = atan(q.y, q.x) + spin. Then spoke distance = |radial distance * sin(N/2 * (a - round...))|... 
+
+Actually the standard trick: distance to nearest of N lines through origin at angles k*2π/N: Let a = atan2(y,x). Then the perpendicular distance to the nearest line is |r * sin(a mod (2π/N) - offset)|... hmm, no: distance from point (r,a) to line at angle α passing through origin = r*|sin(a-α)|. With nearest α = round(a/(2π/N))*2π/N, we get d = r*|sin(a - α)| where a-α ∈ [-π/N, π/N]. So d = r*|sin(mod(a + π/N, 2π/N) - π/N)|.
+
+So spoke distance field ≈ r*|sin(frac)|. Then clamp with r to form a capsule-ish line segment from hub to rim: sdf_line = max(d_perp, |r - rimMid| - rimHalf) roughly. That's like an intersection of a slab and a perpendicular slab. Reasonable. Cost: one atan2 + sin. Fine.
+
+Two wheels, both sides — just compute once per wheel in the wheel plane (spokes span the whole width, we can just include them as a thin sheet of zero thickness — but zero thickness doesn't ray march well). Better to treat the spokes as thin planes at z=const... Let's just have spokes only in the mid-plane and give them thickness by intersecting with a slab in z: max(d_perp_in_plane, |z_wheel_local| - 0.012, |r - 0.27| - 0.15). Hmm, the intersection of three slabs forms a box-like spoke. Fine.
+
+OK. Now, performance. The evaluator measures uncapped frame throughput. The shader must not be too heavy. Let's use reasonable step counts (e.g., 128-160 max steps) and a decent epsilon. Use bounding-sphere/AABB for early skip? Keep it simple but efficient.
+
+Let me now write the SDF in GLSL carefully.
+
+Common helpers:
+```glsl
+float sdSphere(vec3 p, float r){ return length(p)-r; }
+float sdEllipsoid(vec3 p, vec3 r){ float k0=length(p/r); float k1=length(p/(r*r)); return k0*(k0-1.0)/k1; }
+float sdCapsule(vec3 p, vec3 a, vec3 b, float r){ vec3 pa=p-a, ba=b-a; float h=clamp(dot(pa,ba)/dot(ba,ba),0.,1.); return length(pa-ba*h)-r; }
+float sdCappedCylinder(vec3 p, vec3 a, vec3 b, float r) ...
+float sdTorus(vec3 p, vec2 t){ vec2 q=vec2(length(p.xz)-t.x, p.y); return length(q)-t.y; }
+float sdBox(vec3 p, vec3 b){ vec3 q=abs(p)-b; return length(max(q,0.))+min(max(q.x,max(q.y,q.z)),0.); }
+float smin(float a,float b,float k){ float h=clamp(.5+.5*(b-a)/k,0.,1.); return mix(b,a,h)-k*h*(1.-h); }
+```
+smin is expensive when used a lot. Use it selectively.
+
+Rotations: rotate a point about z axis etc.
+
+Let me define the scene in terms of world coords: X forward, Y up, Z lateral.
+
+I'll write helper: `vec3 rotZ(vec3 p, float a)` etc. and `mat3` rotations.
+
+Scene structure:
+
+```
+float map(vec3 p) {
+  float t = u_time;  (crank angle)
+  float d = 1e9;
+  // wheels
+  d = min(d, wheel(p, vec2(-0.62,0.40), spin));
+  d = min(d, wheel(p, vec2(0.62,0.40), spin));
+  // frame
+  d = min(d, frame(p));
+  // pelican
+  float body = pelican(p);
+  d = min(d, body);
+  return d;
+}
+```
+
+Wheel function: local point q = p - vec3(cx, cy, 0). Rotate about z? no, wheels spin about the z axis (lateral). Wheel plane is x-y. So:
+```
+float wheel(vec3 p, vec2 c, float spin) {
+  vec3 q = p - vec3(c, 0.0);
+  // tire: torus in xy plane -> rotate so torus around z
+  // sdTorus assumes torus in xz plane, axis y. We need axis z: use vec3(q.xy, q.z)... 
+}
+```
+Define sdTorusZ(vec3 p, vec2 t): torus with axis along z: q = vec2(length(p.xy) - t.x, p.z); return length(q) - t.y.
+
+So tire: sdTorusZ(q, vec2(0.40 - 0.045, 0.045)) → major radius 0.355, minor 0.045. Outer radius 0.40. Good, matches ground at y=0.
+
+Rim: torus major 0.30, minor 0.022, slightly... Actually the rim should be at outer radius ~0.34. Let's: rim torus major 0.315, minor 0.02.
+
+Hub: cylinder along z, radius 0.035, half-length 0.05.
+
+Spokes: as described.
+
+Also, wheel needs a slight lateral width. Fine.
+
+Frame: capsules with radius ~0.022-0.03 for tubes. Tubes: 
+- BB(-0.08,0.26) to seat cluster (-0.30,0.78): seat tube.
+- BB to head bottom (0.40,0.72): down tube.
+- seat cluster to head top (0.44,0.90): top tube.
+- head tube: (0.40,0.72) to (0.44,0.90) thick r=0.035.
+- seat post: seat cluster (-0.30,0.78) to saddle (-0.36,0.94).
+- fork: two blades from (0.42,0.70) to (0.62,0.40) at z=±0.045, plus a crown.
+- chainstays: BB → rear hub, at z=±0.045.
+- seat stays: seat cluster → rear hub, z=±0.045.
+- handlebar: stem from (0.44,0.90) to (0.50,1.00), then bar in ±z from (0.50,1.00,-0.22) to (0.50,1.00,0.22) with grips.
+
+Hmm, a real bike's top tube connects the seat cluster to the head tube top, and the seat stays go from the seat cluster to the rear hub. Good.
+
+Saddle: a flattened box/ellipsoid at (-0.37, 0.97, 0), size (0.14, 0.03, 0.07) with rounding, maybe an ellipsoid.
+
+Chain: a torus-ish loop between the chainring and the rear cog? Could add a flattened torus/ellipse path. Maybe skip the chain, or add a simple chainring disc (cylinder) at BB radius 0.10 and a rear cog. Let's add a chainring (thin cylinder radius 0.10 at z=+0.06) and a chain as a torus-like ellipse — a capsule loop is hard. Could do: chain as a "rounded rectangle in xy plane" at z=0.055. Actually the chain path is roughly a stadium shape connecting BB (r 0.10) and rear hub (r 0.04). I can approximate the chain with two capsules (top and bottom segments) tangent to both circles. Top segment from (-0.62, 0.44) to (-0.08, 0.36), bottom from (-0.62, 0.36) to (-0.08,0.16)... Let's approximate: top chain from (-0.62, 0.44,0.055) to (-0.08, 0.36, 0.055); bottom chain from (-0.62, 0.36,0.055) to (-0.08, 0.16,0.055). Yeah roughly. Add with radius 0.008. Cheap. Nice detail. Maybe include.
+
+Pedals: crank arms from BB: capsule from BB to pedal center, radius 0.018, at z = ±0.075 (crank on the right side z=+0.075 for the right arm, and the left crank at z=-0.075). Wait, cranks are on both sides, 180° apart. Pedal: a small box at the end plus the pedal spindle.
+
+Crank angle φ = time*2.2 (radians). Right crank at angle φ; left crank at φ+π.
+
+Pedal position right: BB + (0.15*cos φ, 0.15*sin φ, 0.075) → pedal spindle end. Add a small box pedal: box (0.05, 0.012, 0.035) at the end, at z=±0.075±.
+
+Actually let's make the pedal: spindle cylinder along z from z=0.075 to 0.115 then a platform box centered at z=0.12, size (0.055, 0.010, 0.032).
+
+Feet: webbed feet on the pedals. Foot = flattened ellipsoid at pedal top, size (0.07,0.02,0.04) in a rotated frame. Nice touch.
+
+Legs: hip at (-0.30, 1.00, ±0.13); the foot position = the pedal position (with the right foot on the right pedal, left on the left). IK: L1 (thigh) = 0.42, L2 (shin) = 0.42. Distance from hip to pedal: hip (-0.30,1.00) to pedal at BB(-0.08,0.26) + 0.15*(cos,sin): pedal y ranges 0.11-0.41, x from -0.23 to 0.07. distance from hip to pedal ranges: closest (~0.62) to (-0.23, 0.26+?) hmm let me compute at φ=0: pedal = (-0.08+0.15, 0.26) = (0.07, 0.26). dist from (-0.30,1.00) = sqrt(0.37² + 0.74²) = sqrt(0.1369+0.5476)= sqrt(0.6845)=0.827. At φ=90°: pedal = (-0.08, 0.41): dist = sqrt(0.22²+0.59²)=sqrt(0.0484+0.3481)=0.63. At φ=180°: pedal = (-0.23,0.26): dist = sqrt(0.0049+0.5476)=0.743. At φ=270°: (-0.08,0.11): dist= sqrt(0.0484+0.7921)=0.917.
+
+So distances range from 0.63 to 0.92. With L1=L2=0.46: max reach 0.92. Min distance |L1-L2| = 0 — fine. So thigh 0.46 and shin 0.46; total leg 0.92. Slightly bent at max. Good. Let's use L1=L2=0.47 so we have slack.
+
+Hmm but the leg from hip to foot at 0.92 length, the pelican body is only ~0.6 tall. Long legs for a pelican — cartoonish, acceptable. Maybe reduce the saddle height. Alternative: raise the BB? No. It's fine — cartoon.
+
+Actually maybe better: reduce crank radius to 0.14 and lower the hip a bit to (-0.30, 0.98). Leg lengths 0.45 each.
+
+Body: The torso is an ellipsoid centered at (-0.30, 1.30, 0) with radii (0.32, 0.28, 0.26) — hmm, the hip is at y=0.98 which is inside/below the body center 1.30 - 0.28 = 1.02 bottom. So hips come out of the bottom. Good.
+
+The body should be tilted forward slightly. Let's rotate the body ellipsoid about z by -0.25 rad (nose down at front). Center (-0.28, 1.28, 0), radii (0.34, 0.30, 0.27).
+
+Tail: a small cone at the back (-0.60, 1.30).
+
+Neck: from body front-top, e.g., from (0.0, 1.42, 0) curving up to the head. Use two capsules: (0.0,1.40) → (0.16,1.66) and (0.16,1.66) → (0.24,1.80). Radius 0.09 tapering — capsules have constant radius; use two segments with radii 0.11 and 0.09. Fine.
+
+Head: ellipsoid at (0.26, 1.84, 0), radii (0.14, 0.13, 0.12).
+
+Beak: pelicans have long beaks. Upper mandible: from (0.34, 1.86, 0) to (0.86, 1.74, 0) — a tapered capsule. I can make a cone-ish by using a capsule plus a second smaller one. Or use `sdRoundCone` (round cone with different radii) — the classic Inigo Quilez sdRoundCone:
+
+```glsl
+float sdRoundCone(vec3 p, vec3 a, vec3 b, float r1, float r2){
+  vec3 ba = b - a;
+  float l2 = dot(ba,ba);
+  float rr = r1 - r2;
+  float a2 = l2 - rr*rr;
+  float il2 = 1.0/l2;
+  vec3 pa = p - a;
+  float y = dot(pa,ba);
+  float z = y - l2;
+  vec3 x = pa*l2 - ba*y;
+  float x2 = dot(x,x);
+  float y2 = y*y*l2;
+  float z2 = z*z*l2;
+  float k = sign(rr)*rr*rr*x2;
+  if (sign(z)*a2*z2 > k) return sqrt(x2 + z2)*il2 - r2;
+  if (sign(y)*a2*y2 < k) return sqrt(x2 + y2)*il2 - r1;
+  return (sqrt(x2*a2*il2)+y*rr)*il2 - r1;
+}
+```
+That's great for the beak and legs (tapered). It's a bit expensive but fine.
+
+Beak: r1=0.07 at the head, r2=0.025 at the tip.
+
+Pouch: The pelican's gular pouch hangs under the beak. Model as an ellipsoid below the beak: center (0.60, 1.72, 0), radii (0.20, 0.10, 0.07), or better a curved shape. Let's use an ellipsoid squashed and maybe another smaller one near the front. Use two ellipsoids unioned smoothly.
+
+Head-eye: small sphere at (0.30, 1.90, ±0.10) radius 0.028, in black material — I'll use a separate material id.
+
+Materials: I'll implement a material ID function combined with the map. Common approach: map returns vec2(d, matID) or use a global variable set in map. Simplest: use a global `float gMat;` set in map. Since GLSL ES 3.0 allows global mutable variables in the fragment shader, that's fine (no recursion). I'll return vec2 from map.
+
+Lighting: 
+- Key light: directional, from up-front-left.
+- Fill light: sky/hemisphere.
+- Rim light.
+- Soft shadows: could be expensive. Use a cheap shadow: cone-traced soft shadow with 16 steps only for the main light. That doubles cost. Hmm. "Visual quality and rendering efficiency both matter." I'll do a reduced shadow march (e.g., 24 steps with growing tmin) — but that's still expensive. Alternative: use ambient occlusion only (5 taps) — cheaper and gives good shape. Plus a fake contact shadow on the ground plane. Let's do AO (5 taps) and skip real shadows, but add a fake ground shadow blob. Actually a soft shadow really helps ground contact. Let's do a cheap shadow with 20 steps, max distance ~3.0, and use it only when the hit is not the ground. Hmm.
+
+I'll include a shadow march with 32 steps, hard-coded low iteration, and multiply by a smoothstep for softness. Let's keep it. Performance: the map function is moderately complex (~2 wheels with spokes, ~15 capsules, body parts). Each map call maybe 100+ ALU ops. Ray march 120 steps + 32 shadow steps + 5 AO = ~160 map calls per pixel. At 1280x720 that's 147M map calls... too slow for real-time but the evaluator measures "uncapped frame throughput" — presumably they just want it not absurdly slow. Let's reduce: max steps 96, shadow 24, AO 4. Also add a bounding sphere early-exit: if the ray misses the scene bounding sphere (center (0,1.0,0) radius 1.5), skip. That helps a lot for background pixels.
+
+Also, use a coarse "distance to scene bbox" pre-step: I can do `t = max(t, sdBBox)`. Actually a simple approach: compute the ray-sphere intersection with the scene bounding sphere and start/end there.
+
+Let me structure the raymarch:
+```
+float tmin = 0.0, tmax = 20.0;
+// intersect bounding sphere
+if (!sphereIntersect(ro, rd, center=(0.0,1.0,0.0), R=1.55, tmin, tmax)) -> background
+```
+Then march from tmin to tmax with i<128 steps.
+
+Also, the ground plane: I'll include the ground plane in the map only when marching (returns mat 5). But the bounding sphere excludes the ground. Let's handle: march SDF of the bike; if no hit, then intersect with the ground plane analytically (ray-plane), and if the ground is hit, use that. That's efficient and clean.
+
+But then the bike's contact with the ground: the ground shading can include a fake shadow blob under the bike (ellipse in xz centered at the bike's footprint).
+
+That's a nice efficient approach.
+
+For AO on the ground, not needed.
+
+Let's write it.
+
+Colors/materials:
+- 1: tire (dark gray/black, slight roughness)
+- 2: rim/frame metal (color varies; give frame a nice color like teal/red). Let's have:
+  - 2: frame (bright red/orange)
+  - 3: tire (near black)
+  - 4: rim/metal (silver)
+  - 5: saddle/handlebar grips (dark brown leather)
+  - 6: pelican body (white/cream with a slight warm tint)
+  - 7: beak/pouch (orange/yellow)
+  - 8: eye (black)
+  - 9: legs/feet (orange)
+  - 10: ground.
+
+Pelican body should be white with some warm shading. Beak pale orange/yellow, pouch more saturated orange.
+
+Lighting model: Lambert + Blinn-Phong specular + fresnel rim + AO. Gamma correct.
+
+Background: a sky gradient with a sun glow, plus a subtle vignette. Ground: a soft gradient with a radial vignette.
+
+Camera math: 
+```
+vec3 camPos = target + dist*vec3(sin(yaw)*cos(pitch), sin(pitch), cos(yaw)*cos(pitch));
+```
+target = (0, 1.0, 0) roughly (center of interest — maybe (0, 1.05, 0)). Distance default ~4.2. FOV 40°.
+
+Pitch clamp: [-1.35, 1.35] to avoid gimbal issues at the poles. Yaw wraps 360°, no clamp.
+
+Zoom range: distance from 0.55 (close inspection of the beak) to 12. Actually the beak is at (0.6, 1.75) in world; at distance 0.55 from the target (0,1.05,0), the camera would be near the bike; with pitch/yaw you can look at the beak. Hmm — the target is fixed at (0,1.05,0), so close zoom just moves the camera closer to the center. To inspect the beak you'd zoom in and orbit. That's acceptable. But maybe make the target adaptive? No — keep fixed, simpler, and "setView(yaw,pitch,distance)" is a pure camera spec.
+
+Actually, maybe set the target at the middle of the bike+pelican: (0, 1.0, 0). The beak at (0.6,1.75) is off-center; at distance 0.8 you'd see it in the frame from most angles. Fine.
+
+Let's use FOV such that at distance 4.2 the whole subject (extent ~2.2 wide, 2.2 tall) fits. Half-height = 4.2*tan(20°) = 1.53. Yes fits.
+
+Min distance 0.5, max 14.
+
+Controls:
+- pointerdown on canvas → capture, track. pointermove → delta → yaw -= dx*0.008, pitch += dy*0.008 (clamped).
+- pointerup → release.
+- wheel → distance *= exp(deltaY*0.0012), clamp.
+- touch: pointer events handle single touch; for two-finger pinch, I need to track multiple pointers. With pointer events, maintain a Map of active pointers. If 2 pointers, use the distance between them for pinch zoom and the midpoint for... just zoom. And preventDefault on touchstart/touchmove to avoid scrolling (with passive:false).
+- keyboard: keydown on canvas with tabindex=0: ArrowLeft/Right → yaw, ArrowUp/Down → pitch, '+'/'=' → zoom in, '-'/'_' → zoom out. preventDefault.
+- prevent context menu maybe.
+
+"prevent interaction gestures from scrolling while active": add `touch-action: none` via style, and preventDefault in wheel/touch handlers with passive:false.
+
+Should I set canvas.style.touchAction? We can set style on the canvas element — allowed (it's the given canvas). Yes.
+
+Focus: canvas.tabIndex = 0 — should be fine, "make the canvas focusable".
+
+Also on pointerdown we should call canvas.focus() perhaps.
+
+Now the WebGL2 setup:
+- gl = canvas.getContext('webgl2', {antialias:false, alpha:false, depth:false, preserveDrawingBuffer:false}).
+- Actually with a fullscreen quad and depth test disabled, fine.
+- Create program from vertex + fragment shaders. VAO with a buffer containing a fullscreen triangle (positions -1..1). Use gl_VertexID trick? Simpler: a buffer with 3 vertices, attribute location 0, and a passthrough vertex shader. Since we only have one program, bind the attrib location to 0 with layout(location=0) in GLSL ES 300.
+
+Uniforms: u_resolution, u_time, u_yaw, u_pitch, u_dist, u_target? Let's just pass u_camPos and u_camMat (or compute the ray in the fragment shader from the camera basis passed as uniforms). I'll pass u_camPos (vec3), u_camRight, u_camUp, u_camFwd (vec3 each), u_tanHalfFov.
+
+Actually simpler: pass yaw/pitch/dist and compute the camera in the shader. But then the JS getView must return the same. It's fine either way. I'll compute in JS and pass camPos + basis vectors — cleaner and avoids duplication.
+
+Ray: uv = (fragCoord*2 - res)/res.y; for correct aspect, use /res.y. rd = normalize(fwd + uv.x*tanHalfFov*aspect... let's do: rd = normalize(fwd + right*uv.x*tanH + up*uv.y*tanH) where uv is normalized by res.y with aspect handled since uv.x ranges ±aspect. Good.
+
+Context loss: add 'webglcontextlost' listener → preventDefault, set a flag lost=true; 'webglcontextrestored' → re-init resources. render() should not throw if lost.
+
+dispose(): remove listeners, delete program, buffers, VAO.
+
+Shader compilation failure → throw new Error with the info log.
+
+Now let me write the SDF carefully.
+
+```glsl
+#version 300 es
+precision highp float;
+out vec4 fragColor;
+
+uniform vec2 uRes;
+uniform float uTime;
+uniform vec3 uCamPos, uCamRight, uCamUp, uCamFwd;
+uniform float uTanH;
+
+const float PI = 3.14159265;
+
+// ---------- SDF primitives ----------
+float sdSphere(vec3 p, float r){ return length(p)-r; }
+float sdEllipsoid(vec3 p, vec3 r){ float k0=length(p/r); float k1=length(p/(r*r)); return k0*(k0-1.0)/max(k1,1e-6); }
+float sdCapsule(vec3 p, vec3 a, vec3 b, float r){
+  vec3 pa=p-a, ba=b-a;
+  float h=clamp(dot(pa,ba)/dot(ba,ba),0.0,1.0);
+  return length(pa-ba*h)-r;
+}
+float sdRoundCone(vec3 p, vec3 a, vec3 b, float r1, float r2){ ... }
+float sdTorusZ(vec3 p, vec2 t){ vec2 q=vec2(length(p.xy)-t.x, p.z); return length(q)-t.y; }
+float sdBox(vec3 p, vec3 b){ vec3 q=abs(p)-b; return length(max(q,0.0))+min(max(q.x,max(q.y,q.z)),0.0); }
+float smin(float a,float b,float k){ float h=clamp(0.5+0.5*(b-a)/k,0.0,1.0); return mix(b,a,h)-k*h*(1.0-h); }
+float opSmoothUnion... 
+```
+
+For material tracking, I'll use a global `float gMat;` and write `float m(float d, float id){ gMat = id; return d; }` Hmm, but with smin the material of the blend is ambiguous — pick the nearer. Let me instead structure the map as:
+
+```glsl
+vec2 map(vec3 p){
+  // returns (dist, mat)
+  ...
+  vec2 res = vec2(1e9, 0.0);
+  #define U(d, id) { if (d < res.x) res = vec2(d, id); }
+```
+Using a macro with a block. In GLSL, `#define U(d,i) res = (d)<res.x ? vec2(d,i) : res;` That works as an expression statement. Let's do:
+
+```glsl
+#define OP(d,id) res = ((d)<res.x) ? vec2(d,id) : res;
+```
+
+And for smooth unions, use `smin` and pick the id of the smaller one:
+```glsl
+float a = res.x, b = d;
+float k = ...;
+```
+Simpler: do the smooth unions inside sub-functions (e.g., the body function returns a float) and give the whole body one material, with separate extra pieces for the beak, eye, legs.
+
+Design:
+- `float bike(vec3 p)` → returns distance to bike; but materials differ (tire vs frame vs saddle). I'll handle wheels separately (mat 3 for tire, 4 for rim), and frame (mat 2), saddle/grips (mat 5).
+
+Let me write a function that returns vec2 for each part group and combine.
+
+Let me write:
+
+```glsl
+// wheels + tires
+vec2 mapWheel(vec3 p, out ...)
+```
+
+OK let me just write it linearly in map():
+
+```glsl
+vec2 map(vec3 p){
+  vec2 res = vec2(1e9, 0.0);
+
+  // ---- ground handled outside ----
+
+  // ---- WHEELS ----
+  // rear wheel
+  float dr = wheelSDF(p - vec3(-0.62,0.40,0.0), WSPIN, rear=true);
+  ...
+}
+```
+
+Let me define a function:
+
+```glsl
+// returns (tireDist, rimDist) via vec2
+vec2 wheelParts(vec3 q, float spin, float R){
+  // q relative to hub
+  float tire = sdTorusZ(q, vec2(R-0.048, 0.048));
+  float rim  = sdTorusZ(q, vec2(R-0.10, 0.022));
+  // hub
+  float hub = sdCappedCylinderZ(q, 0.045, 0.035); // length, radius
+  // spokes
+  vec2 pl = q.xy;
+  float r = length(pl);
+  float a = atan(pl.y, pl.x) + spin;
+  float seg = 2.0*PI/6.0;
+  float sp = r*abs(sin(mod(a, seg) - seg*0.5));  // hmm
+  ...
+}
+```
+Wait — the spoke distance: for the nearest spoke line at angle α, d = r*|sin(a-α)|. With α = round(a/seg)*seg, a-α ∈ [-seg/2, seg/2]. mod(a + seg/2, seg) - seg/2 gives that. So d = r*|sin(mod(a+seg/2, seg) - seg/2)|. But when r is small, d→0 at the hub — fine, that's inside the hub anyway.
+
+Then the spoke "capsule" from hub to rim: intersect with radial slab: radial distance from |r - rmid| - rhalf, where rmid = (rimR + hubR)/2, rhalf = (rimR - hubR)/2. Use max(d_line, |r - rmid| - rhalf). Then intersect with a z-slab: max(that, |q.z| - 0.010).
+
+Hmm, but the spoke line distance d = r*|sin(...)| is a distance perpendicular to the spoke direction, which is what we want. Good. And max with the radial slab gives the segment. Cost: atan, sin, mod — fine.
+
+Also add a hub flange... skip.
+
+6 spokes is sparse but readable. Let's do 5 or 6. With spin they'll rotate.
+
+The `spin` = uTime * 3.0 (wheel speed) — direction: for forward motion (+X), the wheel rotates... a point at the top moves +X. In the xy-plane, with the wheel center at origin, top point (0, R). Moving +x means rotating clockwise when viewed from +z. Rotation by angle -t about z. The point at angle θ (measured from +x axis) goes to θ - ωt. So in the SDF I rotate the point by +ωt about z: p' = Rz(+ωt) p. In my formula, `a = atan2(y,x) + spin` — that's equivalent to evaluating the pattern at angle a+spin, i.e., rotating the pattern by -spin. Which means the spokes rotate... The spoke pattern at angle α appears at a = α - spin, so the spoke that was at angle α is now at angle α - spin. That's rotation by -spin, which is clockwise for positive spin. Correct for forward motion. 
+
+And the crank: for forward motion, the pedals also rotate clockwise (when viewed from +z). Crank angle φ: right pedal at BB + (cos(-ωt), sin(-ωt))*0.15 = BB + 0.15*(cos φ, -sin φ) with φ=ωt. Let's just use φ = ωt and the pedal position = BB + 0.15*vec2(cos φ, -sin φ). Yes, clockwise.
+
+Now, the wheel radius: R=0.40, y=0.40 touches the ground at y=0. 
+
+Now the frame function.
+
+```glsl
+float frame(vec3 p){
+  float d = 1e9;
+  vec3 BB = vec3(-0.08,0.26,0.0);
+  vec3 SC = vec3(-0.30,0.78,0.0); // seat cluster
+  vec3 HT0= vec3(0.40,0.72,0.0);
+  vec3 HT1= vec3(0.45,0.92,0.0);
+  vec3 RH = vec3(-0.62,0.40,0.0);
+  vec3 FH = vec3(0.62,0.40,0.0);
+  d = min(d, sdCapsule(p, BB, SC, 0.025));   // seat tube
+  d = min(d, sdCapsule(p, BB, HT0, 0.026));  // down tube
+  d = min(d, sdCapsule(p, SC, HT1, 0.024));  // top tube
+  d = min(d, sdCapsule(p, HT0, HT1, 0.034)); // head tube
+  // ...
+}
+```
+
+Wait, the top tube should connect to the head tube top which is HT1 = (0.45,0.92). OK.
+
+Fork: from HT0 down to FH, two blades at z=±0.05: sdCapsule(p, vec3(0.40,0.72,±0.05), vec3(0.62,0.40,±0.05), 0.018). Also a crown capsule from HT0 to (0.41, 0.70). Keep simple.
+
+Chainstays: from BB to RH at z=±0.05, radius 0.016.
+Seat stays: from SC to RH at z=±0.05, radius 0.014.
+Seat post: SC to ( -0.35, 0.95), radius 0.018.
+Stem: HT1 to (0.50, 1.02, 0), radius 0.018.
+Handlebar: from (0.50, 1.02, -0.24) to (0.50, 1.02, 0.24) radius 0.016. Plus grips: capsules at the ends, radius 0.022, length 0.06 in z. Actually the bar grips: from z=0.17 to 0.24 at radius 0.022 → material 5.
+
+Hmm — with the pelican's wings holding the bars, the grips should be visible.
+
+Rear cog: cylinder at RH, radius 0.05, thin, at z=0.055.
+Chainring: cylinder at BB, radius 0.10, at z=0.06.
+Chain: two capsules as described, radius 0.010, at z=0.06.
+
+Bottom bracket shell: cylinder at BB along z, radius 0.035, half-length 0.055.
+
+Saddle: at (-0.36, 0.98, 0): sdEllipsoid(p - c, vec3(0.14, 0.035, 0.075))? Pelican saddle. Let's make it a rounded box: sdBox with rounding. Or an ellipsoid scaled — fine. Slight nose forward. Actually let's use two spheres/capsules: a capsule from (-0.44,0.98,0) to (-0.30,0.99,0) with radius 0.05, and a wider back part. Simpler: sdEllipsoid(p-(-0.38,0.98,0), vec3(0.15,0.04,0.09)) — an elongated flat ellipsoid. Good enough.
+
+Now the pelican.
+
+Body: 
+```glsl
+vec3 q = p - vec3(-0.26, 1.28, 0.0);
+q = rotZ(q, 0.25); // tilt: front up? 
+```
+Hmm, rotZ(q, a) rotates the point; the shape appears rotated by -a. Let's define rotZ(p,a) = vec3(p.x*cos a - p.y*sin a, p.x*sin a + p.y*cos a, p.z) — standard rotation of the point by +a, so the shape rotates by -a. Whatever; I'll pick a sign and check mentally.
+
+The body should be tilted so the front (chest) is up and the rear is down... For a pelican sitting upright on a bike leaning forward, the body axis goes from the lower-rear (tail) to the upper-front (chest/neck). So the body's long axis is tilted ~20-30° from horizontal.
+
+Ellipsoid radii: (0.36, 0.30, 0.27) with the long axis along x. Tilt so the front is higher: rotate the point by -0.28 rad about z... Let's just say after applying `q = rotZ(q, -0.28)`, a point along +x gets rotated to (x*cos(-0.28), x*sin(-0.28)) = (x*0.96, -x*0.276). So the shape (which is the ellipsoid in the rotated frame) — points at +x in the shape's local frame map to p = rotZ^-1 applied... ugh.
+
+Let me think again: if I compute the ellipsoid on q = R(θ)·(p - c), the shape in world = {p : R(θ)(p-c) ∈ E} = c + R(-θ)E. So the shape is rotated by -θ. To make the shape's long axis tilt so the front (+x) goes up (+y), I need a rotation of the shape by angle ψ where the +x axis maps to (cos ψ, sin ψ) with ψ > 0. So the shape rotation is +ψ, meaning θ = -ψ. So q = rotZ(p - c, -ψ) with rotZ being the standard CCW point rotation. I'll define `pRotZ(p,a)` as the standard CCW rotation and use `pRotZ(p-c, -0.28)` — hmm, just use `pRotZ(p-c, 0.28)` and the shape rotates by -0.28 → the front goes down. Not what I want. So use -0.28... 
+
+I'll just use a helper `rotZ` and pick the sign, then trust: define
+```glsl
+vec3 rotZ(vec3 p, float a){ float s=sin(a), c=cos(a); return vec3(c*p.x - s*p.y, s*p.x + c*p.y, p.z); }
+```
+and for the body I use `vec3 q = rotZ(p - BODYC, -0.30);` which gives a shape rotated by +0.30 (front up). Good.
+
+Hmm, actually is "front up" right? A pelican riding a bike leans forward, the tail is up. Whatever looks fine. Let me think about the silhouette: the body is an egg; the neck emerges from the top-front; the tail sticks out at the back. I'll tilt the body slightly so that the rear is a bit lower — no, the rear (tail) should be higher and back, like a bird leaning forward. Actually when a bird sits on a bike leaning forward, its body is roughly horizontal and the tail points back and slightly up. Let's use a small tilt of +0.15 (front up) — barely noticeable. Let's go with -0.15 shape rotation? Ugh. Let's use rotZ(p-BODYC, -0.12) → shape rotated +0.12 rad, front up slightly. Fine.
+
+Actually, I realize I should double check the rotZ convention once more. rotZ(p,a) with a>0 rotates the point counterclockwise. If the shape S is fixed and we test q = rotZ(p, a), then p is in the shape iff rotZ(p,a) ∈ S, i.e., p ∈ rotZ^{-1}(S) = rotZ(S, -a). So yes, the shape is rotated by -a. Confirmed.
+
+Body: center (-0.26, 1.26, 0), radii (0.34, 0.30, 0.26) with rotZ by -0.12 applied to the local point.
+
+Hmm — but also I want the body to be a bit pear-shaped (bigger at the back/bottom). Add a second ellipsoid at the back, smin'd.
+
+Tail: a cone pointing back: sdRoundCone from (-0.52,1.28,0) to (-0.72,1.42,0) with r1=0.10, r2=0.02. Actually pelican tails are short. It's a nice touch.
+
+Neck: from the body's upper front (0.0, 1.42) to the head (0.24, 1.78). Use two round cones for a curve: 
+- seg1: (0.02, 1.40, 0) → (0.14, 1.62, 0) r 0.13 → 0.10
+- seg2: (0.14, 1.62, 0) → (0.22, 1.80, 0) r 0.10 → 0.085
+
+Head: ellipsoid at (0.26, 1.85, 0) radii (0.13, 0.125, 0.115). Or a sphere r=0.12 smin'd with the neck.
+
+Beak: upper: round cone from (0.30,1.88,0) to (0.90,1.76,0), r1=0.075, r2=0.022. Hmm, the beak should start at the front of the head: head center (0.26,1.85), radius 0.12 → front at x=0.38. So the beak base at (0.32, 1.86) to the tip at (0.88, 1.73). Length ~0.58, which is long relative to the head (0.24 diameter) — pelicans have very long beaks. Good.
+
+Lower mandible + pouch: from (0.32, 1.80) to (0.82, 1.72): the pouch hangs below. Model the pouch as an ellipsoid centered at (0.58, 1.74, 0) radii (0.24, 0.10, 0.075), smin'd with the lower beak. Plus a lower mandible round cone from (0.32,1.80) to (0.86,1.73) r 0.05→0.02.
+
+Hmm, the pouch is orange and the beak is pale yellow/orange. Let's unify: beak + pouch material = orange-yellow (mat 7), and maybe the pouch slightly different (mat 7 both). Fine — one material simplifies.
+
+Eye: sphere at (0.33, 1.90, ±0.105) r 0.026, black. On both sides? Pelicans have eyes on both sides of the head, so yes, both. The visible one from a given angle. Good. Maybe add a small white highlight — skip, use specular.
+
+Wings: Let's make the wings folded and holding the handlebar. Shoulder at (-0.14, 1.42, ±0.20); elbow at (0.06, 1.20, ±0.28); wingtip at (0.48, 1.02, ±0.24) (at the handlebar grips). Use round cones flattened: I can flatten by scaling: apply the round cone in a scaled space? Non-uniform scaling breaks the distance metric. Alternative: use a smooth blend of several spheres along the path to form a flattened wing. Or use ellipsoids: an ellipsoid from the shoulder to the elbow oriented along the segment, flattened in the "wing thickness" direction.
+
+Simplest robust approach: a wing = a union of 3-4 rotated ellipsoids along the path, each flattened. With smin blending, they'd read as a smooth wing.
+
+Ellipsoid oriented along a direction: build a local frame. Alternatively use `sdEllipsoid` on `q = rotZ(rotY(...))`. Since the wings mostly lie in the xy-plane with a z offset, I can orient with a rotation about z only: local q = rotZ(rotY(p-c, ...)). The wing segment from the shoulder (-0.14,1.42,±0.20) to the elbow (0.06,1.20,±0.28) is mostly in x-y with a small z change. I'll orient the ellipsoid using a rotation about z by the segment angle, ignoring the z change. Good enough.
+
+Even simpler: build the wing from spheres blended with smin? No, that's blobby.
+
+Let's do: wing = smin of 3 ellipsoids:
+1. Upper arm: at midpoint (-0.04, 1.31, ±0.24), radii (0.16, 0.10, 0.055) rotated about z by the angle of the segment: from (-0.14,1.42) to (0.06,1.20), direction (0.2,-0.22) → angle = atan2(-0.22,0.2) = -0.83 rad. The shape rotation should be -0.83, so q = rotZ(p-c, +0.83).
+2. Forearm: midpoint (0.27, 1.11, ±0.26), direction from (0.06,1.20) to (0.48,1.02) = (0.42,-0.18), angle = -0.405. Radii (0.24, 0.075, 0.05). q = rotZ(p-c, 0.405).
+3. Hand/wing tip at (0.48, 1.02, ±0.24): a small sphere r 0.06 wrapping the grip.
+
+Hmm, honestly, this looks like arms. It's a cartoon pelican; fine. But maybe better: have the wings folded against the body and the wing tips forward resting near the top tube, not the handlebar. Actually pelicans riding bikes with wings on the handlebar is the iconic image. Let's go with the wings on the handlebar.
+
+Hmm, but with the head/beak above at y=1.85 and the body center at 1.26, the shoulders at 1.42, and the hands at 1.02 — that's a lot of reach, plausible.
+
+Legs: 
+- hip: (-0.30, 0.98, ±0.13)
+- foot: the pedal position.
+- thigh: round cone from hip to knee, r 0.07 → 0.05
+- shin: round cone from knee to ankle, r 0.05 → 0.035
+- foot: a flattened ellipsoid at the pedal, size (0.075, 0.018, 0.05), orange, webbed — maybe add a small heel. The foot should sit on the pedal. The pedal top is at y = pedalY + 0.012 or so. I'll place the foot ellipsoid centered at the pedal position + (0.01, 0.025, 0).
+
+Material: legs and feet = orange (mat 9), same family as the beak but slightly different.
+
+IK in the shader: 
+```glsl
+vec3 leg(vec3 p, vec3 hip, vec3 foot, float side){
+  vec3 u = foot - hip;
+  float d = length(u);
+  u = u/d;
+  float L1 = 0.46, L2 = 0.46;
+  d = clamp(d, abs(L1-L2)+0.001, L1+L2-0.001);
+  float ca = (L1*L1 + d*d - L2*L2)/(2.0*L1*d);
+  float sa = sqrt(max(0.0, 1.0-ca*ca));
+  vec3 v = normalize(vec3(-u.y, u.x, 0.0));  // points +x when u is -y
+  vec3 knee = hip + L1*(ca*u + sa*v)*... 
+```
+wait: knee = hip + L1*(ca*u + sa*v) where v is a unit vector perpendicular to u in the leg plane. Then |knee-hip| = L1, |foot-knee| = L2. Yes.
+
+But careful: the v must be perpendicular to u; for a general u (with a z-component) normalize((-u.y, u.x, 0)) is perpendicular to u only if... dot(u, v) = -u.x*u.y + u.y*u.x + 0 = 0. Yes, always perpendicular (as long as the vector isn't zero, i.e., u isn't along z — it isn't). Good.
+
+Since the legs are nearly in the x-y plane, v ≈ (+|uy|, ...). For u pointing down (0,-1,0): v = (1, 0, 0) → the knee bends forward. Good.
+
+Note: `d` is clamped, which changes the leg length; but the actual foot is at the pedal so the rendered shin connects the computed knee to the actual foot (using round cone from knee to foot). Fine.
+
+Now let's think about the smooth unions between the body parts. Use smin with a small k (0.05-0.12) for organic parts, and hard min for the mechanical parts.
+
+Cost: this map is getting big. Let's count the operations: 2 wheels × (torus 2 + cylinder + spokes) ≈ 2×6 = 12 primitives, the frame ~20 capsules, the pelican ~15 (round cones are expensive ~30 ops each!). Round cone costs maybe 30 instructions. 15 round cones = 450 instructions per map. That's a lot but GPU-fine at moderate resolution. Let's reduce: use capsules where tapering isn't needed.
+
+Let me estimate: total ~60 primitives, average ~15 ops = 900 ops per map call. With 100 steps = 90k ops per pixel. At 1280×720 = 921k pixels → 83 GFLOP per frame. That's way too slow (a modern GPU does ~5-10 TFLOPS, so ~10-16 fps). Hmm. Need to be careful.
+
+But the evaluator just measures throughput; still, "rendering efficiency matters". Let's reduce the step count: maxSteps 80 with a somewhat larger epsilon and a good bounding sphere early-out. Many pixels (background, ground) skip the march entirely. On average, maybe 40% of pixels march. Also, the march terminates early when it hits.
+
+Also we could use a bounding-volume hierarchy... too complex.
+
+Realistically, let's target maxSteps ~96, and use `t += max(0.6*d, 0.0008*t)`... Standard: t += d*0.9 for safety. Actually using `t += max(d, 0.0015*t)` helps convergence speed but risks overshoot. Let's just use t += d and epsilon = 0.0009*d + 0.0004... Hmm. Standard: `if (d < 0.0012*t) break;`. Let's use eps proportional: `if (d < 0.0008*t + 0.0004) hit`. That lets close-ups terminate faster.
+
+Let's also lower the resolution? No — "Do not lower the internal resolution."
+
+OK, we just write a reasonably efficient shader and accept it. Use `highp` and avoid `pow`. Keep the shading cheap (no soft shadows? I'll include a cheap shadow with 20 steps but only for the primary hit, and only up to distance 4). Actually, I'll skip the real shadow march and instead use AO + a fake ground shadow. That saves ~20% and still looks good. Hmm, but shadows add a lot of realism. Let's include a shadow march with 24 steps but with an early bail if the point is far above the ground... Meh. Let's include it — it's the classic look. Actually, let me reconsider: with a large scene, the shadow ray from a hit point near the bike travels through the bike volume, where the SDF is fine. 24 steps × ~900 ops = 21k ops per pixel per light. The primary march is 96 × 900 = 86k. So the shadow adds ~25%. Acceptable.
+
+Hmm, but the map function cost estimate might be too pessimistic. Let's just go and keep things tidy.
+
+Optimization: split the map into a "far" version and a "near" version? Complexity. Skip.
+
+Another optimization: use a cheap bounding-sphere for the pelican vs bike? Nah.
+
+Let's just write it.
+
+Also for the AO: 4-5 taps.
+
+Let me now write the actual GLSL.
+
+```glsl
+#version 300 es
+precision highp float;
+
+uniform vec2  uRes;
+uniform float uTime;
+uniform vec3  uCam;
+uniform vec3  uRight;
+uniform vec3  uUp;
+uniform vec3  uFwd;
+uniform float uTanH;
+
+out vec4 outColor;
+
+#define PI 3.141592653589793
+
+// ---------- primitives ----------
+float smin(float a, float b, float k){
+  float h = clamp(0.5 + 0.5*(b-a)/k, 0.0, 1.0);
+  return mix(b, a, h) - k*h*(1.0-h);
+}
+float sdSph(vec3 p, float r){ return length(p)-r; }
+float sdEll(vec3 p, vec3 r){
+  float k0 = length(p/r);
+  float k1 = length(p/(r*r));
+  return k0*(k0-1.0)/max(k1,1e-7);
+}
+float sdCap(vec3 p, vec3 a, vec3 b, float r){
+  vec3 pa = p-a, ba = b-a;
+  float h = clamp(dot(pa,ba)/dot(ba,ba), 0.0, 1.0);
+  return length(pa - ba*h) - r;
+}
+float sdRC(vec3 p, vec3 a, vec3 b, float r1, float r2){ ... }
+float sdTorusZ(vec3 p, float R, float r){ vec2 q = vec2(length(p.xy)-R, p.z); return length(q)-r; }
+float sdCylZ(vec3 p, float h, float r){ vec2 d = vec2(length(p.xy)-r, abs(p.z)-h); return min(max(d.x,d.y),0.0)+length(max(d,0.0)); }
+float sdBox(vec3 p, vec3 b){ vec3 q = abs(p)-b; return length(max(q,0.0)) + min(max(q.x,max(q.y,q.z)),0.0); }
+vec3 rotZ(vec3 p, float a){ float s=sin(a),c=cos(a); return vec3(c*p.x - s*p.y, s*p.x + c*p.y, p.z); }
+vec3 rotY(vec3 p, float a){ float s=sin(a),c=cos(a); return vec3(c*p.x + s*p.z, p.y, -s*p.x + c*p.z); }
+vec3 rotX(vec3 p, float a){ float s=sin(a),c=cos(a); return vec3(p.x, c*p.y - s*p.z, s*p.y + c*p.z); }
+```
+
+Careful with rotZ applied for the body — I'll use the convention above.
+
+Now the map. Materials constants:
+```
+const float M_FRAME = 1.0, M_TIRE=2.0, M_METAL=3.0, M_LEATHER=4.0, M_BODY=5.0, M_BEAK=6.0, M_EYE=7.0, M_LEG=8.0;
+```
+
+Material colors:
+- FRAME: vec3(0.85, 0.16, 0.14) — red. Or teal 0.1,0.55,0.6. Let's do a warm red-orange: (0.90, 0.22, 0.15).
+- TIRE: (0.045,0.045,0.05)
+- METAL: (0.75,0.77,0.80)
+- LEATHER: (0.24,0.14,0.09)
+- BODY: (0.98,0.96,0.93)
+- BEAK: (0.98,0.68,0.20)
+- EYE: (0.02,0.02,0.03)
+- LEG: (0.95,0.55,0.16)
+
+Now the map function. I'll write it as one function returning vec2.
+
+```glsl
+vec2 map(vec3 p){
+  vec2 res = vec2(1e9, 0.0);
+  #define PUT(d,id) if ((d) < res.x) res = vec2((d),(id));
+
+  float t = uTime;
+  float spin = t*2.6;
+  float crank = t*2.2;
+
+  // ---- wheels ----
+  for (int i=0;i<2;i++){
+    float cx = i==0 ? -0.62 : 0.62;
+    ...
+  }
+```
+Hmm, a loop with an if — better to just write a function `wheel(vec3 p, float cx, float spin, inout vec2 res)`. Functions with inout are fine in GLSL ES 3.0. Let's do:
+
+```glsl
+void addWheel(inout vec2 res, vec3 p, float cx, float spin){
+  vec3 q = p - vec3(cx, 0.40, 0.0);
+  float R = 0.40;
+  float tire = sdTorusZ(q, R-0.048, 0.048);
+  PUT(tire, M_TIRE)  // but PUT uses res.x directly
+  ...
+}
+```
+Since PUT is a macro referencing `res`, and in the function the parameter is named res, it works. Nice.
+
+Wheel contents:
+```glsl
+  float tire = sdTorusZ(q, 0.352, 0.048);
+  if (tire < res.x) res = vec2(tire, M_TIRE);
+  float rim = sdTorusZ(q, 0.30, 0.020);
+  // spokes
+  vec2 pl = q.xy;
+  float rr = length(pl);
+  float a = atan(pl.y, pl.x) + spin;
+  float seg = PI/3.0; // 6 spokes
+  float dd = rr * abs(sin(mod(a+seg*0.5, seg) - seg*0.5));
+  float spoke = max(dd, max(abs(rr - 0.15) - 0.135, abs(q.z) - 0.010));
+  spoke = max(spoke - 0.008, -0.020); // thickness? 
+```
+Hmm, let's simplify: spoke distance = max(max(dd, abs(rr-0.15)-0.14), abs(q.z)-0.008) - 0.004. The `-0.004` gives a thin thickness. But subtracting makes it a "rounded" version, fine.
+
+Hmm, actually dd as computed is a true perpendicular distance in the plane, so `spoke = max(dd, radialSlab)` then subtract the thickness. But `max(dd, zSlab)` isn't exactly a distance, but close enough for ray marching (it's a lower bound... actually max of two distances is a valid lower-ish bound for the intersection). We're making an approximation; ray marching might overshoot. To be safe, use a slightly reduced step. Let's use a global step multiplier of 0.85 in the march. That costs more steps though. Hmm. Standard practice: use max() intersections with a 0.9 safety factor. I'll use `t += d * 0.85;` hmm, that increases steps by 18%. Let's use 0.95 and rely on the max-based bounds being conservative-ish.
+
+Actually for a line segment: the distance to a segment is max(perpDist, |along - mid| - halflen) only when the perpDist measures the perpendicular to the line; that's a valid distance to the "infinite slab intersection" = an infinite strip. Actually max(perp, axial) is the exact distance to the intersection of two infinite slabs = an infinite rectangular bar, which is a valid conservative bound. But then subtracting the thickness r gives the exact SDF of a box bar. So it IS correct! max(d1,d2) with d1,d2 being exact distances to slabs gives the exact distance to the intersection region (exterior distance). And the exterior distance to an intersection of convex sets is ≥ max of the individual... it's exactly the distance to the intersection of the complements? Hmm, for convex sets A ∩ B, the distance function: outside the intersection, dist(x, A∩B) ≥ max(dist(x,A), dist(x,B)). It's a lower bound, so it's conservative (safe for marching, just slower). Fine.
+
+Then the spokes with q.z: the spokes are in the mid-plane. It's fine.
+
+OK, and the hub.
+
+Also, I should only compute the spokes if we're near the wheel... but the bounding sphere already handles the far case. Fine.
+
+Let's write `addWheel`:
+```glsl
+void addWheel(inout vec2 res, vec3 p, float cx, float sp){
+  vec3 q = p - vec3(cx, 0.40, 0.0);
+  float tire = sdTorusZ(q, 0.352, 0.048);
+  if (tire < res.x) res = vec2(tire, 2.0);
+  float rim = sdTorusZ(q, 0.298, 0.018);
+  vec2 pl = q.xy;
+  float rr = length(pl);
+  float a = atan(pl.y, pl.x) + sp;
+  float seg = PI/3.0;
+  float sdd = rr * abs(sin(mod(a + seg*0.5, seg) - seg*0.5));
+  float spoke = max(sdd, abs(rr-0.16) - 0.132);
+  spoke = max(spoke, abs(q.z) - 0.009);
+  spoke -= 0.005;
+  float metal = min(rim, spoke);
+  if (metal < res.x) res = vec2(metal, 3.0);
+  float hub = sdCylZ(q, 0.045, 0.030);
+  if (hub < res.x) res = vec2(hub, 3.0);
+}
+```
+Note sdd can be > rr for small rr, fine.
+
+Now the frame:
+```glsl
+void addFrame(inout vec2 res, vec3 p){
+  vec3 BB = vec3(-0.08, 0.27, 0.0);
+  vec3 SC = vec3(-0.30, 0.78, 0.0);
+  vec3 HT0 = vec3(0.40, 0.72, 0.0);
+  vec3 HT1 = vec3(0.45, 0.92, 0.0);
+  vec3 RH = vec3(-0.62, 0.40, 0.0);
+  vec3 FH = vec3(0.62, 0.40, 0.0);
+  float d = 1e9;
+  d = min(d, sdCap(p, BB, SC, 0.026));      // seat tube
+  d = min(d, sdCap(p, BB, HT0, 0.028));     // down tube
+  d = min(d, sdCap(p, SC, HT1, 0.025));     // top tube
+  d = min(d, sdCap(p, HT0, HT1, 0.036));    // head tube
+  d = min(d, sdCap(p, vec3(0.40,0.72,0.05), vec3(0.60,0.42,0.05), 0.018));   // fork right
+  d = min(d, sdCap(p, vec3(0.40,0.72,-0.05), vec3(0.60,0.42,-0.05), 0.018)); // fork left
+  d = min(d, sdCap(p, vec3(-0.08,0.27,0.05), vec3(-0.60,0.40,0.05), 0.017)); // chainstay r
+  d = min(d, sdCap(p, vec3(-0.08,0.27,-0.05), vec3(-0.60,0.40,-0.05), 0.017));
+  d = min(d, sdCap(p, vec3(-0.30,0.78,0.05), vec3(-0.60,0.40,0.05), 0.015));
+  d = min(d, sdCap(p, vec3(-0.30,0.78,-0.05), vec3(-0.60,0.40,-0.05), 0.015));
+  d = min(d, sdCap(p, vec3(-0.30,0.78,0), vec3(-0.35,0.96,0), 0.019)); // seatpost
+  d = min(d, sdCap(p, HT1, vec3(0.50,1.02,0), 0.019)); // stem
+  d = min(d, sdCap(p, vec3(0.50,1.02,-0.235), vec3(0.50,1.02,0.235), 0.016)); // bar
+  d = min(d, sdCylZ(p-BB, 0.055, 0.038)); // BB shell
+  d = min(d, sdCylZ(p-vec3(-0.62,0.40,0.055), 0.012, 0.055)); // rear cog
+  if (d < res.x) res = vec2(d, 1.0);
+  // leather: saddle + grips
+  float l = sdEll(rotZ(p - vec3(-0.38,0.98,0.0), 0.10), vec3(0.155,0.042,0.085));
+  l = min(l, sdCap(p, vec3(0.50,1.02,0.17), vec3(0.50,1.02,0.245), 0.023));
+  l = min(l, sdCap(p, vec3(0.50,1.02,-0.17), vec3(0.50,1.02,-0.245), 0.023));
+  if (l < res.x) res = vec2(l, 4.0);
+}
+```
+Wait: `sdEll(rotZ(p-c, 0.10), ...)` gives the shape rotated by -0.10 (front down). For a saddle we want the nose slightly up? Doesn't matter much. Use 0.
+
+Also the chain: two capsules at z=0.055 from the cog to the chainring. Top: (-0.62,0.45,0.055) to (-0.08,0.37,0.055). Bottom: (-0.62,0.35,0.055) to (-0.08,0.17,0.055). r=0.009. mat 3 (metal).
+
+Chainring: sdCylZ(p-BB - (0,0,0.062), 0.008, 0.10) — metal.
+
+Now the pelican.
+
+```glsl
+void addPelican(inout vec2 res, vec3 p){
+  // body
+  vec3 b = p - vec3(-0.26, 1.26, 0.0);
+  b = rotZ(b, -0.14);
+  float body = sdEll(b, vec3(0.355, 0.30, 0.265));
+  // chest bump
+  float chest = sdEll(p - vec3(0.02,1.36,0.0), vec3(0.20,0.22,0.22));
+  body = smin(body, chest, 0.10);
+  // tail
+  float tail = sdRC(p, vec3(-0.52,1.30,0.0), vec3(-0.76,1.44,0.0), 0.09, 0.02);
+  body = smin(body, tail, 0.06);
+  // neck
+  ...
+}
+```
+
+Hmm wait — the body ellipsoid center at (-0.26,1.26) with rx=0.355 spans x from -0.615 to 0.095. And the chest sphere at (0.02,1.36) r 0.20-0.22 → spans x to 0.24. The neck then goes up from (0.10, 1.45) to the head (0.24,1.82).
+
+Hmm, but the saddle is at (-0.38, 0.98). The body bottom is at y = 1.26-0.30 = 0.96. Good, it sits on the saddle.
+
+Also, the body at x from -0.62 to +0.24 — the rear wheel is at x=-0.62. The body would intersect the rear wheel! The rear wheel top is at y=0.80, and the body bottom is at 0.96. OK, no intersection. Good.
+
+But the seat stays go from (-0.30,0.78) to (-0.60,0.40), and the body's bottom rear is at around (-0.5, 1.05). Fine.
+
+The front wheel at x=0.62 — the beak tip at 0.88, y=1.73. Way above the wheel (top at 0.80). Fine.
+
+Wings: shoulders at (-0.14, 1.40, ±0.21) — that's inside the body (body at that x... the body spans z ±0.265). The shoulder z=±0.21 is inside the body. Good, so the wing emerges from the body.
+
+Let me define the wing path: shoulder S=(-0.10,1.40,±0.20), elbow E=(0.10,1.18,±0.27), hand H=(0.48,1.03,±0.235).
+
+The upper arm ellipsoid: midpoint (-0.00,1.29,±0.235), direction (0.20,-0.22) → angle -0.833 rad. The shape should be rotated by -0.833 → q = rotZ(p - c, +0.833). Radii along the local x: half-length 0.155, thickness y 0.085, z 0.055.
+
+Wait: an ellipsoid with rx=0.155, ry=0.085 covers a segment of length 0.31 with a max radius of 0.085, and the segment length is |(0.2,-0.22)|=0.297. So rx=0.155 works.
+
+Forearm: midpoint (0.29, 1.105, ±0.25), direction (0.38,-0.15) → length 0.409, angle -0.376. Shape rotation -0.376 → q = rotZ(p-c, 0.376). Radii (0.215, 0.07, 0.048).
+
+Hand: sphere at H, r 0.07, smin with the forearm.
+
+These should be smin'd with a small k (0.03) to look continuous.
+
+Also, wing tips could have a few feather bumps — skip.
+
+Legs: with IK.
+
+```glsl
+float legSDF(vec3 p, vec3 hip, vec3 foot, float side){
+  vec3 u = foot - hip;
+  float d = length(u);
+  u = u/max(d,1e-4);
+  float L1 = 0.47, L2 = 0.47;
+  float dc = clamp(d, 0.05, L1+L2-0.005);
+  float ca = (L1*L1 + dc*dc - L2*L2)/(2.0*L1*dc);
+  float sa = sqrt(max(0.0, 1.0-ca*ca));
+  vec3 v = normalize(cross(u, vec3(0.0,0.0,1.0)));  
+```
+Hmm, cross(u, z) = (u.y*1 - 0, 0 - u.x*1, 0) = (u.y, -u.x, 0). For u=(0,-1,0): (-1, 0, 0) → backward. I want forward (+x). So use v = normalize(cross(vec3(0,0,1), u)) = (-u.y, u.x, 0)... cross(z,u) = (0*u.z - 1*u.y, 1*u.x - 0*u.z, 0) = (-u.y, u.x, 0). For u=(0,-1,0) → (1,0,0). Forward. Good.
+
+```glsl
+  vec3 knee = hip + L1*(ca*u + sa*v);
+  float l = sdRC(p, hip, knee, 0.075, 0.055);
+  l = min(l, sdRC(p, knee, foot, 0.05, 0.032));
+  return l;
+}
+```
+Note: if the actual d > L1+L2 we clamp dc, so the knee is computed for the clamped distance but the shin connects the knee to the actual foot — the shin gets longer. With our range (0.63-0.92) and L1+L2 = 0.94, we're fine.
+
+Hmm, wait: the foot at the pedal, but the leg's z is ±0.13 (hip) and the pedal at z=±0.075 or so. Hmm, the pedal for the right foot is at z=+0.075 (crank) and the pedal platform extends to z=0.115. Let's put the foot at z = ±0.10 and the hip at z = ±0.12. Fine. The knee v vector has zero z component, so it stays in the plane defined by hip, foot, and the z-axis... no: knee = hip + L1*(ca*u + sa*v), and v is horizontal (z=0). So the knee's z = hip.z + L1*ca*u.z. With u.z small, ok.
+
+Feet: place a flattened ellipsoid at the pedal top: foot center = pedalPos + (0.01, 0.03, 0). Size (0.08, 0.022, 0.055). Actually the foot should be at the pedal position, and the pedal is at z=±0.075 for the crank end, plus the pedal platform. Let's define the pedal point as `pedalR = BB + vec2(cos, -sin)*0.15` at z=+0.10, and `pedalL` at z=-0.10 with the crank at angle+π.
+
+The crank arm: from BB at z=±0.075 to the pedal at z=±0.10 — the crank arm is a capsule from (BBx,BBy,0.075) to (pedalx,pedaly,0.075), and the pedal spindle goes from z=0.075 to 0.115.
+
+Let me define: 
+```
+vec3 pedR = vec3(BB.x + 0.15*cos(crank), BB.y - 0.15*sin(crank), 0.10);
+```
+Hmm, but I want the crank arms to be at z=±0.075 and the pedal platform centered at z=±0.115, with the spindle between. Let me simplify: the crank arm capsule from (BB.x,BB.y,0.075) to the pedal spindle end (px,py,0.075); the pedal = a box at (px,py,±0.105) size (0.055,0.010,0.032) → spanning z from 0.073 to 0.137. And the spindle cylinder along z from 0.075 to 0.10.
+
+Foot on the pedal: at (px, py+0.022, 0.105) with an ellipsoid (0.075, 0.02, 0.045).
+
+Hmm, the foot should be between the pedal and the shin. Since the shin comes from the hip to the foot, and the foot is on the pedal — fine, the ankle is at the foot.
+
+OK. Let's also handle: the right foot's pedal and leg vs the left. Both computed with crank and crank+PI.
+
+Material: legs+feet = M_LEG (orange).
+
+Eyes: sphere at (0.32, 1.90, ±0.10) r 0.028 → M_EYE. Hmm, the head is centered at (0.26,1.85) with radius ~0.12, so the surface at that point... let's place the eye at (0.33, 1.895, ±0.095) with r 0.027, and it should protrude slightly.
+
+Now the whole pelican needs to be assembled with smin for organic parts.
+
+Let me now write the map in full:
+
+```glsl
+vec2 map(vec3 p){
+  vec2 res = vec2(1e9, 0.0);
+  float t = uTime;
+  float spin = t*2.4;
+  float crank = t*2.0;
+
+  addWheel(res, p, -0.62, spin);
+  addWheel(res, p,  0.62, spin);
+  addFrame(res, p);
+  addPelican(res, p, crank);
+  return res;
+}
+```
+
+Wait, the pelican function needs the crank angle for the legs. OK.
+
+Now, the raymarching:
+
+```glsl
+float marchGround and bike...
+```
+
+Let me write the trace:
+```glsl
+vec2 trace(vec3 ro, vec3 rd){
+  // bounding sphere: center (0,0.95,0) radius 1.5
+  vec3 oc = ro - vec3(0.0, 0.95, 0.0);
+  float b = dot(oc, rd);
+  float c = dot(oc,oc) - 1.55*1.55;
+  float h = b*b - c;
+  if (h < 0.0) return vec2(-1.0, 0.0);
+  h = sqrt(h);
+  float t0 = max(-b-h, 0.0);
+  float t1 = -b+h;
+  if (t1 < 0.0) return vec2(-1.0, 0.0);
+  float t = t0;
+  float mat = 0.0;
+  for (int i=0;i<110;i++){
+    vec3 pos = ro + rd*t;
+    vec2 r = map(pos);
+    if (r.x < 0.0009*t + 0.0006) { return vec2(t, r.y); }
+    t += r.x;
+    if (t > t1) break;
+  }
+  return vec2(-1.0, 0.0);
+}
+```
+
+Hmm, returning early inside a loop is fine in GLSL ES 3.0.
+
+The bounding sphere should encompass the whole bike+pelican: x from -0.9 to 0.95, y from 0 to 2.0, z ±0.4. Center (0, 1.0, 0), radius ~1.3. Let's use center (0.0, 0.95, 0.0) and radius 1.25. Check the beak tip (0.90, 1.76): distance from (0,0.95,0) = sqrt(0.81+0.656) = 1.21. Inside 1.25. The rear wheel (-0.62,0.40): dist = sqrt(0.384+0.3025)=0.83. The top of the head (0.26,1.98): dist = sqrt(0.0676+1.06)= 1.06. OK, radius 1.3 for safety.
+
+Ground: analytic plane at y=0. But the tires touch the ground; the ground plane hit test: if rd.y < 0, tg = -(ro.y - 0)/rd.y. If tg > 0 and (no bike hit or tg < tbike) then it's the ground.
+
+Actually, I'll raymarch the bike, then compare with the ground.
+
+But — the ground plane at y=0 with the camera possibly below... clamp the pitch to avoid going under. With pitch limited to [-0.35, 1.35] and the target at y~1.0, distance up to 14, the camera y = 1.0 + 14*sin(-0.35) = 1.0 - 4.8 = -3.8 → below the ground. Hmm. Let's clamp the pitch to [-0.12, 1.45] and the distance max to 10. At distance 10, camera y = 1.0 - 1.19 = -0.19 → slightly below ground. Hmm. Let's limit the pitch to [-0.05, 1.45]? That prevents looking from below, which is fine for a bike on the ground, but the evaluator may set pitch explicitly through setView. The requirement just says setView sets the orbit camera. I'll clamp pitch to [-0.25, 1.45] and handle the ground plane both ways (if the camera is below, the ground is still drawn — it'll look odd but fine).
+
+Actually, simplest: make the ground a large but finite disc and shade it. If the camera goes below, you'd see the underside. Acceptable. Let's clamp the pitch to a reasonable range where the camera stays above the ground: pitch in [-0.20, 1.45] and distance max 9. Then the min camera y = 1.0 + 9*sin(-0.2) = 1.0 - 1.79 = -0.79. Still below. Hmm.
+
+Alternative: put the ground at y = -0.02 and don't worry; if the camera dips below, the ground plane covers the whole lower half. Actually, if the camera goes below the ground plane, the ground plane would fill the entire view (we'd see the backside). To avoid a black screen, I can shade the ground with a two-sided normal — but it'd still fill the screen. Let's just clamp the pitch to >= -0.08 and the max distance to 8: camera y = 1.0 + 8*(-0.08) = 0.36 > 0. Good. But then, at a pitch of -0.08 with a distance of 8, we're at y=0.36 which is above the ground but the view is nearly horizontal.
+
+Hmm, but the evaluator might call setView(0, -1.0, 5) expecting a view from below. I'd clamp to -0.08. That's a defensible design decision (prevents going under the floor). Many implementations clamp the pitch to [-89°, 89°]. I'll clamp to [-0.15, 1.5] but also keep the ground rendering robust: since the camera y > 0.1 in all clamped cases? At distance 8 and pitch -0.15: y = 1 - 1.19 = -0.19. Still slightly below. Let me set the target y to 1.0 and the max distance to 7: at pitch -0.15 → y = 1 - 1.04 = -0.04. Marginal.
+
+Alternative: shift the ground down to y=-0.05 and use a "sky" for the underside. Or just don't render the ground when the camera is below it — render the sky instead. Easy fix: if the camera y < 0.02, skip the ground and use the sky. That's a one-liner and prevents the black-fill issue. Let's do that: `if (rd.y > 0.0 || ro.y > 0.01)` ... Actually simply: only test the ground if `ro.y > 0.0`. If the camera is below the ground plane, no ground is drawn → sky everywhere. Clean.
+
+Then clamp the pitch to [-1.5, 1.5] and the distance to [0.35, 12]. The camera can go below the ground and you'd see the sky + the bike from below. That's fine and robust. Actually with the pitch at -1.5 the camera is almost directly below the target at y ≈ 1 - 12 = -11. You'd see the bike from below against the sky. Acceptable, if a bit odd. It's better than a black screen. And the requirement says "remain coherent from every angle" — a pelican on a bike viewed from below against a sky is coherent enough.
+
+Hmm, but then it might look broken. Let me clamp the pitch to [-0.9, 1.45]. At pitch -0.9 and distance 8, the camera is at y = 1 - 6.3 = -5.3, looking up at the bike. The ground isn't drawn (camera below), sky everywhere, bike floating. It's coherent, just unusual. OK, clamp to [-0.9, 1.45]. Hmm, but many will just use a pitch in [-1, 1]. Fine.
+
+Actually, let's be smarter: keep the ground always visible by making it a finite disc of radius 30 centered at the origin, and for the underside, shade it with the normal flipped (so it looks like a dark underside)... nah. Simpler: clamp the pitch to [-0.55, 1.5] and the distance to [0.35, 9]. At pitch -0.55, distance 9 → y = 1-4.7 = -3.7, below the ground. Still below.
+
+OK the cleanest: when the camera is below the ground plane, render the ground as a mirror-less dark surface (just render it with the flipped normal and a flat color). Actually, you know what—the ground is a plane; from below we see its underside. Just render it with the same shading but the lighting will darken it (the normal points up but the light comes from above → still lit). It would fill the bottom half of the screen and look like a horizon. Actually that's perfectly fine and normal-looking: you'd see the ground plane receding to a horizon with the bike above it, viewed from below. Since the bike sits ON the ground, viewing from below the ground gives a weird "underground" view, but it renders fine.
+
+I'll just always render the ground (the plane test works from both sides as long as we take abs or just use the plane at y=0 with the normal +y). Then the shading works. The only issue: when the ray starts below y=0 and goes up, it hits the plane at t>0 and shows the ground filling the lower part. Fine, it's coherent.
+
+OK, so: always test the ground. Good, no special-casing.
+
+Fake contact shadow: on the ground, darken based on proximity to the bike's footprint. I'll compute `shadow = 1 - 0.55 * exp(-dist2d^2)`. Using the distance in xz to the line segment between the wheel contact points, or an ellipse. Let's use an ellipse: center (0,0), radii (1.0, 0.45) → d = length(vec2(p.x/1.0, p.z/0.45)) and shadow = smoothstep(1.0, 0.4, d)... Plus a stronger darkening under the wheels. Keep it simple.
+
+Now lighting:
+
+```glsl
+vec3 skyColor(vec3 rd){
+  float y = clamp(rd.y*0.5+0.5, 0.0, 1.0);
+  vec3 horizon = vec3(0.85, 0.88, 0.92);
+  vec3 zenith = vec3(0.25, 0.45, 0.75);
+  vec3 col = mix(horizon, zenith, pow(y, 0.8));
+  // sun glow
+  float s = max(dot(rd, LIGHTDIR), 0.0);
+  col += vec3(1.0,0.85,0.6) * pow(s, 32.0) * 0.6;
+  col += vec3(1.0,0.9,0.75) * pow(s, 6.0) * 0.12;
+  return col;
+}
+```
+
+Ground color: a warm sand/gray-green. Add a radial vignette fade to the horizon color.
+
+Lighting for the object:
+```glsl
+vec3 shade(vec3 p, vec3 n, vec3 rd, float mat){
+  vec3 albedo; float rough; ...
+  vec3 L1 = normalize(vec3(0.5, 0.85, 0.55));  // key
+  vec3 L2 = normalize(vec3(-0.6, 0.35, -0.5)); // fill
+  float ao = calcAO(p, n);
+  float diff = max(dot(n, L1), 0.0);
+  float sh = softShadow(p + n*0.01, L1);
+  ...
+}
+```
+
+Soft shadow: 
+```glsl
+float shadow(vec3 ro, vec3 rd){
+  float res = 1.0;
+  float t = 0.03;
+  for (int i=0;i<24;i++){
+    vec3 p = ro + rd*t;
+    float h = map(p).x;
+    res = min(res, 8.0*h/t);   // hmm, standard: res = min(res, k*h/t)
+    t += clamp(h, 0.02, 0.25);
+    if (res < 0.05 || t > 3.5) break;
+  }
+  return clamp(res, 0.0, 1.0);
+}
+```
+Using k=8 gives fairly soft shadows. Fine.
+
+AO:
+```glsl
+float ao(vec3 p, vec3 n){
+  float occ = 0.0, sca = 1.0;
+  for (int i=0;i<5;i++){
+    float h = 0.01 + 0.09*float(i)/4.0;
+    float d = map(p + n*h).x;
+    occ += (h-d)*sca;
+    sca *= 0.85;
+  }
+  return clamp(1.0 - 2.2*occ, 0.0, 1.0);
+}
+```
+
+Hmm, "occ += (h-d)*sca" is the standard formulation. OK.
+
+Normals: 
+```glsl
+vec3 calcNormal(vec3 p){
+  vec2 e = vec2(0.0015, 0.0);
+  return normalize(vec3(
+    map(p+e.xyy).x - map(p-e.xyy).x,
+    map(p+e.yxy).x - map(p-e.yxy).x,
+    map(p+e.yyx).x - map(p-e.yyx).x));
+}
+```
+6 map calls. Expensive but standard.
+
+Total map calls per pixel: ~110 (march, but many terminate early) + 24 (shadow) + 5 (AO) + 6 (normal) ≈ 145 worst case. Hmm. That's a lot. Let's reduce the march to 96 steps.
+
+Fine. Let's target: maxSteps 96, shadow 20, AO 4.
+
+Now, materials/shading function:
+
+```glsl
+void getMat(float id, out vec3 albedo, out float rough, out float spec){
+  if (id < 1.5) { albedo = vec3(0.86,0.18,0.14); rough = 0.35; spec = 0.6; }  // frame red
+  else if (id < 2.5) { albedo = vec3(0.05,0.05,0.055); rough = 0.85; spec = 0.1; } // tire
+  else if (id < 3.5) { albedo = vec3(0.72,0.74,0.78); rough = 0.25; spec = 1.0; } // metal
+  else if (id < 4.5) { albedo = vec3(0.26,0.15,0.09); rough = 0.6; spec = 0.3; }  // leather
+  else if (id < 5.5) { albedo = vec3(0.97,0.95,0.92); rough = 0.7; spec = 0.25; } // body
+  else if (id < 6.5) { albedo = vec3(0.97,0.62,0.16); rough = 0.55; spec = 0.35; } // beak
+  else if (id < 7.5) { albedo = vec3(0.02,0.02,0.03); rough = 0.15; spec = 1.5; } // eye
+  else { albedo = vec3(0.95,0.52,0.14); rough = 0.5; spec = 0.4; } // leg
+}
+```
+
+Now the full fragment main:
+
+```glsl
+void main(){
+  vec2 uv = (gl_FragCoord.xy*2.0 - uRes)/uRes.y;
+  vec3 rd = normalize(uFwd + uRight*uv.x*uTanH + uUp*uv.y*uTanH);
+  vec3 ro = uCam;
+  vec2 hit = trace(ro, rd);
+  vec3 col;
+  // ground
+  float tg = 1e9;
+  if (abs(rd.y) > 1e-5) { tg = -ro.y/rd.y; if (tg < 0.0) tg = 1e9; }
+  if (hit.x > 0.0 && hit.x < tg) {
+     vec3 p = ro + rd*hit.x;
+     vec3 n = calcNormal(p);
+     col = shadeSurface(p, n, rd, hit.y);
+     // fog
+     col = mix(col, skyColor(rd), 1.0-exp(-0.006*hit.x*hit.x));
+  } else if (tg < 1e8) {
+     vec3 p = ro + rd*tg;
+     col = shadeGround(p, rd);
+     col = mix(col, skyColor(rd), 1.0-exp(-0.0025*tg*tg));
+  } else {
+     col = skyColor(rd);
+  }
+  // tonemap + gamma
+  col = col/(1.0+col*0.35);   // a little filmic
+  col = pow(max(col,0.0), vec3(1.0/2.2));
+  outColor = vec4(col, 1.0);
+}
+```
+
+Hmm, careful with the filmic + gamma. Let's use ACES-ish or simple Reinhard. I'll use `col = col*(1.0/(1.0+col))`? That's desaturating. Let's use `col = 1.0 - exp(-col*1.2)` then gamma 2.2.
+
+Also add a subtle vignette based on uv.
+
+Now, the ground shading: albedo = a soft gray-green; add the contact shadow; add fog.
+
+OK, now the JS side.
+
+```js
+export function createPelicanSdf(canvas){
+  const gl = canvas.getContext('webgl2', {alpha:false, antialias:false, depth:false, stencil:false, powerPreference:'high-performance'});
+  if (!gl) throw new Error('WebGL2 is not available');
+  ...
+}
+```
+
+Shaders as template strings. Keep the module under 32KB — the shader is maybe 8-10KB. Fine.
+
+Compile:
+```js
+function compile(type, src){
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src);
+  gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error('Shader compile error: ' + gl.getShaderInfoLog(s));
+  return s;
+}
+```
+
+Program, then get uniform locations.
+
+Geometry: a single triangle covering the screen:
+```js
+const buf = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
+const vao = gl.createVertexArray();
+gl.bindVertexArray(vao);
+gl.enableVertexAttribArray(0);
+gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+gl.bindVertexArray(null);
+```
+
+Vertex shader:
+```glsl
+#version 300 es
+layout(location=0) in vec2 aPos;
+void main(){ gl_Position = vec4(aPos, 0.0, 1.0); }
+```
+
+Render:
+```js
+function render(time){
+  if (lost || !program) return;
+  gl.viewport(0,0,canvas.width, canvas.height);
+  gl.useProgram(program);
+  ...uniforms...
+  gl.bindVertexArray(vao);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+}
+```
+
+Note: we must set the viewport to the drawing buffer size each render (in case the canvas was resized). Yes.
+
+Camera:
+```js
+const view = { yaw: -0.62, pitch: 0.20, distance: 4.4 };
+const target = [0, 1.02, 0];
+function camBasis(){
+  const cp = Math.cos(view.pitch), sp = Math.sin(view.pitch);
+  const cy = Math.cos(view.yaw), sy = Math.sin(view.yaw);
+  const dir = [sy*cp, sp, cy*cp];  // from target to camera
+  const pos = [target[0]+dir[0]*d, ...];
+  const fwd = normalize(target - pos) = -dir;
+  const right = normalize(cross(fwd, worldUp)) ... 
+```
+Let's compute: fwd = -dir. up_world = (0,1,0). right = normalize(cross(fwd, up_world))? For the camera basis, we want right, up, fwd forming a right-handed set with fwd = -z_cam. In view space, x=right, y=up, z=back = -fwd. So right = normalize(cross(fwd, up_world))? Let's check with fwd=(0,0,-1) and up=(0,1,0): cross(fwd,up) = (0,0,-1)×(0,1,0) = (0*0-(-1)*1, (-1)*0-0*0, 0*1-0*0) = (1,0,0). Yes, right = +x. Correct.
+
+Then camUp = cross(right, fwd): (1,0,0)×(0,0,-1) = (0*(-1)-0*0, 0*0-1*(-1), 0) = (0,1,0). Correct.
+
+At pitch = ±90°, fwd is parallel to up → degenerate. Clamp the pitch to [-1.45, 1.45] (±83°) to be safe. And with the ground concern — I decided to render the ground always. At pitch -1.45, distance 12 → camera y = 1.02 - 11.9 = -10.9. It renders the ground below... whatever, it's an extreme case.
+
+Let's clamp pitch to [-1.5, 1.5] radians (±85.9°). Fine, and the cross product is safe (|fwd × up| = cos(pitch) ≈ 0.07 at 86°, still normalizable).
+
+Now the controls.
+
+```js
+const pointers = new Map();
+let dragging = false, lastX=0, lastY=0, pinchDist = 0;
+```
+Handle pointerdown/move/up/cancel on the canvas.
+
+For a two-finger pinch, with the pointer map, when the size >= 2, compute the distance between the first two pointers. On move, if two pointers → zoom by the ratio; else orbit.
+
+Also handle the wheel event: `canvas.addEventListener('wheel', onWheel, {passive:false})`.
+
+Keyboard: keydown handler on the canvas; also need canvas focus (tabindex=0). Also add a click → focus.
+
+Prevent scrolling: `canvas.style.touchAction = 'none'` and preventDefault in the touchstart/touchmove handlers. With pointer events, we still need a `touchstart`/`touchmove` preventDefault to stop scrolling in some browsers (touch-action: none handles it in modern browsers). I'll add both: set touchAction none, and add non-passive touchstart/touchmove listeners with preventDefault (but only when the target is the canvas — which it is).
+
+Note: with `touch-action: none`, pointer events work fine.
+
+Also add `canvas.addEventListener('contextmenu', e => e.preventDefault())`? Optional. Skip, or include (harmless).
+
+Now, the size: the evaluator sets the canvas width/height. We must respect the drawing buffer. On each render we read canvas.width/height and set the viewport + uRes. Good.
+
+Context loss:
+```js
+canvas.addEventListener('webglcontextlost', (e)=>{ e.preventDefault(); lost = true; });
+canvas.addEventListener('webglcontextrestored', ()=>{ lost=false; initGL(); });
+```
+But initGL recreates the program and VAO — need to delete the old ones first (they're gone anyway). Just re-run setup.
+
+Actually, on context loss, the resources are invalid. I'll set program=null and rebuild on restore. Careful with the uniform locations caching.
+
+Let me structure with an `init()` function that creates the program and buffers, and returns. On restore, call init() again.
+
+Now, dispose: remove all listeners, delete the program/buffer/VAO, and delete the context extension? `gl.getExtension('WEBGL_lose_context')?.loseContext()` — optional. Not required. I'd rather not lose the context since it might affect the evaluator. Just delete the resources and mark disposed.
+
+Let's write the code.
+
+One more consideration: "render(timeSeconds) — synchronously draw one complete frame." And "Rendering must be deterministic for the same time, view, and canvas size." OK. Our animation depends on time → deterministic.
+
+But wait: if the evaluator calls render(0) repeatedly, the pose is the same. Fine. But if they call render(t) at a fixed time for the throughput test, the wheels won't spin. Fine.
+
+Hmm — one concern: if the evaluator renders frames at the same time value repeatedly, the image is static, which is fine.
+
+Now let me be careful about the requirement: "Pointer or mouse drag on the canvas must orbit through a full 360 degrees." So yaw is unbounded. Yes, no clamp on yaw. Good, and my camera formula uses sin/cos of yaw so it wraps naturally.
+
+"positive yaw orbits around world-up" — with camera pos = target + d*(sin(yaw)cos(pitch), sin(pitch), cos(yaw)cos(pitch)), as yaw increases, the camera goes from +Z toward +X. That's a rotation around world-up. Good.
+
+Now, "setView(0,0,distance) must show the bicycle from its right side". At yaw=0, pitch=0: camera at (0, 1.02, d) looking in -Z. The bike faces +X, so we see the bike's right side (as computed earlier: the rider's right is +Z). ✓.
+
+Hmm wait, let me double check the "right side of the bicycle" claim. The rider faces +X. right = fwd × up = (1,0,0)×(0,1,0) = (0,0,1) = +Z. The camera is at +Z looking toward -Z. We see the surface of the bike facing +Z, i.e., the right side. ✓
+
+Now let's write everything concretely.
+
+The shader code (final GLSL):
+
+```glsl
+#version 300 es
+precision highp float;
+
+uniform vec2 uRes;
+uniform float uTime;
+uniform vec3 uCam, uRight, uUp, uFwd;
+uniform float uTanH;
+
+out vec4 outColor;
+
+#define PI 3.14159265359
+
+float smin(float a, float b, float k){
+  float h = clamp(0.5 + 0.5*(b-a)/k, 0.0, 1.0);
+  return mix(b,a,h) - k*h*(1.0-h);
+}
+float sdSph(vec3 p, float r){ return length(p)-r; }
+float sdEll(vec3 p, vec3 r){
+  float k0 = length(p/r);
+  float k1 = length(p/(r*r));
+  return k0*(k0-1.0)/max(k1, 1e-7);
+}
+float sdCap(vec3 p, vec3 a, vec3 b, float r){
+  vec3 pa = p-a, ba = b-a;
+  float h = clamp(dot(pa,ba)/dot(ba,ba), 0.0, 1.0);
+  return length(pa-ba*h) - r;
+}
+float sdRC(vec3 p, vec3 a, vec3 b, float r1, float r2){
+  vec3 ba = b-a;
+  float l2 = dot(ba,ba);
+  float rr = r1-r2;
+  float a2 = l2 - rr*rr;
+  float il2 = 1.0/l2;
+  vec3 pa = p-a;
+  float y = dot(pa,ba);
+  float z = y - l2;
+  vec3 x = pa*l2 - ba*y;
+  float x2 = dot(x,x);
+  float y2 = y*y*l2;
+  float z2 = z*z*l2;
+  float k = sign(rr)*rr*rr*x2;
+  if (sign(z)*a2*z2 > k) return sqrt(x2+z2)*il2 - r2;
+  if (sign(y)*a2*y2 < k) return sqrt(x2+y2)*il2 - r1;
+  return (sqrt(x2*a2*il2)+y*rr)*il2 - r1;
+}
+float sdTorusZ(vec3 p, float R, float r){
+  vec2 q = vec2(length(p.xy)-R, p.z);
+  return length(q)-r;
+}
+float sdCylZ(vec3 p, float h, float r){
+  vec2 d = vec2(length(p.xy)-r, abs(p.z)-h);
+  return min(max(d.x,d.y),0.0) + length(max(d,0.0));
+}
+float sdBox(vec3 p, vec3 b){
+  vec3 q = abs(p)-b;
+  return length(max(q,0.0)) + min(max(q.x,max(q.y,q.z)),0.0);
+}
+vec3 rotZ(vec3 p, float a){ float s=sin(a), c=cos(a); return vec3(c*p.x-s*p.y, s*p.x+c*p.y, p.z); }
+```
+
+Watch out: the `sdRC` with `sqrt(x2*a2*il2)` — if a2 < 0 (when rr*rr > l2, i.e., a very fat cone with a short axis) it could be NaN. Our uses have small radii relative to length, so a2 > 0. To be safe, clamp: `a2 = max(a2, 1e-6);`. Hmm, that changes the semantics slightly, but our cases are fine. I'll add a max to avoid NaN.
+
+Now, `sign(z)*a2*z2 > k` with k = sign(rr)*rr*rr*x2. Standard IQ code. OK.
+
+Now writing the parts.
+
+```glsl
+void addWheel(inout vec2 res, vec3 p, float cx, float sp){
+  vec3 q = p - vec3(cx, 0.40, 0.0);
+  float tire = sdTorusZ(q, 0.352, 0.048);
+  if (tire < res.x) res = vec2(tire, 2.0);
+  float rim = sdTorusZ(q, 0.296, 0.019);
+  vec2 pl = q.xy;
+  float rr = length(pl);
+  float a = atan(pl.y, pl.x) + sp;
+  float seg = PI/3.0;
+  float sd = rr*abs(sin(mod(a + seg*0.5, seg) - seg*0.5));
+  float spoke = max(sd, abs(rr-0.16) - 0.132);
+  spoke = max(spoke, abs(q.z) - 0.008) - 0.005;
+  float mtl = min(rim, spoke);
+  if (mtl < res.x) res = vec2(mtl, 3.0);
+  float hub = sdCylZ(q, 0.048, 0.032);
+  if (hub < res.x) res = vec2(hub, 3.0);
+}
+```
+
+Careful: `mod(a + seg*0.5, seg) - seg*0.5` — for negative a, mod in GLSL returns a value with the sign of the divisor? GLSL's mod(x,y) = x - y*floor(x/y), which is always in [0,y) for y>0. Good, always positive. ✓
+
+Now the frame:
+
+```glsl
+void addFrame(inout vec2 res, vec3 p){
+  vec3 BB  = vec3(-0.08, 0.27, 0.0);
+  vec3 SC  = vec3(-0.30, 0.78, 0.0);
+  vec3 HT0 = vec3(0.40, 0.72, 0.0);
+  vec3 HT1 = vec3(0.45, 0.92, 0.0);
+  vec3 RH  = vec3(-0.60, 0.40, 0.0);
+  vec3 FH  = vec3(0.60, 0.40, 0.0);
+
+  float d = sdCap(p, BB, SC, 0.026);
+  d = min(d, sdCap(p, BB, HT0, 0.029));
+  d = min(d, sdCap(p, SC, HT1, 0.025));
+  d = min(d, sdCap(p, HT0, HT1, 0.037));
+  d = min(d, sdCap(p, vec3(0.40,0.72,0.048), vec3(0.58,0.42,0.048), 0.018));
+  d = min(d, sdCap(p, vec3(0.40,0.72,-0.048), vec3(0.58,0.42,-0.048), 0.018));
+  d = min(d, sdCap(p, vec3(-0.08,0.27,0.048), vec3(-0.58,0.40,0.048), 0.016));
+  d = min(d, sdCap(p, vec3(-0.08,0.27,-0.048), vec3(-0.58,0.40,-0.048), 0.016));
+  d = min(d, sdCap(p, vec3(-0.30,0.78,0.045), vec3(-0.58,0.40,0.045), 0.014));
+  d = min(d, sdCap(p, vec3(-0.30,0.78,-0.045), vec3(-0.58,0.40,-0.045), 0.014));
+  d = min(d, sdCap(p, vec3(-0.30,0.78,0.0), vec3(-0.35,0.955,0.0), 0.019));  // seatpost
+  d = min(d, sdCap(p, HT1, vec3(0.50,1.02,0.0), 0.019));                      // stem
+  d = min(d, sdCap(p, vec3(0.50,1.02,-0.24), vec3(0.50,1.02,0.24), 0.016));   // bar
+  d = min(d, sdCylZ(p-BB, 0.058, 0.040));                                     // BB shell
+  d = min(d, sdCylZ(p-vec3(BB.x,BB.y,0.065), 0.008, 0.105));                  // chainring
+  d = min(d, sdCylZ(p-vec3(RH.x,RH.y,0.062), 0.010, 0.055));                  // cog
+  d = min(d, sdCap(p, vec3(-0.60,0.445,0.062), vec3(-0.08,0.375,0.062), 0.010)); // chain top
+  d = min(d, sdCap(p, vec3(-0.60,0.355,0.062), vec3(-0.08,0.165,0.062), 0.010)); // chain bottom
+  if (d < res.x) res = vec2(d, 1.0);
+
+  float l = sdEll(p - vec3(-0.37, 0.985, 0.0), vec3(0.155, 0.045, 0.085));
+  l = min(l, sdCap(p, vec3(0.50,1.02,0.165), vec3(0.50,1.02,0.242), 0.024));
+  l = min(l, sdCap(p, vec3(0.50,1.02,-0.165), vec3(0.50,1.02,-0.242), 0.024));
+  if (l < res.x) res = vec2(l, 4.0);
+}
+```
+
+Hmm, the wheel hubs: I set the wheel hub center at x=±0.62 earlier but now RH/FH at ±0.60. Let me make everything consistent: wheel centers at x = -0.62 and +0.62, y = 0.40. And the rear hub/front hub at the same. Let's use ±0.62 everywhere. And the fork from (0.40,0.72) to (0.62,0.40).
+
+Also the chain from the chainring (BB, r=0.105) to the cog (r=0.055): the chain's top run is tangent to both circles at roughly y = BBy + 0.105 = 0.375 and y = RHy + 0.055 = 0.455. Given the chainring is smaller and higher... The tangent line: from (-0.08, 0.27+0.105=0.375) to (-0.62, 0.40+0.055=0.455). Slope = (0.455-0.375)/(-0.54) = -0.148. OK, so the top chain from (-0.08,0.375) to (-0.62,0.455). The bottom: from (-0.08, 0.165) to (-0.62, 0.345). Good.
+
+Now, the crank assembly:
+
+```glsl
+void addCranks(inout vec2 res, vec3 p, float crank){
+  vec3 BB = vec3(-0.08, 0.27, 0.0);
+  // right crank at angle crank, left at crank+PI
+  float c1 = cos(crank), s1 = sin(crank);
+  vec3 pR = vec3(BB.x + 0.15*c1, BB.y - 0.15*s1, 0.0);
+  vec3 pL = vec3(BB.x - 0.15*c1, BB.y + 0.15*s1, 0.0);
+  float d = sdCap(p, vec3(BB.xy,0.075), vec3(pR.xy,0.075), 0.017);
+  d = min(d, sdCap(p, vec3(BB.xy,-0.075), vec3(pL.xy,-0.075), 0.017));
+  d = min(d, sdCap(p, vec3(pR.xy,0.075), vec3(pR.xy,0.105), 0.012));
+  d = min(d, sdCap(p, vec3(pL.xy,-0.075), vec3(pL.xy,-0.105), 0.012));
+  d = min(d, sdBox(p - vec3(pR.xy, 0.122), vec3(0.055,0.011,0.030)) - 0.008);
+  d = min(d, sdBox(p - vec3(pL.xy,-0.122), vec3(0.055,0.011,0.030)) - 0.008);
+  if (d < res.x) res = vec2(d, 3.0);
+}
+```
+Wait, `sdCap(p, vec3(BB.xy,0.075), ...)` — `vec3(BB.xy, 0.075)` is valid GLSL (vec3 from vec2 + float). Yes.
+
+The pedal box: `sdBox(...)-0.008` gives a rounded box. The pedals should be at the crank ends. Position: (pR.x, pR.y, 0.122). Good.
+
+Note: the pedal center z=0.122 while the spindle goes from 0.075 to 0.105. The box is centered at z=0.122 with half-size 0.03 → z from 0.092 to 0.152. Good, overlapping the spindle end.
+
+The foot is placed on top of the pedal at (pR.x+0.005, pR.y+0.030, 0.122).
+
+Now the legs and feet:
+
+```glsl
+void addLegs(inout vec2 res, vec3 p, float crank){
+  vec3 BB = vec3(-0.08, 0.27, 0.0);
+  float c1 = cos(crank), s1 = sin(crank);
+  vec3 pedR = vec3(BB.x + 0.15*c1, BB.y - 0.15*s1, 0.122);
+  vec3 pedL = vec3(BB.x - 0.15*c1, BB.y + 0.15*s1, -0.122);
+  vec3 hipR = vec3(-0.30, 0.98, 0.125);
+  vec3 hipL = vec3(-0.30, 0.98, -0.125);
+  float d = legDist(p, hipR, pedR + vec3(0.0,0.035,0.0));
+  d = min(d, legDist(p, hipL, pedL + vec3(0.0,0.035,0.0)));
+  // feet
+  float fr = sdEll(rotZ(p - (pedR+vec3(0.01,0.030,0.0)), 0.0), vec3(0.075,0.020,0.050));
+  ...
+}
+```
+Hmm, the foot ellipsoid: a webbed foot pointing forward. Let's make it an ellipsoid with radii (0.085, 0.018, 0.045) centered at the pedal top + (0.015, 0.012, 0).
+
+OK. And the leg connects the hip to the ankle, which is at the pedal top.
+
+Let me define the ankle = pedal + (0, 0.025, 0) roughly, and the foot centered there.
+
+legDist(p, hip, ankle) as described.
+
+Now the pelican:
+
+```glsl
+void addPelican(inout vec2 res, vec3 p, float crank){
+  // --- body ---
+  vec3 b = rotZ(p - vec3(-0.26,1.26,0.0), -0.13);
+  float body = sdEll(b, vec3(0.35, 0.30, 0.265));
+  float chest = sdEll(p - vec3(0.02,1.34,0.0), vec3(0.20,0.23,0.23));
+  body = smin(body, chest, 0.09);
+  float tail = sdRC(p, vec3(-0.50,1.28,0.0), vec3(-0.78,1.42,0.0), 0.10, 0.02);
+  body = smin(body, tail, 0.07);
+  // --- neck ---
+  float neck = sdRC(p, vec3(0.06,1.44,0.0), vec3(0.16,1.64,0.0), 0.125, 0.10);
+  neck = smin(neck, sdRC(p, vec3(0.16,1.64,0.0), vec3(0.24,1.82,0.0), 0.10, 0.085), 0.05);
+  body = smin(body, neck, 0.05);
+  // --- head ---
+  float head = sdSph(p - vec3(0.27,1.86,0.0), 0.125);
+  body = smin(body, head, 0.05);
+  if (body < res.x) res = vec2(body, 5.0);
+  ...
+}
+```
+
+Hmm, careful: the neck's start at (0.06,1.44) with r=0.125 — the chest ellipsoid is at (0.02,1.34) with r 0.20-0.23, so the neck starts inside the chest. Good.
+
+Head at (0.27,1.86) r 0.125, so the head spans x from 0.145 to 0.395, y from 1.735 to 1.985.
+
+Beak: from (0.34,1.88) to (0.92,1.76). Hmm, the beak base should be at the middle of the head's height, around y=1.86, x=0.35. Let's use a from (0.32,1.87) to (0.90,1.75) with r1=0.075, r2=0.025. The upper mandible. The bill tip at x=0.90 vs the front wheel at x=0.62+0.40=1.02 for the wheel's outer edge — the beak tip at 0.90 is inside the wheel's x-range but at y=1.75, way above the wheel (top at 0.80). So no collision. Good.
+
+Pouch: an ellipsoid at (0.58,1.72,0) radii (0.22,0.10,0.075), smin'd with the lower mandible. Lower mandible: sdRC from (0.32,1.80) to (0.88,1.73) r1=0.05, r2=0.02. The pouch hangs below the lower mandible.
+
+Hmm, let's make the pouch more distinct: an ellipsoid centered at (0.56,1.70) with radii (0.21, 0.115, 0.08), and the lower mandible along its top. Actually pelican pouches hang down prominently. Let's make the pouch bigger: center (0.58,1.69), radii (0.20,0.13,0.085). And smin with the upper beak with k=0.03.
+
+Beak material 6 (orange).
+
+Eye: sdSph(p - vec3(0.33,1.90,±0.098), 0.028) → mat 7.
+
+Wings: mat 5 (body white)? Wings are usually the same white/gray. Use mat 5. Fine, maybe slightly different — let's keep 5.
+
+Now, in the map function, the order matters for the material IDs (first hit wins with `<` comparisons only if strictly less; equal distances would keep the earlier). Since the parts are separate, use strict less-than comparisons which naturally keep the earlier id on a tie. It doesn't matter much.
+
+Wing code:
+
+```glsl
+  vec3 s1 = vec3(-0.10,1.40,0.21), e1 = vec3(0.10,1.18,0.27), h1 = vec3(0.48,1.03,0.235);
+  vec3 s2 = vec3(-0.10,1.40,-0.21), e2 = vec3(0.10,1.18,-0.27), h2 = vec3(0.48,1.03,-0.235);
+```
+Upper arm: from s to e: dir = (0.20,-0.22), length 0.297, mid = (0.00,1.29), angle = atan2(-0.22,0.20) = -0.833. The shape rotation = -0.833 → apply rotZ(p-mid, +0.833). Radii: (0.16, 0.085, 0.055).
+
+Forearm: from e (0.10,1.18) to h (0.48,1.03): dir = (0.38,-0.15), length 0.409, mid = (0.29,1.105), angle = atan2(-0.15,0.38) = -0.376. Apply rotZ(p-mid, +0.376). Radii (0.215, 0.072, 0.048).
+
+Hand: sphere at h with r 0.072.
+
+smin all with k=0.04.
+
+Since the sign of the rotation matters, let me double-check with the ellipsoid: the shape is E = {q : |q/r| ... }, and we test q = rotZ(p-mid, θ). The shape in world = mid + rotZ(E, -θ) (since p-mid ∈ rotZ^{-1}(E) = rotZ(E,-θ)). So the shape is rotated by -θ. We want the shape rotated by the segment angle φ = -0.833 (so the local +x axis points along the segment). So -θ = φ → θ = +0.833. ✓ (as I wrote).
+
+Good.
+
+Now the leg IK function. Let me write it as a standalone:
+
+```glsl
+float legDist(vec3 p, vec3 hip, vec3 foot){
+  vec3 u = foot - hip;
+  float d = length(u);
+  u = u/max(d,1e-5);
+  float L1 = 0.46, L2 = 0.46;
+  float dc = clamp(d, 0.08, L1+L2-0.02);
+  float ca = (L1*L1 + dc*dc - L2*L2)/(2.0*L1*dc);
+  ca = clamp(ca, -1.0, 1.0);
+  float sa = sqrt(max(0.0, 1.0-ca*ca));
+  vec3 v = normalize(cross(vec3(0.0,0.0,1.0), u));
+  vec3 knee = hip + L1*(ca*u + sa*v);
+  float ld = sdRC(p, hip, knee, 0.085, 0.058);
+  ld = min(ld, sdRC(p, knee, foot, 0.052, 0.034));
+  return ld;
+}
+```
+Wait, cross(z,u) with u potentially having a z-component: cross((0,0,1),(ux,uy,uz)) = (0*uz-1*uy, 1*ux-0*uz, 0) = (-uy, ux, 0). For u pointing down (0,-1,0) → v=(1,0,0). ✓ forward.
+
+Hmm, but for the leg, the knee should bend forward, so v = +x. ✓
+
+Check the hip: (-0.30,0.98,0.125) and the foot ≈ pedal + (0,0.035,0) at z=±0.122 (not 0.125 — close enough). u ≈ small z. Fine.
+
+Note: L1+L2 = 0.92 and the max distance from the hip to the foot: computed earlier ~0.92 at the lowest pedal. Let's recheck with the new numbers: hip (-0.30, 0.98), lowest pedal y = 0.27-0.15 = 0.12 + 0.035 = 0.155. Distance = sqrt((0.07+0.30)^2 + (0.98-0.155)^2) = sqrt(0.1369 + 0.68) = sqrt(0.817) = 0.904. Under 0.92. ✓ At the top: pedal y = 0.42+0.035 = 0.455, x = -0.08+0.15 = 0.07 → wait, at crank=0 the pedal is at x = -0.08+0.15 = 0.07, y = 0.27. Hmm, I define pR = BB + (0.15cos, -0.15 sin). At crank=0: (0.07, 0.27). At crank=π/2: ( -0.08, 0.27-0.15) = (-0.08, 0.12). At crank=π: (-0.23, 0.27). At crank=3π/2: (-0.08, 0.42).
+
+Distances from the hip (-0.30,0.98) to the ankle = pedal + (0,0.035):
+- crank=0: pedal (0.07,0.27,0.122), ankle (0.07,0.305) → d = sqrt(0.1369+0.4556)=sqrt(0.5925)=0.770
+- crank=π/2: (-0.08,0.155) → d = sqrt(0.0484+0.6806)=0.854
+- crank=π: (-0.23,0.305) → d = sqrt(0.0049+0.4556)=0.679
+- crank=3π/2: (-0.08,0.455) → d = sqrt(0.0484+0.2756)=0.569
+All < 0.92 ✓ and > |L1-L2| = 0 ✓. Good, and the knee always bends forward.
+
+At d=0.569, ca = (0.2116+0.3238-0.2116)/(2*0.46*0.569) = 0.3238/0.5235 = 0.6185 → the knee angle is quite bent. Good.
+
+At d=0.854: ca = (0.2116+0.7293-0.2116)/(2*0.46*0.854)= 0.7293/0.7857=0.928. sa = 0.372. Fine.
+
+Now the feet: the foot ellipsoid at the pedal top. For the right foot, centered at (pedR.x+0.01, pedR.y+0.030, 0.122) with radii (0.085,0.018,0.048). The ankle is at the same place. OK.
+
+Add a small heel: skip.
+
+Now, "two legs in a plausible riding pose" ✓.
+
+Let me also add a subtle "neck" ruff or a beak stripe? Skip.
+
+Now the map:
+
+```glsl
+vec2 map(vec3 p){
+  vec2 res = vec2(1e9, 0.0);
+  float t = uTime;
+  float spin = t*2.2;
+  float crank = t*1.9;
+  addWheel(res, p, -0.62, spin);
+  addWheel(res, p,  0.62, spin);
+  addFrame(res, p);
+  addCranks(res, p, crank);
+  addPelican(res, p, crank);
+  return res;
+}
+```
+
+Hmm — should the front and rear wheels spin at the same rate? Yes for a bike.
+
+Wait, one problem: the wheel spin must be consistent with the crank for realism (gear ratio), but visually it doesn't matter.
+
+Another consideration: the evaluator may render at t=0 only. Then the crank is at angle 0 and the wheels are static. Fine.
+
+Now, the overall render.
+
+Let me also double check the "ground" plane and the wheels: the tire's outer radius is 0.352+0.048 = 0.40, centered at y=0.40, so the bottom touches y=0. ✓
+
+Now let's write the shading.
+
+```glsl
+vec3 matAlbedo(float id){...}
+```
+
+I'll use an if-chain returning a vec4 (albedo.rgb, specular intensity) and a roughness. Let's pack: vec3 albedo; float gloss; float specI.
+
+Key light dir L = normalize(vec3(0.45, 0.80, 0.40)).
+Fill: from the opposite side, dimmer, sky-colored.
+
+Shading:
+```glsl
+vec3 shade(vec3 p, vec3 n, vec3 rd, float id){
+  vec3 alb = ...;
+  float gloss = ...;
+  float ao = calcAO(p,n);
+  float sh = softShadow(p+n*0.008, L1);
+  float dif = max(dot(n,L1),0.0);
+  vec3 col = alb * (dif*sh*vec3(1.0,0.95,0.85)*1.15);
+  // sky ambient
+  float hemi = 0.5+0.5*n.y;
+  col += alb * hemi * vec3(0.30,0.36,0.45) * ao * 0.9;
+  // bounce from ground
+  col += alb * max(0.0,-n.y)*0.5 * vec3(0.25,0.22,0.18) * ao;
+  // specular
+  vec3 h = normalize(L1 - rd);
+  float spe = pow(max(dot(n,h),0.0), 24.0+64.0*gloss) * specI * sh;
+  col += vec3(1.0,0.97,0.9)*spe*0.9;
+  // rim
+  float fres = pow(1.0-max(dot(n,-rd),0.0), 4.0);
+  col += fres*0.18*vec3(0.7,0.8,1.0)*ao;
+  return col;
+}
+```
+
+Careful with the specular exponent and the intensity; keep it reasonable.
+
+Ground shading:
+```glsl
+vec3 shadeGround(vec3 p, vec3 rd){
+  vec3 alb = vec3(0.42,0.44,0.40);
+  // contact shadow
+  float sd = length(vec2(p.x*0.85, p.z*1.9));
+  float contact = 1.0 - 0.75*smoothstep(1.15, 0.25, sd);
+  // also darken under the wheels a bit
+  float sh = softShadow(p+vec3(0,0.004,0), L1);
+  float dif = max(L1.y, 0.0);
+  vec3 col = alb*(dif*sh*1.1)*contact;
+  col += alb*vec3(0.30,0.36,0.45)*0.55;
+  return col;
+}
+```
+A soft shadow on the ground gives a real cast shadow, which would look great. But that's another shadow march per ground pixel, over a large area. The shadow march for ground pixels could be long (the light is at 50° elevation, so the ray travels up to ~3 units). 20 steps. Acceptable. Actually the ground covers most of the lower half of the screen at typical views — that's a lot of pixels × 20 steps × map cost. Hmm, that could double the cost. 
+
+Compromise: use the fake contact shadow on the ground only (no march). The `sd`-based elliptical blob. That's cheap. Let's do that. Plus a subtle ambient occlusion darkening near the bike.
+
+Actually, a real shadow really sells the scene. Alternative: a cheap analytic shadow — project the bike's bounding sphere onto the ground along the light direction and darken. Let's do: the shadow of a sphere of radius 0.75 at (0,0.95,0) projected along L onto the y=0 plane: the center of the shadow ellipse at c = (0,0.95,0) - L*(0.95/L.y) = (0.95/0.8)*(0.45,0.8,0.4) subtracted → (−0.534, 0, −0.475). And the ellipse extends by r/L.y along the light direction... This gives a blob shadow. Combined with the contact shadow. Simple and cheap. I'll do the ellipse-based soft shadow (an approximation). Good.
+
+Actually, let's do a proper "capsule shadow": approximate the bike + pelican as a few spheres (say 3: the rear wheel, the front wheel, and the body/head) and compute an analytic soft shadow from the point light... but our light is directional. For a directional light and an occluder sphere (c_i, r_i), the shadow at ground point p: the distance from the line through p along L to c_i, d = |(c_i - p) × L|, and the shadow factor = smoothstep(r_i, r_i*0.4, d) with a penalty for the distance ahead. That's cheap: 3 spheres × ~8 ops. 
+
+Let's do that: occluders:
+- (-0.62, 0.42, 0) r 0.42 (rear wheel)
+- (0.62, 0.42, 0) r 0.42 (front wheel)
+- (-0.15, 1.35, 0) r 0.55 (body)
+- (0.45, 1.8, 0) r 0.25 (head+beak)
+
+shadow = 1 - product over occluders of (1 - s_i), where s_i = smoothstep(r_i*1.3, r_i*0.55, d_i) * behind factor.
+
+The "behind" factor: the occluder must be between the light and p: dot(c_i - p, L) > 0. Use smoothstep(0, 0.3, that).
+
+That's a decent soft blob shadow. ~4 spheres × 12 ops = 48 ops per ground pixel. Cheap. 
+
+Let me write it:
+```glsl
+float blobShadow(vec3 p, vec3 L, vec3 c, float r){
+  vec3 v = c - p;
+  float t = dot(v, L);
+  if (t < 0.0) return 1.0;
+  float d = length(v - L*t);
+  return smoothstep(r*0.95, r*1.5, d);
+}
+```
+Hmm, tuning: the shadow should be soft: `smoothstep(r*0.7, r*1.6, d)`.
+
+Multiply the four together.
+
+OK. Now, the sky. And fog to blend the ground into the sky at the horizon.
+
+Let me now write the final shader main.
+
+```glsl
+void main(){
+  vec2 uv = (gl_FragCoord.xy*2.0 - uRes)/uRes.y;
+  vec3 rd = normalize(uFwd + (uRight*uv.x + uUp*uv.y)*uTanH);
+  vec3 ro = uCam;
+
+  vec2 h = trace(ro, rd);
+
+  float tg = -1.0;
+  if (abs(rd.y) > 1e-6) { tg = -ro.y/rd.y; if (tg < 0.0) tg = -1.0; }
+
+  vec3 col;
+  if (h.x > 0.0 && (tg < 0.0 || h.x < tg)) {
+    vec3 p = ro + rd*h.x;
+    vec3 n = calcNormal(p);
+    col = shade(p, n, rd, h.y);
+    float f = 1.0 - exp(-0.010*h.x*h.x);
+    col = mix(col, skyColor(rd), clamp(f,0.0,1.0));
+  } else if (tg > 0.0) {
+    vec3 p = ro + rd*tg;
+    col = shadeGround(p, rd);
+    float f = 1.0 - exp(-0.0022*tg*tg);
+    col = mix(col, skyColor(rd), clamp(f,0.0,1.0));
+  } else {
+    col = skyColor(rd);
+  }
+
+  col = 1.0 - exp(-col*1.15);
+  col = pow(max(col, 0.0), vec3(0.4545));
+  // vignette
+  float v = 1.0 - 0.25*pow(length(uv*vec2(0.55,0.75)), 2.5);
+  outColor = vec4(col*v, 1.0);
+}
+```
+
+Careful: `1.0 - exp(-col*1.15)` is a per-channel tonemap that desaturates highlights — acceptable and cheap.
+
+Hmm, but the sky color already includes values > 1? The sky is ~0.9 max. After the tonemap it becomes ~0.6, then gamma → 0.8. OK.
+
+Let me tune the sky to be brighter so it's pleasant: horizon (0.78,0.84,0.90), zenith (0.30,0.50,0.85). After tonemapping+gamma it'll look nice.
+
+Careful with the fog: `mix(col, skyColor(rd), f)` where f depends on the distance. And then the tonemap applies equally. Fine.
+
+Now the JS. Let me write the module.
+
+```js
+export function createPelicanSdf(canvas){
+  if (!canvas || typeof canvas.getContext !== 'function') throw new Error('createPelicanSdf: a canvas element is required');
+  const gl = canvas.getContext('webgl2', {alpha:false, antialias:false, depth:false, stencil:false, premultipliedAlpha:false, preserveDrawingBuffer:false, powerPreference:'high-performance'});
+  if (!gl) throw new Error('createPelicanSdf: WebGL2 is not available');
+
+  const VERT = `#version 300 es
+layout(location=0) in vec2 aPos;
+void main(){ gl_Position = vec4(aPos,0.0,1.0); }`;
+
+  const FRAG = `...`;
+
+  let program = null, vao = null, vbo = null, loc = {}, lost = false, disposed = false;
+
+  function build(){
+    const vs = gl.createShader(gl.VERTEX_SHADER);
+    gl.shaderSource(vs, VERT); gl.compileShader(vs);
+    if (!gl.getShaderParameter(vs, gl.COMPILE_STATUS)) { const log = gl.getShaderInfoLog(vs); gl.deleteShader(vs); throw new Error('Vertex shader error: '+log); }
+    const fs = gl.createShader(gl.FRAGMENT_SHADER);
+    ...
+    const p = gl.createProgram();
+    gl.attachShader(p, vs); gl.attachShader(p, fs); gl.linkProgram(p);
+    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw ...
+    gl.deleteShader(vs); gl.deleteShader(fs);
+    program = p;
+    loc = { uRes: gl.getUniformLocation(p,'uRes'), ... };
+    vao = gl.createVertexArray();
+    vbo = gl.createBuffer();
+    gl.bindVertexArray(vao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,3,-1,-1,3]), gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(0,2,gl.FLOAT,false,0,0);
+    gl.bindVertexArray(null);
+  }
+```
+
+If build() throws during setup, we propagate. On context restore, if build throws, we'd throw inside an event handler — that's bad. Wrap the restore in try/catch and set a flag.
+
+render():
+```js
+function render(timeSeconds){
+  if (disposed || lost || !program) return;
+  const w = canvas.width, h = canvas.height;
+  if (w === 0 || h === 0) return;
+  const t = Number.isFinite(timeSeconds) ? timeSeconds : 0;
+  // camera
+  ...
+  gl.viewport(0,0,w,h);
+  gl.useProgram(program);
+  gl.uniform2f(loc.uRes, w, h);
+  ...
+  gl.bindVertexArray(vao);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  gl.bindVertexArray(null);
+}
+```
+
+Hmm — should render() clear? The fullscreen triangle covers everything, so no clear is needed. But to be safe (e.g., if the shader fails), no. Actually let's `gl.disable(gl.DEPTH_TEST)` etc. at setup. No clear needed but harmless. Skip the clear for speed.
+
+Camera computation per render:
+```js
+const cp = Math.cos(pitch), sp = Math.sin(pitch);
+const cy = Math.cos(yaw), sy = Math.sin(yaw);
+const dx = sy*cp, dy = sp, dz = cy*cp;
+const px = target[0] + dist*dx, py = target[1] + dist*dy, pz = target[2] + dist*dz;
+// fwd = normalize(target - pos) = (-dx,-dy,-dz)
+const fx=-dx, fy=-dy, fz=-dz;
+// right = normalize(cross(fwd, up))
+let rx = fy*0 - fz*1 ... 
+```
+cross(f, u) with u = (0,1,0): (f.y*0 - f.z*1, f.z*0 - f.x*0, f.x*1 - f.y*0) = (-f.z, 0, f.x). Normalize: len = sqrt(fz²+fx²) = cp (since fx²+fz² = cp²). So right = (-fz/cp, 0, fx/cp) = (dz/cp... let's compute: fz = -dz, so -fz = dz; fx = -dx. right = (dz/cp, 0, -dx/cp) = (cy, 0, -sy). Nice and simple. Check with yaw=0: right = (cy,0,-sy) = (1,0,0). ✓ (facing -Z, right = +X ✓).
+
+up = cross(right, fwd) = ... let's just compute it in JS.
+
+tanH = tan(fov/2). Let's use fov = 42° → tanH = 0.3839.
+
+Then uCam, uRight, uUp, uFwd, uTanH.
+
+Camera constants: target = [0, 1.0, 0]. Default view: yaw = -0.62, pitch = 0.18, distance = 4.6.
+
+Hmm, at yaw=-0.62 the camera is at target + 4.6*(sin(-0.62)cos(0.18), sin(0.18), cos(-0.62)cos(0.18)) = 4.6*(-0.581*0.984, 0.179, 0.814*0.984) = (-2.63, 1.0+0.82, 3.68). So we see the bike from the front-right three-quarter. That's good — the pelican's head and beak face the viewer's... the beak points +X and the camera is at -X, +Z → we see the bike from the rear-right. Hmm! At yaw=-0.62, sin(-0.62) < 0 so the camera x < 0 → behind the bike (since the bike faces +X). So a three-quarter rear view. I'd prefer a three-quarter front view where the beak is prominent: yaw = +0.62 → camera at (+2.63, 1.82, 3.68): front-right. But then the beak points toward the camera and might occlude the body. At yaw=+0.62, we'd see the pelican's front-right — the long beak pointing at us at an angle. That's charming but the beak foreshortens.
+
+I think a slightly-front three-quarter view is best: yaw = 0.55, pitch = 0.16, distance 4.4. Hmm, but let's double check that the beak (pointing +X, tip at 0.90,1.75) doesn't stick toward the camera awkwardly. With yaw=0.55, the view direction is roughly -(0.52, 0.16, 0.84) → looking from (2.3, 1.7, 3.7) toward the origin. The beak points along +X and the camera is at +X+Z... the beak points partly toward the camera. The projection: the beak would be foreshortened to about 0.9*sin... The angle between the beak direction (1,0,0) and the view direction (-0.52,-0.16,-0.84): the angle is about 121°, so the beak is fairly perpendicular-ish (90° would be fully side-on). cos(121°) = -0.52, so the beak is foreshortened to 0.85 of its length... fine, still clearly visible.
+
+Alternatively, yaw = -0.6 for a rear-three-quarter, which is also a classic hero shot. Hmm. I'll go with the front three-quarter at yaw = 0.62 so the beak, head, and front of the bike are visible, and the pelican faces the viewer's left.
+
+Hmm, actually with the beak pointing toward the camera, the head might visually overlap the body. With yaw=0.62 and the camera at (2.3,1.75,3.7)... let's see: the projection direction onto the screen right = (cy,0,-sy) = (0.81, 0, -0.58). The head at (0.27,1.86) projects to screen x = 0.27*0.81 = 0.22 (right of center); the body center (-0.26,1.26) projects to -0.21. The beak tip (0.90,1.75) → 0.73 to the right. So from left to right: body, head, beak. Nice, a readable profile with a 3/4 turn. 
+
+I'll use yaw = 0.62, pitch = 0.17, distance = 4.5.
+
+Hmm, but "Start at an appealing three-quarter view" — yes.
+
+Let me double check the framing: the subject spans x from -0.78 (tail) to 0.90 (beak tip), y from 0 to 2.0, z ±0.3. The projected width: the screen-right direction is (0.81,0,-0.58), so the x-extent projects to 0.81*(1.68) = 1.36 wide; the vertical extent is 2.0. At distance 4.5 and tanH = 0.384, the visible half-height at the target distance = 1.73, so the full height is 3.46. The subject is 2.0 tall → fits with margin. Good. Maybe reduce the distance to 3.9 for a tighter shot: half-height = 1.5, full 3.0, subject 2.0 → nice. Let's use distance 4.1.
+
+OK, now the controls implementation.
+
+```js
+  let yaw = 0.62, pitch = 0.17, dist = 4.1;
+  const camTarget = [0.0, 1.0, 0.0];
+  const MIN_D = 0.45, MAX_D = 12.0;
+  const MIN_P = -0.95, MAX_P = 1.45;
+```
+
+setView(y,p,d): clamp pitch and distance, set yaw = y (no clamp).
+
+```js
+  function setView(y, p, d){
+    if (Number.isFinite(y)) yaw = y;
+    if (Number.isFinite(p)) pitch = Math.max(MIN_P, Math.min(MAX_P, p));
+    if (Number.isFinite(d)) dist = Math.max(MIN_D, Math.min(MAX_D, d));
+  }
+```
+
+getView returns {yaw, pitch, distance}. The requirement says "return { yaw, pitch, distance }". ✓
+
+Pointer handling:
+
+```js
+  const pointers = new Map();
+  let lastPinch = 0;
+
+  function onPointerDown(e){
+    if (disposed) return;
+    canvas.focus?.();
+    pointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
+    if (canvas.setPointerCapture) { try { canvas.setPointerCapture(e.pointerId); } catch(_){} }
+    if (pointers.size === 2) lastPinch = pinchDist();
+    e.preventDefault();
+  }
+  function pinchDist(){
+    const a = [...pointers.values()];
+    return Math.hypot(a[0].x-a[1].x, a[0].y-a[1].y);
+  }
+  function onPointerMove(e){
+    const prev = pointers.get(e.pointerId);
+    if (!prev) return;
+    const nx = e.clientX, ny = e.clientY;
+    if (pointers.size === 1){
+      yaw -= (nx - prev.x)*0.0075;
+      pitch = clamp(pitch + (ny - prev.y)*0.0075);
+    }
+    prev.x = nx; prev.y = ny;
+    if (pointers.size >= 2){
+      const d = pinchDist();
+      if (lastPinch > 0 && d > 0) dist = clampD(dist * (lastPinch / d));
+      lastPinch = d;
+    }
+    e.preventDefault();
+  }
+```
+Hmm, careful: when `pointers.size === 1`, the orbit uses the delta of the moved pointer. When 2 pointers, we skip the orbit (using only the pinch). But I update prev.x/y for the moved pointer before the pinch check. Fine.
+
+Wait, there's an issue: the check `if (pointers.size === 1)` happens after getting prev — but I get prev before updating. Let me restructure: get prev, compute dx/dy, update prev, then apply.
+
+Also `yaw -= dx*0.0075`: dragging right should rotate the scene... Convention: dragging right moves the camera to the left around the object (the object appears to rotate right). With `yaw -= dx`, dragging right decreases yaw, moving the camera from +Z toward -X... Feels natural (like orbit controls).
+
+Pitch: dragging down (dy > 0) increases pitch → the camera goes up. Hmm, dragging down should move the camera down (the object tilts toward you)... In most orbit controls, dragging down moves the camera up? No: in three.js OrbitControls, dragging down rotates the camera downward (you look from below). Hmm, actually in OrbitControls, dragging the mouse down moves the camera up over the top... let me think: OrbitControls rotateUp(2π*dy/height) with rotateDelta... In OrbitControls, `rotateUp(2*PI*deltaY/element.clientHeight)` and rotateUp decreases the polar angle... The net effect: dragging down moves the camera down toward the ground plane (you see the object from below). Hmm, I recall dragging down in OrbitControls makes the object appear to rotate so you see its top... 
+
+Let's think about the "grab the object" metaphor: dragging down means pulling the front of the object down, which reveals the top. So the camera effectively moves up. That corresponds to pitch increasing when dy > 0. And the object appears to rotate toward you. I'll use `pitch += dy*0.0075`, which means dragging down moves the camera up. That's the standard "trackball" feel. Yes, in OrbitControls, dragging down does move the camera above (I'm fairly confident: rotateUp with a positive deltaY... `rotateUp(angle)` sets sphericalDelta.phi -= angle, and a smaller phi = closer to the+ Y pole = the camera higher). So yes, dragging down (positive deltaY) → phi decreases → the camera goes up. ✓ matches pitch += dy.
+
+OK.
+
+wheel:
+```js
+  function onWheel(e){
+    e.preventDefault();
+    const k = Math.exp(Math.sign(e.deltaY) * Math.min(Math.abs(e.deltaY), 60) * 0.0016);
+    ...
+  }
+```
+Hmm, deltaMode: some browsers send deltaY in lines. Just use `e.deltaY * (e.deltaMode === 1 ? 16 : 1)`.
+
+`dist = clampD(dist * Math.exp(clamp(e.deltaY,-400,400)*0.0012))`. Zoom in when scrolling up (deltaY < 0) → distance decreases. ✓
+
+Touch: add non-passive touchstart/touchmove listeners that preventDefault to avoid scrolling. But careful: preventDefault on touchstart blocks the focus/click. Since we call focus() on pointerdown, and pointerdown fires... Actually if we preventDefault on touchstart, the browser may not fire pointer events? No, pointer events fire before touch events for the pointerdown. Hmm, preventing the default on touchstart cancels the compatibility mouse events but pointer events still fire. It should be fine. But to be safe, I'll only preventDefault in touchmove (which is what prevents scrolling), plus set touch-action: none which prevents scrolling entirely in modern browsers.
+
+Actually, `touch-action: none` on the canvas is the correct approach and doesn't need preventDefault. I'll add touchmove preventDefault as a belt-and-braces for older browsers... Some browsers warn about non-passive listeners. It's fine.
+
+Keyboard:
+```js
+  function onKeyDown(e){
+    const k = e.key;
+    let used = true;
+    if (k === 'ArrowLeft') yaw += 0.09;
+    else if (k === 'ArrowRight') yaw -= 0.09;
+    else if (k === 'ArrowUp') pitch = clampP(pitch + 0.07);
+    else if (k === 'ArrowDown') pitch = clampP(pitch - 0.07);
+    else if (k === '+' || k === '=' ) dist = clampD(dist*0.9);
+    else if (k === '-' || k === '_' ) dist = clampD(dist/0.9);
+    else used = false;
+    if (used) e.preventDefault();
+  }
+```
+ArrowLeft → yaw increases → the camera orbits... At yaw=0 the camera is at +Z; increasing yaw moves it toward +X (the front). The bike appears to rotate to the... The camera moving right around the object makes the object appear to rotate left. Whatever; it's fine. Actually for ArrowLeft, the user expects the view to rotate left, i.e., the camera moves left (toward -X at yaw=0) = decreasing yaw. Let's use ArrowLeft → yaw -= 0.09. Hmm. In OrbitControls, pressing ArrowLeft does `rotateLeft`... Actually OrbitControls: `case 'ArrowLeft': rotateLeft(2π*rotateSpeed/height...)`. rotateLeft(angle) does sphericalDelta.theta -= angle. theta is the azimuthal angle measured with x = r*sin(phi)*sin(theta), z = r*sin(phi)*cos(theta) — so theta=0 → +Z, matching my yaw. Decreasing theta moves toward -X. So ArrowLeft → yaw decreases. OK, so ArrowLeft → yaw -= step. I'll match that.
+
+Now `dispose()`:
+```js
+  function dispose(){
+    if (disposed) return;
+    disposed = true;
+    removeEventListeners();
+    if (gl && !lost) {
+      if (program) gl.deleteProgram(program);
+      if (vbo) gl.deleteBuffer(vbo);
+      if (vao) gl.deleteVertexArray(vao);
+    }
+    program = vbo = vao = null;
+  }
+```
+
+Context loss:
+```js
+  function onLost(e){ e.preventDefault(); lost = true; }
+  function onRestored(){ try { lost = false; build(); } catch(err) { lost = true; } }
+```
+Careful: on restore, the old program/vao handles are invalid; build() overwrites them.
+
+Now, one more: the evaluator might call render() before any pointer interaction. Fine.
+
+Let me write the fragment shader in full now, carefully.
+
+```glsl
+#version 300 es
+precision highp float;
+
+uniform vec2  uRes;
+uniform float uTime;
+uniform vec3  uCam;
+uniform vec3  uRight;
+uniform vec3  uUp;
+uniform vec3  uFwd;
+uniform float uTanH;
+
+out vec4 fragColor;
+
+#define PI 3.14159265359
+#define LIGHT normalize(vec3(0.42, 0.78, 0.46))
+```
+Careful: `#define LIGHT normalize(...)` used multiple times re-evaluates. Use a const vec3 LIGHT = normalize(vec3(...)) — GLSL ES 3.0 allows const with a constant expression; normalize is not a constant expression. So use a global non-const `vec3 LIGHT = normalize(vec3(0.42,0.78,0.46));` — global initializers in GLSL ES 3.0 must be constant expressions... Actually, in GLSL ES 3.00, global variable initializers must be constant expressions. `normalize(vec3(...))` is not a constant expression. So I can't. Use `const vec3 LIGHT = vec3(0.42, 0.78, 0.46);` and normalize it in the functions, or just precompute a normalized value in JS... simplest: define LIGHT as a literal normalized vector computed by hand: (0.42,0.78,0.46), |v| = sqrt(0.1764+0.6084+0.2116)= sqrt(0.9964)=0.9982. So it's already nearly normalized. Use const vec3 LIGHT = vec3(0.4208, 0.7814, 0.4609); close enough. I'll just write `const vec3 LIGHT = vec3(0.421, 0.781, 0.461);` — |v| = 1.0000. Good.
+
+Now, writing everything.
+
+For the trace, I need to be careful with the bounding sphere when the camera is inside it (close zoom). t0 = max(-b-h, 0.0) handles that.
+
+Let me now assemble the final GLSL string.
+
+```glsl
+#version 300 es
+precision highp float;
+
+uniform vec2 uRes;
+uniform float uTime;
+uniform vec3 uCam, uRight, uUp, uFwd;
+uniform float uTanH;
+
+out vec4 fragColor;
+
+const float PI = 3.14159265;
+const vec3 LIGHT = vec3(0.421, 0.781, 0.461);
+
+// ---------- utils ----------
+float smin(float a, float b, float k){
+  float h = clamp(0.5 + 0.5*(b-a)/k, 0.0, 1.0);
+  return mix(b, a, h) - k*h*(1.0-h);
+}
+vec3 rotZ(vec3 p, float a){ float s=sin(a), c=cos(a); return vec3(c*p.x - s*p.y, s*p.x + c*p.y, p.z); }
+
+// ---------- primitives ----------
+float sdSph(vec3 p, float r){ return length(p)-r; }
+float sdEll(vec3 p, vec3 r){
+  float k0 = length(p/r);
+  float k1 = length(p/(r*r));
+  return k0*(k0-1.0)/max(k1,1e-7);
+}
+float sdCap(vec3 p, vec3 a, vec3 b, float r){ ... }
+float sdRC(vec3 p, vec3 a, vec3 b, float r1, float r2){ ... }
+float sdTorusZ(vec3 p, float R, float r){ ... }
+float sdCylZ(vec3 p, float h, float r){ ... }
+float sdBox(vec3 p, vec3 b){ ... }
+```
+
+Then the parts. Then the map. Then the trace/shade.
+
+One thing to verify: `precision highp float;` — the default for a fragment shader in ES 3.0 is highp for float? Actually in GLSL ES 3.00, the fragment shader has no default precision for float (it must be declared). So declaring `precision highp float;` is required. ✓ And for int: `precision highp int;` is the default in ES 3.0 for int (yes, highp int is the default in ES 3.00 vertex AND fragment? In ES 3.00, the fragment shader has a default of highp int? Let me just add both to be safe. Hmm, "precision highp int;" is fine.
+
+Now let me double check the sdRC implementation for potential division by zero when a ≈ b. l2 = dot(ba,ba) > 0 always in our uses. ✓
+
+Now let me write the whole thing out.
+
+Actually, one thought on performance: the `map` function will be very long, with lots of register pressure. It should still compile.
+
+Another consideration — the AO function calls map 4-5 times; the shadow 20 times; the normal 6 times. Plus the march. So ~1.1× on top of the march. OK.
+
+Let me reduce the march to 90 steps and the shadow to 18.
+
+Alright, writing the code now.
+
+```glsl
+vec2 map(vec3 p){
+  vec2 res = vec2(1e9, 0.0);
+  float t = uTime;
+  float spin = t*2.2;
+  float crank = t*1.9;
+  addWheel(res, p, -0.62, spin);
+  addWheel(res, p, 0.62, spin);
+  addFrame(res, p);
+  addCranks(res, p, crank);
+  addBird(res, p, crank);
+  return res;
+}
+```
+
+Function order in GLSL: functions must be declared before use. I'll order: utils, primitives, addWheel, addFrame, addCranks, legDist, addBird, map, trace, normal, ao, shadow, shade, background, main. ✓
+
+Let me write addBird:
+
+```glsl
+void addBird(inout vec2 res, vec3 p, float crank){
+  // BODY
+  float body = sdEll(rotZ(p - vec3(-0.26,1.26,0.0), -0.13), vec3(0.35,0.30,0.265));
+  body = smin(body, sdEll(p - vec3(0.02,1.34,0.0), vec3(0.20,0.23,0.23)), 0.10);
+  body = smin(body, sdRC(p, vec3(-0.50,1.28,0.0), vec3(-0.78,1.42,0.0), 0.10, 0.025), 0.07);
+  // NECK
+  float neck = sdRC(p, vec3(0.05,1.42,0.0), vec3(0.15,1.63,0.0), 0.135, 0.105);
+  neck = smin(neck, sdRC(p, vec3(0.15,1.63,0.0), vec3(0.235,1.81,0.0), 0.105, 0.09), 0.04);
+  body = smin(body, neck, 0.05);
+  body = smin(body, sdSph(p - vec3(0.27,1.86,0.0), 0.125), 0.05);
+  // WINGS
+  float wing = sdEll(rotZ(p - vec3(0.00,1.29,0.235), 0.833), vec3(0.165,0.085,0.055));
+  wing = smin(wing, sdEll(rotZ(p - vec3(0.29,1.105,0.25), 0.376), vec3(0.215,0.072,0.048)), 0.05);
+  wing = smin(wing, sdSph(p - vec3(0.48,1.03,0.235), 0.072), 0.05);
+  float wing2 = sdEll(rotZ(p - vec3(0.00,1.29,-0.235), 0.833), vec3(0.165,0.085,0.055));
+  ...
+  body = min(body, min(wing, wing2));
+  if (body < res.x) res = vec2(body, 5.0);
+  
+  // BEAK + POUCH
+  float beak = sdRC(p, vec3(0.33,1.88,0.0), vec3(0.92,1.76,0.0), 0.075, 0.022);
+  float low = sdRC(p, vec3(0.33,1.83,0.0), vec3(0.90,1.75,0.0), 0.055, 0.02);
+  float pouch = sdEll(p - vec3(0.58,1.72,0.0), vec3(0.21,0.11,0.075));
+  float bill = smin(beak, low, 0.05);
+  bill = smin(bill, pouch, 0.07);
+  if (bill < res.x) res = vec2(bill, 6.0);
+
+  // EYES
+  float e1 = sdSph(p - vec3(0.325,1.905,0.098), 0.028);
+  float e2 = sdSph(p - vec3(0.325,1.905,-0.098), 0.028);
+  float eye = min(e1,e2);
+  if (eye < res.x) res = vec2(eye, 7.0);
+
+  // LEGS + FEET
+  ...  if (d < res.x) res = vec2(d, 8.0);
+}
+```
+
+Hmm, the wing ellipsoids at z=±0.235 with a z-thickness of 0.055 — the shoulder is at (−0.00,1.29) but the actual shoulder should be at the body's side. The body's z half-width is 0.265 at the center. So the wing at z=0.235 is inside the body. Good.
+
+Hmm, but the upper-arm ellipsoid at midpoint (0.00,1.29,0.235) with radii (0.165,0.085,0.055) — its extent in x is from -0.165 to 0.165 around 0.0 → fine.
+
+But note: the wing ellipsoid is rotated about z, which also rotates the z-offset? No — rotZ doesn't affect z. And I'm applying rotZ to (p - center) which includes p.z - 0.235; rotZ leaves z unchanged. ✓
+
+Now, the eyes at z=±0.098: the head sphere at (0.27,1.86) r 0.125, so a point at (0.325,1.905,0.098): the offset from the head center is (0.055,0.045,0.098), length = sqrt(0.003+0.002+0.0096) = sqrt(0.0146)=0.121. So the eye center is 0.121 from the head center, just inside the surface (r=0.125); with an eye radius of 0.028, the eye protrudes 0.024. Good.
+
+Now the legs:
+
+```glsl
+  vec3 BB = vec3(-0.08,0.27,0.0);
+  float c1 = cos(crank), s1 = sin(crank);
+  vec3 pedR = vec3(BB.x + 0.15*c1, BB.y - 0.15*s1, 0.122);
+  vec3 pedL = vec3(BB.x - 0.15*c1, BB.y + 0.15*s1, -0.122);
+  vec3 ankR = pedR + vec3(0.0, 0.028, 0.0);
+  vec3 ankL = pedL + vec3(0.0, 0.028, 0.0);
+  float legs = legDist(p, vec3(-0.30,0.97,0.125), ankR);
+  legs = min(legs, legDist(p, vec3(-0.30,0.97,-0.125), ankL));
+  // feet
+  legs = min(legs, sdEll(p - (ankR + vec3(0.012,0.004,0.0)), vec3(0.085,0.020,0.048)));
+  legs = min(legs, sdEll(p - (ankL + vec3(0.012,0.004,0.0)), vec3(0.085,0.020,0.048)));
+  if (legs < res.x) res = vec2(legs, 8.0);
+```
+
+Hmm wait, `pedR` has z=0.122 but the ankle z should also be 0.122. And the foot ellipsoid at z=0.122 with a half-width of 0.048 spans z from 0.074 to 0.17. The pedal box spans 0.092 to 0.152. OK, the foot sits on top of the pedal.
+
+Hmm, the foot's y: ankR.y = pedR.y + 0.028, and the foot ellipsoid center at y = pedR.y+0.032 with a half-height of 0.020 → the bottom at pedR.y+0.012. The pedal's top is at pedR.y + 0.011 + 0.008 (rounded box half-height 0.011 plus rounding 0.008) ≈ pedR.y+0.019. So the foot's bottom slightly overlaps the pedal. Fine.
+
+Now, the leg's ankle is at pedR.y+0.028 which is inside the foot. Good.
+
+Everything seems fine.
+
+Let me now also double-check the hip position vs the body: the hip at (-0.30, 0.97, ±0.125). The body's bottom at x=-0.30: the body ellipsoid center (-0.26,1.26), rotated by 0.13 (shape), radii (0.35,0.30,0.265). At the local x = ... ugh. Roughly, the body's bottom is at y ≈ 1.26-0.30 = 0.96. So the hip at y=0.97 is right at the body's lower surface. The thigh (r=0.085) emerges from the body. Good.
+
+And the saddle is at (-0.37,0.985) with radii (0.155,0.045,0.085) → the top at y=1.03. The body's bottom at x=-0.37: y ≈ 0.96+. So the body overlaps the saddle slightly. Good (it's sitting on it).
+
+Now the trace and the rest.
+
+Let me also handle the case where the ray starts inside the bounding sphere and the SDF is negative (inside an object) — the march would immediately return a hit with a negative distance. Since the camera can zoom inside... at distance 0.45 from the target (0,1.0,0), the camera would be inside the pelican's body. Then everything looks weird but doesn't break. Fine.
+
+Actually, MIN_D = 0.45 with the target at the body center — zooming in close puts the camera inside the bird. Hmm. For "close inspection of the beak, rider contacts, frame, and pedals", the evaluator would zoom to maybe 1.0-1.5 distance. The beak is at (0.9,1.75) which is 1.2 from the target (0,1,0); at distance 1.0, the camera orbit radius is 1.0, so the beak is at the far side or close depending on the yaw. It should be inspectable. Let's set MIN_D = 0.35 so you can get really close.
+
+Hmm, but if the camera goes inside the geometry, the render shows the interior (black or weird). Acceptable — it's the evaluator's choice.
+
+Let's write the trace with the bounding sphere.
+
+One more concern: with the camera close (distance 0.5) and the bounding sphere test, if the camera is inside the sphere, t0=0, t1 = the far intersection. Fine.
+
+Now, let me write out the final code. I need to watch the total size (< 32768 bytes). The shader will be maybe 9KB, the JS 9KB. Fine.
+
+Let me write out the shading functions.
+
+```glsl
+float calcAO(vec3 p, vec3 n){
+  float occ = 0.0, sca = 1.0;
+  for (int i=0;i<5;i++){
+    float h = 0.008 + 0.085*float(i)*0.25;
+    float d = map(p + n*h).x;
+    occ += (h - d)*sca;
+    sca *= 0.82;
+  }
+  return clamp(1.0 - 1.9*occ, 0.0, 1.0);
+}
+```
+Careful: h = 0.008 + 0.085*(i)*0.25 → i=0:0.008, i=1:0.029, i=2:0.0505, i=3:0.0718, i=4:0.093. OK.
+
+Note: when the point p is on a concave surface, d < h → occ increases. Standard.
+
+```glsl
+float softShadow(vec3 ro, vec3 rd){
+  float res = 1.0;
+  float t = 0.02;
+  for (int i=0;i<18;i++){
+    float h = map(ro + rd*t).x;
+    res = min(res, 7.0*h/t);
+    t += clamp(h, 0.015, 0.20);
+    if (res < 0.02 || t > 4.0) break;
+  }
+  return clamp(res, 0.0, 1.0);
+}
+```
+
+Then:
+```glsl
+vec3 shade(vec3 p, vec3 n, vec3 rd, float id){
+  vec3 alb = vec3(0.8);
+  float gloss = 0.4, spec = 0.6;
+  if (id < 1.5){ alb = vec3(0.87,0.20,0.15); gloss=0.55; spec=0.9; }
+  else if (id < 2.5){ alb = vec3(0.055,0.055,0.062); gloss=0.25; spec=0.5; }
+  else if (id < 3.5){ alb = vec3(0.70,0.72,0.76); gloss=0.75; spec=1.4; }
+  else if (id < 4.5){ alb = vec3(0.24,0.13,0.075); gloss=0.35; spec=0.5; }
+  else if (id < 5.5){ alb = vec3(0.955,0.94,0.90); gloss=0.30; spec=0.35; }
+  else if (id < 6.5){ alb = vec3(0.96,0.62,0.16); gloss=0.35; spec=0.5; }
+  else if (id < 7.5){ alb = vec3(0.02,0.02,0.025); gloss=0.9; spec=1.6; }
+  else { alb = vec3(0.94,0.50,0.13); gloss=0.35; spec=0.5; }
+
+  float ao = calcAO(p, n);
+  float sh = softShadow(p + n*0.01, LIGHT);
+  float dif = max(dot(n, LIGHT), 0.0);
+  vec3 col = alb * dif * sh * vec3(1.05, 0.99, 0.90) * 1.25;
+  float hemi = 0.5 + 0.5*n.y;
+  col += alb * hemi * vec3(0.30,0.36,0.44) * ao;
+  col += alb * max(0.0, -n.y) * vec3(0.16,0.14,0.11) * ao;
+  vec3 h = normalize(LIGHT - rd);
+  col += vec3(1.0,0.97,0.92) * pow(max(dot(n,h),0.0), mix(18.0,180.0,gloss)) * spec * sh * 0.55;
+  col += vec3(0.55,0.68,0.9) * pow(1.0 - max(dot(n,-rd),0.0), 4.0) * 0.25 * ao;
+  return col;
+}
+```
+
+The ground:
+```glsl
+vec3 shadeGround(vec3 p, vec3 rd){
+  vec3 alb = vec3(0.40,0.42,0.38);
+  float sh = 1.0;
+  sh *= blob(p, vec3(-0.62,0.42,0.0), 0.44);
+  sh *= blob(p, vec3(0.62,0.42,0.0), 0.44);
+  sh *= blob(p, vec3(-0.20,1.30,0.0), 0.52);
+  sh *= blob(p, vec3(0.45,1.80,0.0), 0.30);
+  float dif = max(LIGHT.y, 0.0);
+  vec3 col = alb * dif * (0.28 + 0.72*sh) * 1.2;
+  col += alb * vec3(0.34,0.40,0.46) * 0.7;
+  // distance fade to a neutral
+  return col;
+}
+
+float blob(vec3 p, vec3 c, float r){
+  vec3 v = c - p;
+  float t = dot(v, LIGHT);
+  if (t < 0.0) return 1.0;
+  float d = length(v - LIGHT*t);
+  return smoothstep(r*0.75, r*1.55, d);
+}
+```
+`blob` must be defined before use. OK.
+
+Note: this blob shadow doesn't account for the height properly (a sphere's shadow becomes elongated), but it's a decent soft blob.
+
+Also, the ground albedo should have some variation. Keep it simple.
+
+Sky:
+```glsl
+vec3 sky(vec3 rd){
+  float y = clamp(rd.y, -1.0, 1.0);
+  float t = pow(clamp(0.5+0.5*y, 0.0, 1.0), 0.75);
+  vec3 horizon = vec3(0.86,0.89,0.92);
+  vec3 zenith = vec3(0.22,0.44,0.78);
+  vec3 col = mix(horizon, zenith, t);
+  // ground haze below the horizon
+  col = mix(col, vec3(0.55,0.56,0.52)*0.9, smoothstep(0.0, -0.25, y));
+  float s = max(dot(rd, LIGHT), 0.0);
+  col += vec3(1.0,0.88,0.68)*pow(s, 90.0)*1.5;
+  col += vec3(1.0,0.90,0.75)*pow(s, 6.0)*0.12;
+  return col;
+}
+```
+
+OK. And in main, for the sky I use sky(rd).
+
+Now, one issue: the ground plane extends to infinity; the fog blends it into the sky color at the horizon. But `sky(rd)` for a ray pointing slightly below the horizon gives a hazy ground color, and the fog mixes the ground into that. Good.
+
+Alright, now let me write the JS in full.
+
+```js
+const FRAG = `#version 300 es
+...
+`;
+```
+
+Careful with backticks in the template string (I'm using a JS template literal; no backticks inside the GLSL). ✓ And `${}` — none. ✓
+
+Let me now write out the complete code, checking syntax as I go.
+
+Also: I should double check `sdCylZ` usage: `sdCylZ(q, 0.048, 0.032)` where q is relative to the hub center → a cylinder along z with half-length 0.048 and radius 0.032. ✓
+
+For the bottom bracket shell: `sdCylZ(p - BB, 0.058, 0.040)` ✓.
+
+For the chainring: `sdCylZ(p - vec3(BB.x,BB.y,0.065), 0.008, 0.105)` → a thin disc of radius 0.105 at z=0.065. Hmm, the disc's z half-thickness is 0.008 → z from 0.057 to 0.073. And the crank arm is at z=0.075 with radius 0.017 → z from 0.058 to 0.092. They overlap slightly. Fine.
+
+Wait, the chainring should be at the same z as the chain (0.062). Let me set the chainring at z=0.062 with a half-thickness of 0.007. And the chain at z=0.062 with r=0.010. OK, they're coplanar-ish. Fine.
+
+Actually, a real chainring is on the right side (z>0), and the chain goes to the rear cog at z=0.062. ✓
+
+Now let me finalize the numbers and write everything.
+
+One more check on `addFrame`: `sdCap(p, BB, SC, 0.026)` where BB=(-0.08,0.27,0) and SC=(-0.30,0.78,0) — the seat tube. ✓
+
+The top tube from SC (-0.30,0.78) to HT1 (0.45,0.92). ✓
+The down tube from BB to HT0 (0.40,0.72). ✓
+The head tube from HT0 to HT1 (r=0.037). ✓
+The fork from (0.40,0.72,±0.048) to (0.62,0.40,±0.048) — the front hub is at (0.62,0.40). ✓
+The chainstays from (-0.08,0.27,±0.048) to (-0.62,0.40,±0.048). ✓
+The seat stays from (-0.30,0.78,±0.045) to (-0.62,0.40,±0.045). ✓
+The seat post from (-0.30,0.78,0) to (-0.35,0.955,0). ✓
+The saddle at (-0.37,0.985). The seatpost top (-0.35,0.955) is just below. ✓
+The stem from HT1 (0.45,0.92) to (0.50,1.02). ✓
+The bar from (0.50,1.02,-0.24) to (0.50,1.02,0.24). ✓
+The grips at ±(0.165..0.242). ✓
+The handlebar at y=1.02 and the wing hand at (0.48,1.03,±0.235) — right at the grip. ✓ 
+
+Now, is the handlebar position plausible? The bar is at (0.50, 1.02) and the saddle at (-0.37,0.99). The pelican sits with its body center at (-0.26,1.26) — leaning over the bars. Fine.
+
+Now the wheel hubs: the rear hub at (-0.62,0.40) and the wheel center also at (-0.62,0.40) ✓.
+
+Alright. And the rear cog at (-0.62,0.40,0.062) — inside the wheel's spoke area. Fine.
+
+Let me write everything now, and be careful about GLSL ES 3.0 specifics:
+- `if (pointers.size === 1)` — that's JS.
+- In GLSL, `mod` and `sign` exist. `mix`, `clamp`, `smoothstep` ✓.
+- Integer literals in for loops ✓.
+
+One more: `float(i)*0.25` where i is an int — need `float(i)`. ✓
+
+Let me write the final code.
+
+Also, don't forget: the vertex shader must compile with `#version 300 es` on the first line. ✓ (No leading whitespace or newline before #version!) In a template literal, I must start immediately with `#version 300 es`. So `const VERT = \`#version 300 es\nlayout(location=0)...\`` — careful that the template literal's first character is `#`.
+
+Now writing.
+
+```js
+export function createPelicanSdf(canvas) {
+  if (!canvas || typeof canvas.getContext !== 'function') {
+    throw new Error('createPelicanSdf: a canvas element is required');
+  }
+  const gl = canvas.getContext('webgl2', {
+    alpha: false, antialias: false, depth: false, stencil: false,
+    premultipliedAlpha: false, preserveDrawingBuffer: false,
+    powerPreference: 'high-performance'
+  });
+  if (!gl) throw new Error('createPelicanSdf: WebGL2 is not available in this browser');
+
+  const VERT = `#version 300 es
+layout(location = 0) in vec2 aPos;
+void main() { gl_Position = vec4(aPos, 0.0, 1.0); }
+`;
+
+  const FRAG = `#version 300 es
+precision highp float;
+precision highp int;
+... `;
+```
+
+Then the build/init.
+
+Let me write out the whole FRAG shader text now, in order.
+
+```glsl
+#version 300 es
+precision highp float;
+precision highp int;
+
+uniform vec2  uRes;
+uniform float uTime;
+uniform vec3  uCam;
+uniform vec3  uRight;
+uniform vec3  uUp;
+uniform vec3  uFwd;
+uniform float uTanH;
+
+out vec4 fragColor;
+
+const float PI = 3.14159265358979;
+const vec3 LIGHT = vec3(0.4210, 0.7810, 0.4610);
+
+float smin(float a, float b, float k){
+  float h = clamp(0.5 + 0.5*(b-a)/k, 0.0, 1.0);
+  return mix(b, a, h) - k*h*(1.0-h);
+}
+vec3 rotZ(vec3 p, float a){
+  float s = sin(a), c = cos(a);
+  return vec3(c*p.x - s*p.y, s*p.x + c*p.y, p.z);
+}
+float sdSph(vec3 p, float r){ return length(p) - r; }
+float sdEll(vec3 p, vec3 r){
+  float k0 = length(p/r);
+  float k1 = length(p/(r*r));
+  return k0*(k0-1.0)/max(k1, 1e-7);
+}
+float sdCap(vec3 p, vec3 a, vec3 b, float r){
+  vec3 pa = p - a, ba = b - a;
+  float h = clamp(dot(pa,ba)/dot(ba,ba), 0.0, 1.0);
+  return length(pa - ba*h) - r;
+}
+float sdRC(vec3 p, vec3 a, vec3 b, float r1, float r2){
+  vec3 ba = b - a;
+  float l2 = max(dot(ba,ba), 1e-5);
+  float rr = r1 - r2;
+  float a2 = max(l2 - rr*rr, 1e-5);
+  float il2 = 1.0/l2;
+  vec3 pa = p - a;
+  float y = dot(pa, ba);
+  float z = y - l2;
+  vec3 x = pa*l2 - ba*y;
+  float x2 = dot(x,x);
+  float y2 = y*y*l2;
+  float z2 = z*z*l2;
+  float k = sign(rr)*rr*rr*x2;
+  if (sign(z)*a2*z2 > k) return sqrt(x2 + z2)*il2 - r2;
+  if (sign(y)*a2*y2 < k) return sqrt(x2 + y2)*il2 - r1;
+  return (sqrt(x2*a2*il2) + y*rr)*il2 - r1;
+}
+float sdTorusZ(vec3 p, float R, float r){
+  vec2 q = vec2(length(p.xy) - R, p.z);
+  return length(q) - r;
+}
+float sdCylZ(vec3 p, float h, float r){
+  vec2 d = vec2(length(p.xy) - r, abs(p.z) - h);
+  return min(max(d.x,d.y), 0.0) + length(max(d, 0.0));
+}
+float sdBox(vec3 p, vec3 b){
+  vec3 q = abs(p) - b;
+  return length(max(q, 0.0)) + min(max(q.x, max(q.y,q.z)), 0.0);
+}
+```
+
+Then the parts... then map, trace, etc.
+
+I realize I should double check the `sdRC` "sign(rr)*rr*rr*x2" when rr = 0 (r1 == r2): k=0, and the first branch `sign(z)*a2*z2 > 0` — for z > 0 it's true, returning sqrt(x2+z2)*il2 - r2 which is the distance to the sphere at b. Correct-ish. Fine.
+
+Now, writing it all out. I'll be methodical.
+
+For the JS event listeners, I need to keep references to remove them in dispose.
+
+Let me write the final module.
+
+```js
+export function createPelicanSdf(canvas) {
+  ...
+  // ---- state ----
+  let yaw = 0.62, pitch = 0.17, dist = 4.1;
+  const TARGET = [0.0, 1.0, 0.0];
+  const FOV_TAN = 0.3839; // tan(21 deg)
+  const MIN_D = 0.35, MAX_D = 12.0, MIN_P = -0.95, MAX_P = 1.45;
+
+  let program = null, vao = null, vbo = null, U = null;
+  let lost = false, disposed = false, ready = false;
+  ...
+}
+```
+
+Let me now write it all out in the final answer. I'll write the code carefully, then double check the GLSL for syntax errors.
+
+Some checks:
+- `vec3 pa = p - a, ba = b - a;` — valid GLSL (multiple declarators with different initializers). ✓
+- In `addWheel`, I use `res` as the `inout` parameter. ✓
+- Macros: I'm not using any #define with res. Good.
+
+Check `addFrame`'s use of `vec3(BB.xy, 0.075)` — wait, I need `vec3(BB.x, BB.y, 0.075)`. `vec3(BB.xy, 0.075)` is also valid (vec2 + float). ✓
+
+Let me write addCranks with a shared vec3 for the pedal positions... but they're computed twice (in addCranks and addBird). Slight duplication, fine.
+
+Now, one design detail I want to double check: the pelican's leg from the hip at z=±0.125 down to the pedal at z=±0.122 — the leg is nearly vertical in the x-y plane. And the thigh's radius is 0.085. OK.
+
+Let me write out the final code.
+
+Actually — hold on. I want to reconsider the wing shape, since it's the most likely thing to look wrong. Two ellipsoids + a sphere on each side, forming an arm from the shoulder to the grip. The lower one may intersect the top tube of the frame. The top tube goes from (-0.30,0.78) to (0.45,0.92). The forearm ellipsoid from (0.10,1.18) to (0.48,1.03) with a radius of 0.07 → its bottom is at about y=1.03-0.07=0.96 near the hand, and the top tube at x=0.48 is at y≈0.925 with a radius of 0.025 → the top is at 0.95. So they nearly touch. Fine (a wing resting near the bar).
+
+OK. Also the wing might look better with a "feather tip" — a small ellipsoid extending past the grip. Skip.
+
+Now writing for real.
+
+One last thought about the background: the requirement mentions "background" as something to implement. The sky gradient + ground satisfies that.
+
+Let me write the code.
+
+Also: for `getView()` I return a copy: `{ yaw, pitch, distance: dist }`.
+
+Final code:
+
+```js
+export function createPelicanSdf(canvas) {
+  if (!canvas || typeof canvas.getContext !== 'function') {
+    throw new Error('createPelicanSdf: a canvas element is required');
+  }
+  const gl = canvas.getContext('webgl2', {...});
+  if (!gl) throw new Error('createPelicanSdf: WebGL2 is not available');
+
+  const VERT = `#version 300 es
+layout(location=0) in vec2 aPos;
+void main(){ gl_Position = vec4(aPos, 0.0, 1.0); }
+`;
+
+  const FRAG = `#version 300 es
+  ... `;
+
+  let program = null, vao = null, vbo = null, U = null;
+  let lost = false, disposed = false;
+
+  function build() {
+    const vs = gl.createShader(gl.VERTEX_SHADER);
+    gl.shaderSource(vs, VERT);
+    gl.compileShader(vs);
+    if (!gl.getShaderParameter(vs, gl.COMPILE_STATUS)) {
+      const log = gl.getShaderInfoLog(vs) || 'unknown error';
+      gl.deleteShader(vs);
+      throw new Error('createPelicanSdf: vertex shader failed to compile: ' + log);
+    }
+    const fs = gl.createShader(gl.FRAGMENT_SHADER);
+    gl.shaderSource(fs, FRAG);
+    gl.compileShader(fs);
+    if (!gl.getShaderParameter(fs, gl.COMPILE_STATUS)) {
+      const log = gl.getShaderInfoLog(fs) || 'unknown error';
+      gl.deleteShader(vs); gl.deleteShader(fs);
+      throw new Error('createPelicanSdf: fragment shader failed to compile: ' + log);
+    }
+    const p = gl.createProgram();
+    gl.attachShader(p, vs);
+    gl.attachShader(p, fs);
+    gl.linkProgram(p);
+    gl.deleteShader(vs); gl.deleteShader(fs);
+    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
+      const log = gl.getProgramInfoLog(p) || 'unknown error';
+      gl.deleteProgram(p);
+      throw new Error('createPelicanSdf: program failed to link: ' + log);
+    }
+    program = p;
+    U = {
+      uRes: gl.getUniformLocation(p, 'uRes'),
+      uTime: gl.getUniformLocation(p, 'uTime'),
+      uCam: gl.getUniformLocation(p, 'uCam'),
+      uRight: gl.getUniformLocation(p, 'uRight'),
+      uUp: gl.getUniformLocation(p, 'uUp'),
+      uFwd: gl.getUniformLocation(p, 'uFwd'),
+      uTanH: gl.getUniformLocation(p, 'uTanH')
+    };
+    vbo = gl.createBuffer();
+    vao = gl.createVertexArray();
+    gl.bindVertexArray(vao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,3,-1,-1,3]), gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+    gl.bindVertexArray(null);
+    gl.disable(gl.DEPTH_TEST);
+    gl.disable(gl.BLEND);
+    gl.disable(gl.CULL_FACE);
+  }
+```
+
+Careful: on a rebuild after context restore, the old vao/vbo are invalid; assigning new ones is fine.
+
+Then the camera and render.
+
+OK, writing the final answer now. I'll be careful to keep it all consistent.
+
+For the vertex attribute location: `layout(location=0) in vec2 aPos;` requires GLSL ES 3.00 — supported in WebGL2. ✓
+
+Let me write the render function:
+
+```js
+  function render(timeSeconds) {
+    if (disposed || lost || !program) return;
+    const w = canvas.width | 0, h = canvas.height | 0;
+    if (w <= 0 || h <= 0) return;
+    const t = (typeof timeSeconds === 'number' && isFinite(timeSeconds)) ? timeSeconds : 0;
+
+    const cp = Math.cos(pitch), sp = Math.sin(pitch);
+    const cy = Math.cos(yaw), sy = Math.sin(yaw);
+    const dx = sy*cp, dy = sp, dz = cy*cp;
+    const px = TARGET[0] + dist*dx, py = TARGET[1] + dist*dy, pz = TARGET[2] + dist*dz;
+    const fx = -dx, fy = -dy, fz = -dz;
+    // right = normalize(cross(fwd, (0,1,0))) = (-fz, 0, fx)/cp
+    const inv = 1/Math.max(cp, 1e-4);
+    const rx = -fz*inv, ry = 0, rz = fx*inv;
+    // up = cross(right, fwd)
+    const ux = ry*fz - rz*fy, uy = rz*fx - rx*fz, uz = rx*fy - ry*fx;
+
+    gl.viewport(0, 0, w, h);
+    gl.useProgram(program);
+    gl.uniform2f(U.uRes, w, h);
+    gl.uniform1f(U.uTime, t);
+    gl.uniform3f(U.uCam, px, py, pz);
+    gl.uniform3f(U.uRight, rx, ry, rz);
+    gl.uniform3f(U.uUp, ux, uy, uz);
+    gl.uniform3f(U.uFwd, fx, fy, fz);
+    gl.uniform1f(U.uTanH, FOV_TAN);
+    gl.bindVertexArray(vao);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.bindVertexArray(null);
+  }
+```
+
+Check cross(right, fwd): right = (-fz, 0, fx)*inv, fwd = (fx,fy,fz).
+up = right × fwd = |i j k; rx 0 rz; fx fy fz| = (0*fz - rz*fy, rz*fx - rx*fz, rx*fy - 0*fx) = (-rz*fy, rz*fx - rx*fz, rx*fy). ✓ matches what I wrote with ry=0.
+
+Verify at pitch=0, yaw=0: fwd = (0,0,-1), right = (1,0,0) [since -fz=1, fx=0, inv=1]. up = (0*(-1) - 0*0, 0*0 - 1*(-1), 1*0 - 0*0) = (0,1,0). ✓
+
+Good.
+
+Note: at pitch near ±π/2, cp→0, inv→large, but clamped to 1e-4 → the right vector blows up. But I clamp the pitch to ±1.45 (cp=0.12), so it's fine.
+
+Now the event handling and the rest.
+
+Let me now also double check `uTanH` = tan(fov/2) where fov = 42° → tan(21°) = 0.3839. ✓ The vertical FOV.
+
+For a canvas with aspect > 1, uv.x ranges ±aspect, so the horizontal FOV is wider. ✓ Correct.
+
+Writing the final answer now.
+
+One more: "Do not create your own animation loop" ✓. "Do not use requestAnimationFrame, timers, workers..." ✓.
+
+"Handle WebGL context loss without throwing." ✓
+
+Now, writing out the whole thing.
+
+Regarding the potential issue of `map()` returning a negative value at the start (camera inside geometry) — the march would immediately hit. Fine.
+
+Let me write the shadeGround blob function before shadeGround.
+
+Final structure of FRAG. Writing it now in full.
+
+Also I want to double-check the `atan` in addWheel when pl is (0,0): atan(0,0) is undefined but returns 0 typically; the result is multiplied by rr=0 → 0. Fine.
+
+Writing the answer now.
+
+Actually one more important check: in `trace`, I return `vec2(-1.0, 0.0)` on a miss, and the caller checks `h.x > 0.0`. Since a hit at t=0 would be reported as `vec2(0, mat)` and `0 > 0` is false → it'd be treated as a miss. Only happens if the camera starts exactly on a surface. Rare. Fine.
+
+Let me write out everything now.
+
+For the file size, I'll estimate as I go. Should be around 18-22KB.
+
+Let me write the final GLSL `map` and confirm the parameter passing for `addBird(res, p, crank)`.
+
+Writing it all out now for real.
+
+```glsl
+void addWheel(inout vec2 res, vec3 p, float cx, float sp){
+  vec3 q = p - vec3(cx, 0.40, 0.0);
+  float tire = sdTorusZ(q, 0.352, 0.048);
+  if (tire < res.x) res = vec2(tire, 2.0);
+  float rim = sdTorusZ(q, 0.294, 0.019);
+  float rr = length(q.xy);
+  float a = atan(q.y, q.x) + sp;
+  float seg = PI/3.0;
+  float sd = rr*abs(sin(mod(a + seg*0.5, seg) - seg*0.5));
+  float spoke = max(sd, abs(rr - 0.155) - 0.135);
+  spoke = max(spoke, abs(q.z) - 0.008) - 0.005;
+  float mtl = min(rim, spoke);
+  if (mtl < res.x) res = vec2(mtl, 3.0);
+  float hub = sdCylZ(q, 0.048, 0.032);
+  if (hub < res.x) res = vec2(hub, 3.0);
+}
+```
+
+Wait: rim radius 0.294 with a tube radius of 0.019 → the rim's outer edge is at 0.313, inside the tire's inner edge (0.352-0.048 = 0.304). Hmm, the tire torus: major 0.352, minor 0.048 → it spans radially from 0.304 to 0.400. The rim at 0.294±0.019 → 0.275 to 0.313. So the rim overlaps the tire (0.304-0.313). Good, connected.
+
+The spokes: from rr = 0.02 (0.155-0.135) to 0.29. So they span the hub to the rim. ✓
+
+OK, writing.
+
+Final check on the beak: `sdRC(p, vec3(0.33,1.88,0.0), vec3(0.92,1.76,0.0), 0.075, 0.022)`. The head is at (0.27,1.86) r 0.125 → the head's surface at the front is around x=0.395. The beak base at (0.33,1.88) with r=0.075 is inside the head. ✓ Good, connected.
+
+The pouch ellipsoid at (0.58,1.72) with radii (0.21,0.11,0.075): it spans x 0.37..0.79, y 1.61..1.83. And the lower mandible from (0.33,1.83) to (0.90,1.75) with r 0.055→0.02: that passes through the pouch's upper region. Combined with smin(0.07), the pouch blends into the bill. Should look like a pelican bill with a pouch. Good.
+
+Hmm, one thing: the pouch's bottom at y=1.61 is below the lower mandible's line at that x (y≈1.79 near x=0.58). So the pouch hangs below. ✓
+
+Now the eye at (0.325,1.905,±0.098) — the head sphere center (0.27,1.86), r=0.125. ✓
+
+Alright. Writing the final answer.
+
+Oh wait — one more consideration about `precision highp float` and the loop with `break` inside — fine.
+
+And the number of iterations in the loops must be constant expressions in GLSL ES 3.0? For loops with a constant bound are fine. `for (int i=0;i<5;i++)` ✓.
+
+Writing now.
+
+Let me also handle: `if (typeof timeSeconds === 'number' ...)` — use Number.isFinite? That's ES6, fine in browsers. I'll use a manual check.
+
+Now writing the whole answer.

@@ -1,0 +1,356 @@
+export function createPelicanSdf(canvas) {
+  if (!canvas || typeof canvas.getContext !== 'function') throw new Error('createPelicanSdf requires a canvas element.');
+  let gl = canvas.getContext('webgl2', { alpha: false, antialias: false, depth: false, stencil: false, powerPreference: 'high-performance' });
+  if (!gl) throw new Error('WebGL2 is unavailable.');
+  const view = { yaw: 0.62, pitch: 0.24, distance: 5.4 };
+  const target = [0, 0.32, 0];
+  let program = null, vao = null, buffer = null, uniforms = {}, lost = false, disposed = false;
+  let loseExt = gl.getExtension('WEBGL_lose_context');
+  const pointers = new Map();
+  let pinchDistance = 0, pinchViewDistance = 0;
+  const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+  const vert = `#version 300 es
+layout(location=0) in vec2 aPos;
+void main(){gl_Position=vec4(aPos,0.0,1.0);}`;
+  const frag = `#version 300 es
+precision highp float;
+out vec4 outColor;
+uniform vec2 uRes;
+uniform vec3 uCam;
+uniform vec3 uFwd;
+uniform vec3 uRight;
+uniform vec3 uUp;
+uniform float uTime;
+float sdSphere(vec3 p,float r){return length(p)-r;}
+float sdCapsule(vec3 p,vec3 a,vec3 b,float r){vec3 pa=p-a,ba=b-a;float h=clamp(dot(pa,ba)/dot(ba,ba),0.0,1.0);return length(pa-ba*h)-r;}
+float sdTorusZ(vec3 p,vec2 t){vec2 q=vec2(length(p.xy)-t.x,p.z);return length(q)-t.y;}
+float sdEllipsoid(vec3 p,vec3 r){float k0=length(p/r);float k1=length(p/(r*r));return k0*(k0-1.0)/max(k1,0.0001);}
+float sdRoundCone(vec3 p,vec3 a,vec3 b,float r1,float r2){vec3 ba=b-a;float l2=dot(ba,ba);float rr=r1-r2;float a2=l2-rr*rr;float il2=1.0/l2;vec3 pa=p-a;float y=dot(pa,ba);float z=y-l2;float x2=dot(pa*l2-ba*y,pa*l2-ba*y);float y2=y*y*l2;float z2=z*z*l2;float k=sign(rr)*rr*rr*x2;if(sign(z)*a2*z2>k)return sqrt(x2+z2)*il2-r2;if(sign(y)*a2*y2<k)return sqrt(x2+y2)*il2-r1;return (sqrt(x2*a2*il2)+y*rr)*il2-r1;}
+float sdBox(vec3 p,vec3 b){vec3 q=abs(p)-b;return length(max(q,0.0))+min(max(q.x,max(q.y,q.z)),0.0);}
+float smin(float a,float b,float k){float h=clamp(0.5+0.5*(b-a)/k,0.0,1.0);return mix(b,a,h)-k*h*(1.0-h);}
+vec2 unite(vec2 a,vec2 b){return a.x<b.x?a:b;}
+vec2 wheel(vec3 p,vec3 cen){
+ vec3 q=p-cen;
+ vec2 r=vec2(sdTorusZ(q,vec2(0.80,0.085)),1.0);
+ r=unite(r,vec2(sdTorusZ(q,vec2(0.675,0.027)),2.0));
+ float rad=length(q.xy);
+ float f=mod(atan(q.y,q.x),1.0471976)-0.5235988;
+ vec2 sp=vec2(cos(f),sin(f))*rad;
+ float spokes=length(vec3(sp.x-clamp(sp.x,0.08,0.66),sp.y,q.z))-0.014;
+ spokes=min(spokes,sdCapsule(q,vec3(0.0,0.0,-0.10),vec3(0.0,0.0,0.10),0.058));
+ r=unite(r,vec2(spokes,2.0));
+ return r;
+}
+vec2 mapObj(vec3 p){
+ vec2 res=vec2(1000.0,-1.0);
+ #define ADD(d,m) res=unite(res,vec2(d,m))
+ vec3 A=vec3(-1.05,-0.35,0.0),B=vec3(1.05,-0.35,0.0),C=vec3(0.02,-0.42,0.0),S=vec3(-0.34,0.62,0.0),HT=vec3(0.72,0.58,0.0),HB=vec3(0.86,0.30,0.0);
+ res=unite(res,wheel(p,A));
+ res=unite(res,wheel(p,B));
+ ADD(sdCapsule(p,A,S,0.040),3.0);
+ ADD(sdCapsule(p,A,C,0.034),3.0);
+ ADD(sdCapsule(p,C,S,0.050),3.0);
+ ADD(sdCapsule(p,C,HB,0.055),3.0);
+ ADD(sdCapsule(p,S,HT,0.050),3.0);
+ ADD(sdCapsule(p,HT,HB,0.060),3.0);
+ ADD(sdCapsule(p,HB,B,0.040),3.0);
+ ADD(sdCapsule(p,S,vec3(-0.38,0.74,0.0),0.035),2.0);
+ ADD(sdEllipsoid(p-vec3(-0.40,0.76,0.0),vec3(0.29,0.070,0.165)),4.0);
+ ADD(sdCapsule(p,HT,vec3(0.68,0.86,0.0),0.038),2.0);
+ ADD(sdCapsule(p,vec3(0.68,0.86,-0.34),vec3(0.68,0.86,0.34),0.034),2.0);
+ ADD(sdCapsule(p,vec3(0.68,0.86,0.22),vec3(0.68,0.86,0.36),0.050),1.0);
+ ADD(sdCapsule(p,vec3(0.68,0.86,-0.36),vec3(0.68,0.86,-0.22),0.050),1.0);
+ ADD(sdSphere(p-vec3(0.68,0.925,0.16),0.045),8.0);
+ ADD(sdCapsule(p,vec3(0.02,-0.36,0.075),vec3(-1.05,-0.27,0.075),0.017),1.0);
+ ADD(sdCapsule(p,vec3(0.02,-0.49,0.075),vec3(-1.05,-0.43,0.075),0.017),1.0);
+ ADD(sdTorusZ(p-C,vec2(0.155,0.024)),2.0);
+ ADD(sdSphere(p-C,0.075),2.0);
+ ADD(sdCapsule(p,vec3(0.02,-0.42,0.13),vec3(0.29,-0.27,0.13),0.030),2.0);
+ ADD(sdCapsule(p,vec3(0.02,-0.42,-0.13),vec3(-0.19,-0.57,-0.13),0.030),2.0);
+ ADD(sdEllipsoid(p-vec3(0.35,-0.25,0.235),vec3(0.145,0.034,0.095)),1.0);
+ ADD(sdEllipsoid(p-vec3(-0.25,-0.61,-0.235),vec3(0.145,0.034,0.095)),1.0);
+ float white=sdEllipsoid(p-vec3(-0.08,1.02,0.0),vec3(0.62,0.42,0.36));
+ white=smin(white,sdCapsule(p,vec3(0.24,1.12,0.0),vec3(0.52,1.58,0.0),0.175),0.12);
+ white=smin(white,sdSphere(p-vec3(0.58,1.72,0.0),0.270),0.12);
+ white=smin(white,sdRoundCone(p,vec3(-0.52,1.10,0.0),vec3(-0.98,1.30,0.0),0.185,0.035),0.08);
+ white=smin(white,sdCapsule(p,vec3(0.40,1.90,0.0),vec3(0.30,2.02,0.0),0.055),0.05);
+ ADD(white,6.0);
+ for(int side=-1;side<=1;side+=2){
+   float s=float(side);
+   vec3 q=p-vec3(-0.18,1.09,0.335*s);
+   float ca=cos(-0.38),sa=sin(-0.38);
+   q.xy=vec2(ca*q.x-sa*q.y,sa*q.x+ca*q.y);
+   ADD(sdEllipsoid(q,vec3(0.52,0.27,0.088)),7.0);
+   ADD(sdCapsule(p,vec3(0.28,1.10,0.27*s),vec3(0.54,0.96,0.35*s),0.058),7.0);
+   ADD(sdCapsule(p,vec3(0.54,0.96,0.35*s),vec3(0.68,0.88,0.30*s),0.048),7.0);
+   ADD(sdSphere(p-vec3(0.66,1.805,0.238*s),0.049),10.0);
+ }
+ ADD(sdCapsule(p,vec3(0.02,0.78,0.19),vec3(0.37,0.36,0.26),0.066),8.0);
+ ADD(sdCapsule(p,vec3(0.37,0.36,0.26),vec3(0.35,-0.13,0.24),0.052),8.0);
+ ADD(sdCapsule(p,vec3(-0.03,0.78,-0.19),vec3(-0.31,0.28,-0.26),0.066),8.0);
+ ADD(sdCapsule(p,vec3(-0.31,0.28,-0.26),vec3(-0.25,-0.52,-0.24),0.052),8.0);
+ ADD(sdEllipsoid(p-vec3(0.39,-0.17,0.24),vec3(0.175,0.052,0.088)),8.0);
+ ADD(sdEllipsoid(p-vec3(-0.27,-0.56,-0.24),vec3(0.175,0.052,0.088)),8.0);
+ float beak=sdRoundCone(p,vec3(0.76,1.705,0.0),vec3(1.64,1.575,0.0),0.112,0.024);
+ beak=min(beak,sdCapsule(p,vec3(0.78,1.625,0.0),vec3(1.60,1.545,0.0),0.042));
+ ADD(beak,8.0);
+ ADD(sdSphere(p-vec3(1.645,1.575,0.0),0.032),1.0);
+ float pouch=sdEllipsoid(p-vec3(1.13,1.405,0.0),vec3(0.49,0.225,0.135));
+ pouch=smin(pouch,sdCapsule(p,vec3(0.80,1.58,0.0),vec3(1.45,1.46,0.0),0.075),0.08);
+ ADD(pouch,9.0);
+ return res;
+}
+vec2 mapScene(vec3 p){
+ vec2 r=mapObj(p);
+ float g=p.y+1.235;
+ return g<r.x?vec2(g,0.0):r;
+}
+vec3 calcNormal(vec3 p){
+ vec2 e=vec2(0.0016,-0.0016);
+ return normalize(e.xyy*mapScene(p+e.xyy).x+e.yyx*mapScene(p+e.yyx).x+e.yxy*mapScene(p+e.yxy).x+e.xxx*mapScene(p+e.xxx).x);
+}
+float shadow(vec3 ro,vec3 rd){
+ float res=1.0,t=0.035;
+ for(int i=0;i<20;i++){
+   float h=mapObj(ro+rd*t).x;
+   if(h<0.0015)return 0.0;
+   res=min(res,11.0*h/t);
+   t+=clamp(h,0.035,0.28);
+   if(t>7.0)break;
+ }
+ return clamp(res,0.0,1.0);
+}
+vec3 albedo(float m,vec3 p){
+ int id=int(m+0.5);
+ if(id==0){
+   float path=smoothstep(1.35,1.05,abs(p.z));
+   float tile=smoothstep(0.45,0.48,abs(fract(p.x*0.8)-0.5))+smoothstep(0.45,0.48,abs(fract(p.z*0.8)-0.5));
+   vec3 grass=mix(vec3(0.24,0.55,0.25),vec3(0.36,0.68,0.30),0.5+0.5*sin(p.x*2.1)*sin(p.z*1.7));
+   vec3 road=mix(vec3(0.76,0.62,0.43),vec3(0.68,0.53,0.36),clamp(tile,0.0,1.0)*0.25);
+   return mix(grass,road,path);
+ }
+ if(id==1)return vec3(0.055,0.055,0.065);
+ if(id==2)return vec3(0.72,0.76,0.80);
+ if(id==3)return vec3(0.02,0.58,0.62);
+ if(id==4)return vec3(0.38,0.19,0.09);
+ if(id==6)return vec3(1.00,0.96,0.88);
+ if(id==7)return vec3(0.68,0.76,0.82);
+ if(id==8)return vec3(1.00,0.48,0.08);
+ if(id==9)return vec3(1.00,0.62,0.38);
+ if(id==10)return vec3(0.01,0.01,0.015);
+ return vec3(0.9);
+}
+vec3 shade(vec2 hit,vec3 pos,vec3 rd){
+ vec3 n=calcNormal(pos);
+ vec3 alb=albedo(hit.y,pos);
+ vec3 light=normalize(vec3(0.55,0.85,0.45));
+ float sh=shadow(pos+n*0.025,light);
+ float diff=max(dot(n,light),0.0);
+ vec3 hemi=mix(vec3(0.20,0.23,0.28),vec3(0.42,0.48,0.52),n.y*0.5+0.5);
+ vec3 hv=normalize(light-rd);
+ float spec=pow(max(dot(n,hv),0.0),hit.y==2.0?70.0:28.0)*(hit.y==2.0?0.75:0.22);
+ float ao=0.78+0.22*clamp(mapObj(pos+n*0.11).x*6.0,0.0,1.0);
+ vec3 col=alb*(hemi*ao+(vec3(1.15,1.02,0.86)*diff*sh))+spec*sh*vec3(1.0,0.98,0.92);
+ float fog=1.0-exp(-max(length(pos-uCam)-4.0,0.0)*0.035);
+ return mix(col,vec3(0.62,0.78,0.92),clamp(fog,0.0,0.45));
+}
+vec3 background(vec3 rd){
+ float h=clamp(rd.y*0.5+0.5,0.0,1.0);
+ vec3 col=mix(vec3(0.98,0.78,0.55),vec3(0.35,0.65,0.98),pow(h,0.75));
+ col=mix(vec3(0.55,0.78,0.94),col,smoothstep(-0.08,0.18,rd.y));
+ vec3 light=normalize(vec3(0.55,0.85,0.45));
+ float sun=max(dot(rd,light),0.0);
+ col+=vec3(1.0,0.72,0.38)*pow(sun,180.0)*1.4+vec3(1.0,0.62,0.25)*pow(sun,8.0)*0.18;
+ if(rd.y>0.03){
+   vec2 cp=rd.xz/(rd.y+0.35);
+   float cl=sin(cp.x*3.1+sin(cp.y*2.3)*1.4)*sin(cp.y*4.0-1.2);
+   col=mix(col,vec3(1.0),smoothstep(0.55,0.92,cl)*0.20*smoothstep(0.03,0.25,rd.y));
+ }
+ return col;
+}
+void main(){
+ vec2 uv=(2.0*gl_FragCoord.xy-uRes)/uRes.y;
+ vec3 rd=normalize(uFwd+uv.x*uRight+uv.y*uUp);
+ vec3 ro=uCam;
+ float t=0.05,tmax=22.0;
+ vec2 hit=vec2(-1.0,-1.0);
+ for(int i=0;i<88;i++){
+   vec2 d=mapScene(ro+rd*t);
+   if(d.x<0.0012*max(1.0,t)){hit=vec2(t,d.y);break;}
+   t+=d.x*0.88;
+   if(t>tmax)break;
+ }
+ vec3 col;
+ if(hit.x>0.0){
+   col=shade(hit,ro+rd*hit.x,rd);
+ }else{
+   float gt=(-1.235-ro.y)/rd.y;
+   if(rd.y<-0.0001&&gt>0.0&&gt<60.0){
+     vec3 gp=ro+rd*gt;
+     vec2 fake=vec2(gt,0.0);
+     col=shade(fake,gp,rd);
+   }else col=background(rd);
+ }
+ col=col/(col+0.85);
+ col=pow(col,vec3(0.58));
+ outColor=vec4(col,1.0);
+}`;
+  function compile(type, source) {
+    const s = gl.createShader(type);
+    gl.shaderSource(s, source);
+    gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+      const msg = gl.getShaderInfoLog(s) || 'unknown shader error';
+      gl.deleteShader(s);
+      throw new Error('Shader compilation failed: ' + msg);
+    }
+    return s;
+  }
+  function initGL() {
+    const vs = compile(gl.VERTEX_SHADER, vert);
+    const fs = compile(gl.FRAGMENT_SHADER, frag);
+    const pr = gl.createProgram();
+    gl.attachShader(pr, vs);
+    gl.attachShader(pr, fs);
+    gl.linkProgram(pr);
+    gl.deleteShader(vs);
+    gl.deleteShader(fs);
+    if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) {
+      const msg = gl.getProgramInfoLog(pr) || 'unknown link error';
+      gl.deleteProgram(pr);
+      throw new Error('Shader program link failed: ' + msg);
+    }
+    program = pr;
+    vao = gl.createVertexArray();
+    buffer = gl.createBuffer();
+    gl.bindVertexArray(vao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+    uniforms = {
+      res: gl.getUniformLocation(program, 'uRes'),
+      cam: gl.getUniformLocation(program, 'uCam'),
+      fwd: gl.getUniformLocation(program, 'uFwd'),
+      right: gl.getUniformLocation(program, 'uRight'),
+      up: gl.getUniformLocation(program, 'uUp'),
+      time: gl.getUniformLocation(program, 'uTime')
+    };
+  }
+  initGL();
+  canvas.tabIndex = 0;
+  canvas.style.touchAction = 'none';
+  function setView(yaw, pitch, distance) {
+    if (Number.isFinite(yaw)) view.yaw = yaw;
+    if (Number.isFinite(pitch)) view.pitch = clamp(pitch, -1.45, 1.45);
+    if (Number.isFinite(distance)) view.distance = clamp(distance, 0.85, 18.0);
+  }
+  function getView() { return { yaw: view.yaw, pitch: view.pitch, distance: view.distance }; }
+  function render(timeSeconds) {
+    if (disposed || lost || !program) return;
+    const w = gl.drawingBufferWidth, h = gl.drawingBufferHeight;
+    if (!w || !h) return;
+    const cp = Math.cos(view.pitch), sp = Math.sin(view.pitch);
+    const cy = Math.cos(view.yaw), sy = Math.sin(view.yaw);
+    const cam = [target[0] + view.distance * sy * cp, target[1] + view.distance * sp, target[2] + view.distance * cy * cp];
+    let fwd = [target[0] - cam[0], target[1] - cam[1], target[2] - cam[2]];
+    const fl = Math.hypot(fwd[0], fwd[1], fwd[2]) || 1;
+    fwd = [fwd[0] / fl, fwd[1] / fl, fwd[2] / fl];
+    let right = [fwd[2], 0, -fwd[0]];
+    const rl = Math.hypot(right[0], right[1], right[2]) || 1;
+    right = [right[0] / rl, right[1] / rl, right[2] / rl];
+    const up = [right[1] * fwd[2] - right[2] * fwd[1], right[2] * fwd[0] - right[0] * fwd[2], right[0] * fwd[1] - right[1] * fwd[0]];
+    gl.viewport(0, 0, w, h);
+    gl.useProgram(program);
+    gl.bindVertexArray(vao);
+    if (uniforms.res) gl.uniform2f(uniforms.res, w, h);
+    if (uniforms.cam) gl.uniform3f(uniforms.cam, cam[0], cam[1], cam[2]);
+    if (uniforms.fwd) gl.uniform3f(uniforms.fwd, fwd[0] * 1.35, fwd[1] * 1.35, fwd[2] * 1.35);
+    if (uniforms.right) gl.uniform3f(uniforms.right, right[0], right[1], right[2]);
+    if (uniforms.up) gl.uniform3f(uniforms.up, up[0], up[1], up[2]);
+    if (uniforms.time) gl.uniform1f(uniforms.time, Number.isFinite(timeSeconds) ? timeSeconds : 0);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+  function pointerDistance() {
+    const a = [...pointers.values()];
+    return a.length < 2 ? 0 : Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y);
+  }
+  function onPointerDown(e) {
+    if (disposed) return;
+    try { canvas.focus(); } catch (_) {}
+    try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.size === 2) { pinchDistance = pointerDistance(); pinchViewDistance = view.distance; }
+    e.preventDefault();
+  }
+  function onPointerMove(e) {
+    if (!pointers.has(e.pointerId)) return;
+    const old = pointers.get(e.pointerId);
+    const dx = e.clientX - old.x, dy = e.clientY - old.y;
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.size === 1) {
+      view.yaw += dx * 0.009;
+      view.pitch = clamp(view.pitch + dy * 0.009, -1.45, 1.45);
+    } else if (pointers.size === 2) {
+      const d = pointerDistance();
+      if (pinchDistance > 0 && d > 0) view.distance = clamp(pinchViewDistance * pinchDistance / d, 0.85, 18.0);
+    }
+    e.preventDefault();
+  }
+  function onPointerUp(e) {
+    pointers.delete(e.pointerId);
+    if (pointers.size === 2) { pinchDistance = pointerDistance(); pinchViewDistance = view.distance; }
+    else pinchDistance = 0;
+  }
+  function onWheel(e) {
+    e.preventDefault();
+    const scale = e.deltaMode === 1 ? 33 : e.deltaMode === 2 ? 400 : 1;
+    view.distance = clamp(view.distance * Math.exp(e.deltaY * scale * 0.0012), 0.85, 18.0);
+  }
+  function onKeyDown(e) {
+    let used = true;
+    if (e.key === 'ArrowLeft') view.yaw -= 0.14;
+    else if (e.key === 'ArrowRight') view.yaw += 0.14;
+    else if (e.key === 'ArrowUp') view.pitch = clamp(view.pitch + 0.09, -1.45, 1.45);
+    else if (e.key === 'ArrowDown') view.pitch = clamp(view.pitch - 0.09, -1.45, 1.45);
+    else if (e.key === '+' || e.key === '=') view.distance = clamp(view.distance * 0.88, 0.85, 18.0);
+    else if (e.key === '-' || e.key === '_') view.distance = clamp(view.distance * 1.14, 0.85, 18.0);
+    else used = false;
+    if (used) e.preventDefault();
+  }
+  function onContextLost(e) { e.preventDefault(); lost = true; }
+  function onContextRestored() {
+    if (disposed) return;
+    try { gl = canvas.getContext('webgl2'); if (!gl) { lost = true; return; } initGL(); lost = false; }
+    catch (_) { lost = true; }
+  }
+  canvas.addEventListener('pointerdown', onPointerDown);
+  canvas.addEventListener('pointermove', onPointerMove);
+  canvas.addEventListener('pointerup', onPointerUp);
+  canvas.addEventListener('pointercancel', onPointerUp);
+  canvas.addEventListener('wheel', onWheel, { passive: false });
+  canvas.addEventListener('keydown', onKeyDown);
+  canvas.addEventListener('webglcontextlost', onContextLost, false);
+  canvas.addEventListener('webglcontextrestored', onContextRestored, false);
+  function dispose() {
+    if (disposed) return;
+    disposed = true;
+    pointers.clear();
+    canvas.removeEventListener('pointerdown', onPointerDown);
+    canvas.removeEventListener('pointermove', onPointerMove);
+    canvas.removeEventListener('pointerup', onPointerUp);
+    canvas.removeEventListener('pointercancel', onPointerUp);
+    canvas.removeEventListener('wheel', onWheel);
+    canvas.removeEventListener('keydown', onKeyDown);
+    canvas.removeEventListener('webglcontextlost', onContextLost, false);
+    canvas.removeEventListener('webglcontextrestored', onContextRestored, false);
+    if (gl) {
+      if (buffer) gl.deleteBuffer(buffer);
+      if (vao) gl.deleteVertexArray(vao);
+      if (program) gl.deleteProgram(program);
+      if (loseExt) try { loseExt.loseContext(); } catch (_) {}
+    }
+    program = null; vao = null; buffer = null;
+  }
+  return { render, setView, getView, dispose };
+}

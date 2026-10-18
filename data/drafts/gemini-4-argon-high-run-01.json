@@ -1,0 +1,75 @@
+{
+  "id": "gemini-4-argon-high-run-01",
+  "title": "Google: Gemini 4 Argon / high effort",
+  "model": "google/gemini-4-argon",
+  "provider": "OpenRouter via pi SDK",
+  "status": "unverified",
+  "track": "one-shot",
+  "promptVersion": "1.0.0",
+  "promptSha256": "cd21d5a8bb3956d82ab5650304e7e491063eacdb27dad85be6b4a845512f5e6b",
+  "artifactSha256": "57b800ae689ccd3004e18640807ab54a4db2a682f6980806099ff5ae195c267f",
+  "createdAt": "2026-10-18",
+  "artifact": "./artifacts/gemini-4-argon-high-run-01.js",
+  "description": "The complete first response is 45,761 bytes, larger than the benchmark's 32,768-byte module cap; it would render, but it cannot be published under the executable-artifact size constraint. The unchanged response is retained as a draft.",
+  "accent": "#0b6e75",
+  "generationHarness": {
+    "name": "pi SDK",
+    "version": "0.84.3",
+    "surface": "pi-coding-agent createAgentSession (in-memory, no tools)",
+    "sandbox": "n/a",
+    "notes": "Fresh ephemeral invocation with user config and project rules disabled; orchestrated by Codex."
+  },
+  "generationUsage": {
+    "inputTokens": 794,
+    "cachedInputTokens": 0,
+    "reasoningTokens": null,
+    "outputTokens": 49719,
+    "totalTokens": 50513,
+    "apiCostUsd": 0.498778,
+    "billingMode": "api-metered",
+    "source": "data/raw/gemini-4-argon-high-run-01/events.jsonl",
+    "notes": "OpenRouter invocation via pi SDK; cost computed by pi from provider pricing (per-million-token rates)."
+  },
+  "validation": {
+    "state": "failed",
+    "checks": [
+      "prompt and response receipt hashes"
+    ],
+    "unmetRequirements": [
+      {
+        "requirement": "Module at or below 32,768 UTF-8 bytes",
+        "evidence": "The unchanged first response is 45,761 UTF-8 bytes, about 40% over the 32,768-byte cap stated in the prompt. The repository's executable-artifact publication check hard-fails artifacts above the cap, and one-shot responses are never truncated or repaired, so the result cannot be added to the catalog."
+      }
+    ],
+    "warnings": [
+      "Not added to the catalog because the unchanged response does not pass executable-artifact publication constraints."
+    ]
+  },
+  "metrics": {
+    "sourceBytes": 45761,
+    "initMs": null,
+    "gpuMsMedian": null,
+    "gpuMsP95": null,
+    "timingMethod": null,
+    "environment": null,
+    "environmentKey": null,
+    "profile": "pelican-canvas-960x540-v1",
+    "sampleCount": null,
+    "trials": null,
+    "measuredAt": null
+  },
+  "visual": {
+    "readability": null,
+    "completeness": null,
+    "coherence": null,
+    "craft": null,
+    "inspectability": null,
+    "reviewers": 0
+  },
+  "provenance": {
+    "generatorKind": "model-eval",
+    "method": "Fresh one-shot pi SDK invocation; text-only with tools and skills disabled; added trailing LF",
+    "rawResponse": "../raw/gemini-4-argon-high-run-01/response.txt",
+    "decoding": "reasoning effort: high; other decoding settings not exposed"
+  }
+}

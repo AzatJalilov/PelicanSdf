@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "id": "grok-4-7-high-run-01",
+  "model": "x-ai/grok-4.7",
+  "provider": "OpenRouter via pi SDK",
+  "accent": "#0b6e75",
+  "modelDisplayName": "SpaceXAI: Grok 4.7",
+  "reasoningEffort": "high",
+  "maxOutputTokens": 131072,
+  "harness": {
+    "name": "pi SDK",
+    "version": "0.84.3",
+    "surface": "pi-coding-agent createAgentSession (in-memory, no tools)",
+    "sandbox": "n/a",
+    "ephemeral": true,
+    "userConfigLoaded": false,
+    "projectRulesLoaded": false
+  },
+  "prompt": {
+    "path": "benchmark/prompt.txt",
+    "bytes": 3387,
+    "sha256": "cd21d5a8bb3956d82ab5650304e7e491063eacdb27dad85be6b4a845512f5e6b"
+  },
+  "response": {
+    "path": "data/raw/grok-4-7-high-run-01/response.txt",
+    "bytes": 135,
+    "sha256": "f657bb3e82c6549d6faf8e7568bc9a69fd68d9531ba81ad6842cd764673047fc",
+    "source": "text"
+  },
+  "thinking": {
+    "path": "data/raw/grok-4-7-high-run-01/thinking.txt",
+    "bytes": 154006,
+    "sha256": "cc4e13a6d0f3111ca4b3cae9350ddc19072d3836a6a97905b15f6d235226dc5c"
+  },
+  "usage": {
+    "inputTokens": 823,
+    "cachedInputTokens": 1152,
+    "reasoningTokens": null,
+    "outputTokens": 113615,
+    "totalTokens": 115590
+  },
+  "billing": {
+    "mode": "openrouter",
+    "apiCostUsd": 0.6839120000000001,
+    "note": "OpenRouter invocation via pi SDK; cost computed by pi from provider pricing (per-million-token rates)."
+  },
+  "startedAt": "2026-10-18T20:04:11.735Z",
+  "completedAt": "2026-10-18T20:27:46.686Z",
+  "durationMs": 1414951,
+  "exitCode": 0,
+  "error": null,
+  "eventCount": 7120,
+  "files": {
+    "events": "data/raw/grok-4-7-high-run-01/events.jsonl",
+    "stderr": "data/raw/grok-4-7-high-run-01/stderr.txt",
+    "thinking": "data/raw/grok-4-7-high-run-01/thinking.txt"
+  }
+}

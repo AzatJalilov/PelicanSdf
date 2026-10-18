@@ -1,0 +1,1219 @@
+I am building a complete interactive 3D signed-distance-field artwork of a pelican riding a bicycle.
+
+The module will export a single function that initializes a WebGL2 raymarcher. It must expose render, setView, getView, and dispose methods. The fragment shader will compute signed distances for the pelican-bicycle scene. Mouse drag, wheel zoom, arrow keys, and plus/minus controls will handle camera movement.
+
+I am planning the SDF geometry for the scene. The bicycle will use torus wheels, tube frame segments, a seat, handlebars, and pedals. The pelican body will be modeled as an ellipsoid. I also need to prevent scroll while the canvas is focused, handle WebGL context loss, and keep the module under 32768 bytes.
+
+The pelican model will include a head, eye, long beak, throat pouch, wings, and legs in a riding pose. The camera orbit formula is being defined so that yaw=0, pitch=0 places the viewer on the +X axis looking at the origin.
+
+The bicycle will face +Z so that the camera at yaw=0, pitch=0 viewing from +X shows its right side.
+
+The camera orbit formula is confirmed: positive yaw rotates counterclockwise around the world-up axis. Pitch will be clamped to roughly ±1.45 radians to prevent pole flipping while still allowing full inspection from above and below.
+
+Mouse drag will accumulate yaw continuously for full 360-degree orbit. The camera distance range is set from 1.5 to 18 units to allow both full-subject and close-inspection views.
+
+The initial camera view is set to yaw -0.6, pitch 0.35, and distance 9 for an appealing three-quarter angle. The rear wheel will sit at z = -0.9 and the front wheel at z = 1.05, both centered at y = 0.55 with radius 0.55.
+
+The wheel geometry will use a torus with major radius 0.52 and minor radius 0.06, aligned to the YZ plane so it rotates around the X axis. A custom SDF function will compute signed distances for this orientation. Spokes will be approximated with thin radial capsules or a disk rather than boolean subtraction to avoid rendering artifacts.
+
+For close inspection, the wheel hub needs visible spokes. Angular-repetition SDFs are too messy to implement cleanly, so the spoke geometry will instead be a thin cylinder with two flat boxes forming a cross.
+
+I am optimizing the raymarcher for throughput. The shader will use tetrahedron normal estimation to cut sampling from six taps to four. Bounding volume early-outs and a step limit of 64–80 will keep the scene SDF cheap enough for direct render() measurement.
+
+The raymarcher will use 64 steps with a larger step factor and early termination. Sphere tracing over-relaxation is avoided to prevent artifacts. Lighting will be minimal, using one or two lights with no ambient occlusion. A simple sky gradient will provide the background. The palette will be warm and coastal: white or cream pelican, orange beak, yellow eye, dark tires, and metallic frame. Material IDs will be derived from the SDF value or a separate material function.
+
+The SDF will return a vec2 containing both distance and material index. Hard minimums will be used for the bicycle geometry to keep the shader lean, while smooth minimums will be reserved only for the pelican body parts.
+
+The pelican will sit on the seat with legs extended to the pedals, a long curved neck, and a hanging throat pouch. Material IDs will blend across smooth minimums for the body parts. Exact coordinates are being set: the seat at y=1.15, z=-0.15, and the ellipsoid body centered at (0, 1.35, -0.05) with size (0.28, 0.22, 0.38).
+
+The pelican head will sit at (0, 1.85, 0.35) with a radius of 0.16. The beak will extend as a long tapered capsule to roughly (0, 1.78, 1.15). A small ellipsoid will form the hanging throat pouch beneath the beak. Eyes will be placed at (±0.1, 1.9, 0.42) so they remain visible from all angles. Wings will be flat ellipsoids on the sides and may animate subtly with time. Legs will be capsules running from the body bottom to the pedals. All motion—wheel spin, pedal rotation, wing flapping, and head bobbing—will be deterministic functions of timeSeconds.
+
+The rear wheel is now at z = -1.0 and the front wheel at z = 1.15, both centered at y = 0.55 with radius 0.52. The bottom bracket sits at (0, 0.42, 0.05). The seat is at (0, 1.12, -0.25) and the handlebars at (0, 1.08, 1.0). The diamond frame will be built from a seat tube, down tube, top tube, chain stay, seat stay, fork, and head tube.
+
+The crank will rotate around the X axis through the bottom bracket, with pedals at its ends. A thin torus or rounded rectangle between the chainring and rear cog will approximate the chain. The overall bike scale is roughly 2.2 units long and 1.3 units tall, so a camera distance of 6–8 units keeps the full subject in view. Wheel radii are set to 0.50 for the tire center and 0.045 for the tire thickness.
+
+The bottom bracket is now at (0, 0.38, 0.0). The head tube runs from (0, 0.72, 0.82) to (0, 1.02, 0.72). The seat is at (0, 1.08, -0.22). Frame segments will be built with a capsule SDF. A wheel SDF function is being drafted to rotate around the X axis for animation.
+
+The wheel SDF will combine a tire torus, a thin rim torus, and a capped hub cylinder. Six radial spokes will be generated with an angular repetition formula using atan and modulo to avoid boolean subtraction artifacts.
+
+The spoke geometry is being simplified to a thin box aligned along the Y axis. The angle is folded into [-seg, seg], and the point is rotated by -ang to align the spoke with the local Y axis. This avoids boolean subtraction artifacts.
+
+The spoke geometry is finalized as a thin box aligned along the local Y axis, centered at y = 0.24 with half-extents of 0.012 in X and Z and 0.20 in Y. A custom `sdCylX` SDF is being drafted for the wheel hub cylinder.
+
+The `sdCylX` SDF is now complete. The crank angle is being set to time multiplied by two, and the forward motion direction is being checked against the camera view so the wheel rotation and pedal spin remain consistent.
+
+The camera right vector is -Z and the up vector is Y. The bicycle facing +Z therefore appears on the left side of the screen from this right-side view, which is correct.
+
+The camera right vector was wrong. With the camera at +X looking toward the origin, the correct right vector is +Z, not -Z. The front of a forward-facing bike therefore appears on the right side of the screen from this right-side view.
+
+// OpenGL camera: right, up, -forward.
+// If position is (d, 0, 0), target (0,0,0), up (0,1,0):
+// forward = normalize(target - position) = (-1, 0, 0)
+// right = normalize(cross(forward, up)) = cross((-1,0,0),(0,1,0)) = (0, 0, -1) which is -Z
+// up = cross(right, forward) = cross((0,0,-1), (-1,0,0)) = (0, 1, 0) good.
+
+// In view space, camera looks down -Z. World +Z maps to... 
+// A point in front of the bike at world +Z, relative to camera.
+// The camera's right vector is world -Z. So world +Z is to the camera's LEFT.
+
+The camera right vector is being re-examined. A contradiction emerged between the cross-product math and the expected left-right orientation of a forward-facing bike from the east side.
+
+The camera right vector is confirmed to be -Z. This means a forward-facing bike appears on the left side of the screen from this right-side view.
+
+A yaw rotation around Y is being calculated to verify the camera's forward direction. The math shows that turning left from looking down -Z yields a look vector of (-1, 0, 0), confirming the camera faces -X.
+
+The yaw rotation math is being re-examined. A left turn from looking down -Z produces a look vector of (-1, 0, 0), but the right vector becomes (0, 0, -1). This conflicts with intuitive expectations for a west-facing camera. The coordinate naming convention itself is being questioned as the source of the confusion.
+
+The coordinate confusion is resolved. In right-handed Y-up space, +Z is south and -Z is north, so a west-facing camera correctly maps the front of a south-facing bike to its left side.
+
+The bike will face -Z so the rider's right side aligns with +X. The camera at +X looking at the origin then shows the right side of the bike, and the front points to the right edge of the screen.
+
+Wheel positions are fixed at (0, 0.52, 0.95) for the rear and (0, 0.52, -1.10) for the front. The rotation direction is being checked against forward motion along -Z so the top of each wheel moves toward the camera while the bottom remains grounded.
+
+The wheel rotation direction is confirmed. Positive X-axis rotation moves the top of the wheel toward +Z, so the wheel spins clockwise as the bike travels forward.
+
+Wheel rotation is corrected to negative time so the top of each wheel moves toward the camera. The pelican will face forward as well. The shader must stay under 32 KB, so the module will use roughly 48–64 marching steps and tetrahedral normals for efficiency. Lighting will combine a key light from upper right front, a fill light, a rim light, and simple fresnel.
+
+A ground plane with soft shadow is being considered, though a simple contact darkening may be cheaper. The background will use a sky gradient and a subtle sun disk without extra marching. Eight material colors are planned: dark tire rubber, silver frame, brown seat, white pelican body, orange beak, pinkish pouch, dark eye with highlight, and orange legs.
+
+The material count is being reduced to eight, with color derived from the ID. A ground plane at y=0 will support shadows and contact darkening. The wheel center sits exactly at the tire radius so the wheel rests flush on the ground. The pelican body is being built as an ellipsoid centered at (0, 1.22, 0.15), with a neck modeled as a quadratic bezier of capsules.
+
+The pelican body is an ellipsoid centered at (0, 1.22, 0.15). The tail is a smaller ellipsoid at (0, 1.28, 0.52). The curved neck is a two-segment capsule from (0, 1.30, 0.0) to (0, 1.82, -0.32) with radii 0.09 and 0.075. The head is a sphere centered at (0, 1.84, -0.42) with radius 0.145. The beak geometry is now being drafted.
+
+The beak is modeled as a capsule from (0, 1.82, -0.52) to (0, 1.72, -1.25) with radius 0.045. A small ellipsoid forms the pouch beneath the beak. Both eyes are drawn as spheres at (±0.1, 1.90, -0.48). Wings will fold along the body and extend slightly outward. The leg geometry starts from a hip point near (0.08, 1.02, 0.1) down to the knee and pedal.
+
+Legs will be modeled as capsules from hip to knee to pedal, with knee and foot positions computed from the rotating crank angle. The right-side crank arm length is 0.18, and the pedals are offset by 0.12 in X while tracing a circle in YZ driven by negative time. This keeps the rider’s feet in contact with the pedals as the bike moves forward.
+
+The right hip is fixed at (0.10, 1.00, 0.08). The knee is placed halfway between the hip and the pedal plus a small upward and outward offset to create a natural bend.
+
+The right knee is placed at the midpoint between hip and pedal, offset slightly outward and forward to approximate a natural leg bend. This simple inverse-kinematics approach is sufficient for the stylized pelican.
+
+The pelican will sit on the seat with short legs reaching down to the pedals. Its wings may rest near the handlebars or fold, and its long beak points forward.
+
+Wings will angle forward and downward toward the handlebars, with tips resting near the grips to suggest the bird is actively holding the bars. The handlebar position is set at y≈1.0 and z≈-0.85. Ground shadow will be handled by a short shadow march.
+
+A short shadow march toward the key light will replace fake ambient occlusion. The ray will start near the bounding sphere and march up to 56 steps with a maximum distance of 30. An adaptive epsilon based on pixel footprint will keep close-inspection detail sharp without wasting steps at distance.
+
+Camera vectors will be computed in JavaScript and passed to the shader as uniforms. The camera position is derived from yaw, pitch, and distance, with forward pointing toward the origin and right computed by crossing forward with world up.
+
+The camera right vector is computed by crossing the forward direction with world up. Pitch will be clamped to ±1.4 radians to prevent the right vector from degenerating at extreme angles. The vertical field of view is set to about 0.55 radians, and zoom will be controlled purely by camera distance.
+
+The camera will start at a three-quarter front-right angle. Yaw is set to -0.55 so the camera faces toward the front while still viewing the right side of the bike. The minimum distance is 1.2 for close inspection, and the maximum is 20.
+
+The initial camera view is set to yaw -0.65, pitch 0.32, and distance 7.5, giving a slightly elevated three-quarter front-right angle. Pointer drag will control yaw and pitch, while wheel, pinch, arrow keys, and plus/minus buttons handle zoom. The canvas will be focusable with tabindex=0, and default scrolling will be suppressed via preventDefault on wheel and touchmove events. Pointer capture will manage drag interactions. WebGL context loss and restoration listeners will be added to handle canvas state recovery.
+
+The render loop will check `gl.isContextLost()` at its start and return early if the context is lost, avoiding any exceptions. If the context is restored, the module will recreate shaders and buffers; otherwise it will no-op.
+
+The render loop will check `gl.isContextLost()` at its start and return early if the context is lost, avoiding any exceptions. The module will listen for `webglcontextlost` and call `preventDefault` so the browser does not crash the page. Shader compilation failures and WebGL2 unavailability will throw clear errors during setup. The evaluator calls `render()` directly, so no `requestAnimationFrame` wrapper is needed.
+
+The viewport will match the canvas drawing buffer dimensions, and the render pass will use a fullscreen triangle strip. The vertex shader is being drafted with a single attribute for screen-space coordinates.
+
+The vertex shader passes clip-space coordinates to the fragment shader. The fragment shader will compute ray directions from the camera forward, right, and up vectors using normalized screen-space coordinates derived from gl_FragCoord and the resolution uniform. A time uniform will drive animation. The pelican design is being refined to emphasize its most distinctive features: a large beak with a throat pouch, a white body, gray wings, and an S-curved neck.
+
+The pelican will have a stocky body and short tail. Webbed foot ellipsoids will sit on the pedals. The bike will read clearly as a diamond-frame with spokes, handlebars, seat, and chain. The color palette is set: dark gray tires, silver rims, a cheerful turquoise frame, and brown leather.
+
+The pelican palette is refined to a white body, pale gray wings, orange-yellow beak, pink-orange pouch, dark eye with white catchlight, and orange legs. The lighting model blends diffuse, shadowed, and specular terms with a subtle fresnel falloff. A sky gradient based on ray height is also being drafted.
+
+The sky gradient blends a warm sand-to-blue tone with a bright sun highlight. Ground will be modeled as warm sand in the signed-distance field, and a soft circular shadow will sit beneath the bike.
+
+A subtle exponential fog will blend the scene into the sky based on distance. The pelican body will bob slightly, and its wings will flutter gently, while the beak stays mostly still. The chain will remain static.
+
+A simple chain loop will be included to complete the functional bicycle. It will be modeled as a thin ring or ellipse in the YZ plane between the rear cog and the front chainring, avoiding expensive torus segments that could intersect the frame.
+
+The chain will be modeled as two capsules for the upper and lower runs, plus small tori for the front and rear cogs. Fenders are omitted to save performance. The handlebars will form a T-shape with stem, bar, and grips. The fork will use two offset capsules from the head tube to the front axle, spaced outside the hub to avoid z-fighting with the wheel.
+
+The seat will be a flattened ellipsoid with a capsule seat post. The signed-distance field will use smooth minimum blending for the pelican’s organic body, neck, head, and wings to avoid sharp edges, while hard minimums will keep the mechanical frame and wheels crisp.
+
+Color bleeding at material edges from smooth distance blending is an acceptable trade-off. The evaluator’s fixed canvas size is unknown, so the raymarcher must stay efficient. A bounding-sphere cull will skip marching for rays that miss a sphere of radius 2.2 centered near the scene origin, falling back to sky and ground plane only.
+
+Ground will be handled analytically as a plane at y = 0, intersecting rays before any raymarching begins. Normal estimation will use a four-tap tetrahedron to reduce shader cost. Shadow rays will be replaced by an inexpensive ambient-occlusion pass that samples depth along the surface normal in four steps, producing soft contact shadows without extra ray casts.
+
+The raymarcher will use 48 steps starting at the bounding-sphere intersection, but thin spokes at 0.012 radius may be missed if the step size exceeds the surface width.
+
+To prevent the 0.012 radius spokes from being skipped by large raymarcher steps, they will be thickened to 0.025 or modeled as thin cylinders with a hub. Subtracting grooves from the tire would introduce Lipschitz discontinuities, so that approach is abandoned.
+
+Sphere tracing is mathematically guaranteed to hit any surface when the SDF returns true distance or underestimates it. The 0.012 radius spokes will therefore be traced correctly without being skipped, provided the spoke SDF is accurate.
+
+Angular repetition SDFs can overestimate distances if not built carefully. The folded spoke box SDF is safe because the box does not cross sector boundaries, so the distance stays exact or underestimates in the sector.
+
+The wheel will use six to eight spokes. Folding space near sector boundaries underestimates distance, which is safe for sphere tracing. Wheel rotation will be applied before spoke calculations.
+
+The wheel SDF is being built with a tire, rim, hub, and axle. Six spokes will be generated by folding the angular coordinate into a sector and rotating each spoke into local space.
+
+The spoke geometry is now a thin capsule from y = 0.07 to 0.40, rotated into local space with sine and cosine. The wheel SDF returns the minimum distance to the tire, rim, hub, axle, or spoke, plus a material tag that marks the tire as the base surface and all other parts as metal.
+
+A helper will select the material from the minimum distance. The frame will be all metal. A chainring torus, rotating crank arms, and box pedals will complete the drivetrain. Crank rotation will follow the wheel spin at a gear ratio of roughly 3.8.
+
+The crank will rotate at 2.2 times the time uniform, and the wheel will spin at 2.4 times that speed to keep the chain moving visibly. Direction signs will be defined carefully in the shader to avoid backwards motion.
+
+Crank rotation is now set to 1.8 times the time uniform, and wheels spin at 4.0 times that speed so the pedals stay visible rather than blurred. The pelican’s wings will be modeled as ellipsoids with inline rotation matrices. Each wing will be built from two capsules for the arm and forearm, plus a flat ellipsoid for the feather surface. The right wing will extend from a shoulder point toward the handlebar, with the left wing mirrored across the body.
+
+Wing geometry is being simplified to two thin capsules for the arm and forearm, plus a wider ellipsoid for the feather membrane. The pelican will use compact folded wings on the sides rather than extended or gripping ones, preventing clipping through the bike and keeping the silhouette clean from every angle.
+
+The right wing will be an ellipsoid at the body side, rotated around Y by roughly 20° and Z by 15°, with a dark tip. The beak will use a long tapered upper mandible, a shorter lower one, a sagging pink pouch with subtle color wrinkle, and a slightly raised culmen ridge.
+
+A tapered capsule with a varying radius will form the upper beak, narrowing from 0.055 at the head to 0.012 at the tip. A small downward hook will sit at the tip. The pouch will be a squashed pink-orange ellipsoid hanging below the beak.
+
+The pelican’s eyes will be white spheres with pupils slightly protruding forward to read as depth. A small yellow patch near the eye and a slight brow ridge will add character.
+
+The pelican will be an American white pelican with a large yellow-orange beak, white body, and black wingtips. Black wingtips will be encoded in the material color function rather than modeled as separate geometry.
+
+The black wingtips will be separate ellipsoids at the wing backs rather than encoded in the material function. A crest is omitted because white pelicans lack one. The throat pouch will be large and obvious as the defining feature. The bike frame is being scaled to roughly 1.8 meters, with wheel centers at Y = 0.51, a rear hub at (0, 0.51, 0.85), and a front hub at (0, 0.51, -1.05).
+
+The bike frame geometry is now fully specified. The seat post runs from the bottom bracket at (0, 0.36, -0.05) to the seat at (0, 1.05, 0.22). The head tube connects the bottom bracket to the head at (0, 0.98, -0.62). The handlebar spans (-0.32, 1.08, -0.62) to (0.32, 1.08, -0.62) with a downward slope. The top tube links the seat to the head tube, the down tube runs from the head tube bottom to the bottom bracket, and the seat tube runs from the bottom bracket to the seat. Chain stays and seat stays connect the rear hub to the bottom bracket and seat cluster.
+
+The fork blades will extend from the head tube bottom to the front hub, offset slightly in X. The pelican body is centered at (0, 1.32, 0.18) with radii (0.30, 0.24, 0.40). The tail sits at (0, 1.34, 0.55) with radii (0.10, 0.05, 0.18). The neck tapers from a base at (0, 1.40, -0.05) through a mid point at (0, 1.68, -0.08) to a top at (0, 1.82, -0.28). The head is centered at (0, 1.80, -0.40) with radius 0.14. The beak runs from
+
+The pouch is centered at (0, 1.62, -0.82) with radii (0.08, 0.12, 0.30). The eyes are placed at (±0.095, 1.86, -0.46). The right wing is an elongated ellipsoid at (0.32, 1.30, 0.22) with radii (0.07, 0.14, 0.36), and its tip is a black ellipsoid at (0.34, 1.28, 0.50). The legs sit at the hips (±0.10, 1.08, 0.05), with feet on pedals offset outside the frame via a pedalPos helper that uses a 0.16 length and a side multiplier. The knees will bend
+
+The knee joint is placed at the midpoint between hip and foot, offset slightly outward and upward. A flat ellipsoid forms the webbed foot on the pedal, and the pedal itself is a small box.
+
+The pelican body will be raised slightly so it rests cleanly on the seat with only a shallow smooth blend. A subtle belly roundness is added. The ground will be a sandy procedural color generated from a cheap hash of position, avoiding any external textures. A soft shadow blob beneath the bike is also being considered.
+
+The shadow blob is being built as a smoothstep ellipse centered at the bike’s rear. Ground contact will darken nearby sand via ambient occlusion, and the final color will receive a warm gamma correction. All procedural noise is spatial-only to keep the output deterministic.
+
+The renderer will use a single raymarch sample per pixel to maximize throughput. Multi-sample anti-aliasing is rejected because it doubles cost. A cheap derivative-based edge filter may be applied only at the sky-ground boundary. Thicker spokes are considered as a fallback for close-zoom clarity.
+
+The shader will be compact but readable GLSL, with variable names shortened if needed to stay within the 32KB limit. It targets WebGL2 with #version 300 es and uses highp float precision in the fragment shader to avoid raymarching artifacts.
+
+The raymarch loop will use a fixed 64-step limit with early breaks for distance and time. Surface normals will be computed via a tetrahedron gradient using a small epsilon offset.
+
+The WebGL2 context is configured with alpha, antialias, depth, and stencil disabled for maximum performance. Camera state initializes to yaw -0.62, pitch 0.38, and distance 7.2. Keyboard and pointer controls are being wired up to handle user interaction.
+
+Pointer capture locks the cursor during drag. Yaw spins freely. Pitch is clamped between -1.35 and 1.35. Wheel events are intercepted to adjust camera distance.
+
+Wheel events scale camera distance by an exponential factor between 1.15 and 22. Keyboard arrow keys rotate yaw and pitch in small increments, while the plus key zooms inward.
+
+The minus key zooms outward. The canvas will be focusable via tabindex so keyboard controls work. Pointer events will handle two-finger pinch zoom by tracking multiple active pointers.
+
+The pinch-zoom logic will store each pointer’s previous position and compute the distance between the two active pointers to scale camera distance. Wheel events will be configured as non-passive so preventDefault can block browser scrolling. The canvas will also have touch-action disabled to prevent native mobile gestures.
+
+Right-click drag will be allowed for orbiting, not just left-click. Pointer events will handle both mouse and touch input.
+
+Pointer down will explicitly call canvas.focus() so keyboard controls activate immediately. The zoom keys will handle both standard and numpad variants. Arrow key preventDefault blocks page scrolling during orbiting. Wheel events scale outward on downward scroll, following standard conventions.
+
+The camera distance clamp is refined to 0.8–24 units so the beak and frame remain clearly visible at close range. setView and getView will preserve exact values by clamping pitch and distance internally.
+
+Camera state will be stored exactly as set, with clamping applied only during rendering to prevent math degeneration. getView returns the raw values. A minimum distance guard of 0.05 prevents invalid camera distances.
+
+The initial camera will be set to an appealing three-quarter view before any external setView calls. The render function will accept a timeSeconds argument and advance animation internally. The dispose method will remove event listeners, delete WebGL buffers and programs, and avoid aggressively losing the context.
+
+WebGL context loss is handled by a lost flag and event listeners. On restore, the renderer recreates GL resources via a separate init function to avoid double-creation. Shader compilation errors during initial setup will throw, but restore failures will be caught silently so the event handler does not crash.
+
+A no-op render path will be used if the WebGL context is lost. The module must be pure JavaScript with no Markdown or explanations. Visual polish will include a procedural sky with sun and clouds, a gradient ground plane with shadow, and rim lighting to separate the pelican from the background.
+
+The pelican will receive wrap lighting on the pouch, a glossy beak, and eye catchlights. The bike frame will use fake metallic reflections from the sky, while the tires stay matte. Procedural clouds were considered but rejected as too banded; a clean gradient sky with sun is preferred instead. Fog and color grading will add atmospheric depth. Ground reflections are skipped to keep raymarching efficient.
+
+The bike will include a two-line chain with rings, pedal cages, and dark rubber handlebar grips. Eight spokes per wheel will improve clarity at close range. Frame tubes are sized at 0.035 for the main members and 0.02 for the stays to stay visible. The handlebars will be swept-back upright bars typical of a city bike.
+
+The handlebars are being modeled as a stem, a bar, and two angled grips. The seat is an ellipsoid centered at the pelican's hips. A quick spatial check confirms the beak tip does not intersect the front wheel.
+
+The pelican’s body, tail, and legs were checked against the bike frame to prevent self-intersection. Hip and knee positions were offset outward so the legs clear the seat tube, and feet sit at x = ±0.16 on the pedals.
+
+The pelican body spans ±0.30 in the X axis, making it wider than the bike frame so wings and legs extend outward naturally. The front view will clearly show the beak, pouch, legs, handlebar, and front wheel. From behind, the tail, rear wheel, and wings remain visible while the head may be partially hidden by the body. From below, the camera can look up at the wheels, pedals, belly, and pouch against the ground plane.
+
+A solid infinite ground plane would block the view from below when the camera sits under the surface. The ground should instead be a thin slab so the sky remains visible from underneath.
+
+The ground plane will only render when the camera is above the surface. This prevents the ground from blocking the view when the camera looks up from below.
+
+A contact shadow will darken the ground beneath the bike instead of using a full shadow march.
+
+A single extra SDF sample above each hit point will estimate ground occlusion cheaply. The raymarch loop is being tuned to 72 steps with a dynamic epsilon threshold.
+
+The raymarch loop uses a 0.9 step multiplier to slightly understep each sample for safety with non-perfect SDFs. The epsilon threshold is set to 0.0006 times the current distance, which maps to roughly one pixel at typical viewing distances and about half a pixel at close zoom. The 72-step limit should be sufficient because the bounding sphere keeps average object pixels within 30–40 steps, while background rays require no march.
+
+The raymarch step limit is raised to 80 for safety. The SDF map will be split into separate bike and pelican routines, with a bounding-box test inside the shared function to skip the inactive object during ray marching.
+
+When the ray is outside an object’s bounding box, the map returns the box distance as an underestimate so marching still terminates correctly. The pelican bounds are x ±0.7, y 0.9–2.1, and z −1.4 to 0.8.
+
+The map function will first test both bounding boxes. If the ray is close to either object, it computes the detailed SDF; otherwise it returns the box distance. This lets the ray march quickly through empty space while still catching nearby geometry.
+
+The bounding-box shortcut is safe because the box distance never exceeds the true SDF distance. Switching to the detailed SDF inside the 0.3-unit threshold will not cause a discontinuity.
+
+The pelican bounding box is tightened to y 0.1–2.1, z −1.35–0.8, and x ±0.6 so the legs are fully contained. The bike bounds are expanded to x ±0.45 for the handlebars and ±0.2 for the frame so the pedals and wheels remain inside.
+
+The wheel radius is set to 0.51 and the tire width to 0.1. The handlebars are wider than the frame. The bounding-box shortcut will still help rays passing near one object even though the combined bounds cover most of the scene. Rotation matrices and animated pedal positions will be computed once per map call instead of per primitive. The shader will use highp precision throughout. A rear cog will be added to the chain.
+
+The pelican body will use subtle gray on the back and white on the belly, blended with smoothstep gradients based on normal and position. Wing tips will be darkened to black.
+
+A 13-material ID system will separate the pelican, bike frame, wheels, seat, handlebars, and other parts for distinct shading. Metal surfaces will use a fake sky reflection with a smoothstep-based environment blend. The pelican will receive soft wrap lighting.
+
+The pelican wrap lighting will use a simple dot-product clamp against the light direction. The module will be kept compact to stay within the byte limit. The canvas will receive tabIndex 0 and touch-action none so it captures keyboard and pinch input directly.
+
+Wheel events will be intercepted to prevent browser scrolling, with deltaMode normalized to pixels before applying exponential zoom. Pinch gestures will be detected by measuring the distance between two active pointers and comparing it to the previous frame. Single-pointer movement will orbit the camera.
+
+Arrow keys will orbit the camera with yaw and pitch at 0.05 radians per press, relying on native browser key repeat. The module must not run its own animation loop; it only updates view state on input so the evaluator's render cycle can display changes.
+
+The canvas will use passive: false for keydown and pointermove listeners so input is not blocked. Pointer events will cover down, move, up, cancel, and lostpointercapture. The evaluator sets the drawing buffer width and height directly, so clientWidth is irrelevant; devicePixelRatio scaling is also being considered.
+
+The evaluator sets the canvas drawing buffer width and height, so the module must not override them. WebGL depth testing will be disabled and blending will be skipped. The shader will receive a fullscreen triangle drawn with gl.drawArrays(gl.TRIANGLES, 0, 3). Camera basis vectors and position will be computed in JavaScript and passed as uniforms to the vertex shader.
+
+Camera basis vectors are computed in JavaScript to avoid shader precision issues and keep the shader compact. Pitch is clamped between −1.45 and 1.45, distance between 0.2 and infinity, and the camera position, forward vector, and right vector are derived from yaw and pitch. The right vector is normalized after a zero-length guard.
+
+The focal length is set to 2.6. This yields a vertical field of view of about 35.5 degrees. The full subject fits within the frame from distance 7.
+
+The camera will orbit around a fixed target point at (0, 0.92, -0.05) rather than the origin. This keeps the pelican and bike centered in the frame while the camera position is computed as target plus an offset.
+
+The pelican beak will be long and prominent, about 0.75 units versus a body length of 0.8. Its pouch will be wide and droopy in vivid orange-pink. A yellow-orange bare-skin patch will sit around the eye to mimic the white pelican’s facial coloring.
+
+The front of the pelican head will be tinted yellow in the shader based on depth. The rear cog is centered at (0, 0.51, 0.85) with radius 0.08, and the chainring at (0, 0.36, -0.05) with radius 0.13. Two chain segments will connect them: an upper one from the top of the ring to the top of the cog, and a lower one from the bottom of each.
+
+The lower chain segment runs from the bottom of the cog to the bottom of the ring. The chainring and cog are modeled as tori with radii 0.13 and 0.07, both with a 0.012 thickness. The crank arms will be two opposite capsules through the bottom bracket, rotating in the YZ plane at x=0 to intersect the chainring. The animation speed is set to 1.6 radians per second.
+
+The crank arm is a 0.17-unit capsule with 0.018 radius, rotating around the bottom bracket. Two 0.055-unit boxes model the pedals offset ±0.11 along the X axis. The right foot rests on the +X pedal, and the leg animation will reuse the same rotation angle so the foot tracks the pedal.
+
+The opposite pedal is at bb minus arm plus (-0.11, 0, 0). The leg SDF will reuse the same crank rotation angle. Feet are modeled as flat orange ellipsoids on top of the pedals and remain world-aligned rather than rotating with the crank arm.
+
+The right foot is modeled as a flat orange ellipsoid at the +X pedal. Pedals will stay level and world-aligned as they orbit the crank arm, rather than rotating with it. A ground plane and sky background will be added to the shader so the scene remains visible even if the SDF fails.
+
+A compile helper will validate shader compilation and link status, throwing on failure. The render loop will check `gl.isContextLost()` before drawing.
+
+Smooth minimums will be limited to the pelican body, neck, and head with a small k value of 0.04 so the silhouette stays crisp. The beak, pouch, eyes, wings, and legs will use hard minimums or very small smoothing to avoid blending into surrounding geometry.
+
+A slight vertical bob will animate the pelican body, neck, and head to mimic breathing. The legs will bob at the hips but stay anchored to the feet so they do not detach. Wheel spin and pedaling remain the primary motion. A subtle head turn was considered but skipped as potentially awkward. The vertex shader will be a simple fullscreen triangle. The full module is ready to be written and checked against the byte limit.
+
+The fragment shader will apply a gentle tonemap and a slight gamma lift to the linear light output. The background will use darkened horizon tones and subtle aerial perspective. The white pelican will contrast sharply against the blue sky and sand ground, with the orange beak serving as the focal accent. A rich coral or teal frame color is being considered.
+
+The frame will be teal with chrome rims. The seat is warm brown and the tires are near-black with slight roughness. Thin white sidewalls were considered but skipped for simplicity.
+
+Rim highlights will sell the wheels. Eight spokes at half-thickness 0.012 will remain visible at close zoom but blend into the rim at distance, with no extra spoke set or hub flange needed. The rear triangle will be drawn clearly so the frame reads as fully connected from every angle. The down tube, seat tube, and top tube are being mapped out as separate capsules.
+
+The remaining frame geometry is being defined as capsule segments. Chain stays and seat stays will run from the bottom bracket and seat cluster to the rear hub, offset slightly in X so they converge at the hub. Head tube, fork, stem, handlebars, grips, and seat ellipsoid are also being mapped out. Exact world-space coordinates for the rear hub, front hub, and bottom bracket are being set.
+
+Head tube and seat cluster coordinates are now fixed. The rear wheel will sit at y=0.50 with a 0.45 major radius, 0.048 minor radius, and 0.05 thickness, leaving a 0.002 gap above the ground.
+
+The seat height is being raised to 1.14 so the pelican sits clearly above the wheel top at 1.0. The body center will be at 1.40. The bottom bracket may also be lifted slightly above the wheel center.
+
+The pelican is positioned over the seat with its body center at (0, 1.38, 0.12) and facing −z. The rear of the body aligns with the seat at z=0.20 so the pelican appears to sit on the saddle.
+
+The pelican body is centered at z=0.10 with a depth of 0.36, placing its front edge near z=-0.26 and its rear near z=0.46. The seat sits at z=0.22 and y=1.14, so the body bottom lands cleanly on the saddle.
+
+The neck will curve upward and forward from the body base at (0, 1.42, -0.12) through (0, 1.72, -0.18) and (0, 1.86, -0.38). The head center will sit at (0, 1.84, -0.50).
+
+The beak extends forward along negative z from (0, 1.80, -0.60) to a tip at (0, 1.70, -1.28). The author
+
+The beak tip at z = −1.28 and y = 1.70 clears the front wheel, which ends at y = 1.0, so no collision occurs. The pouch is modeled as an ellipsoid centered at (0, 1.62, −0.92) with radii (0.075, 0.11, 0.30), hanging below the beak.
+
+The handlebar sits at y=1.10 and clears the neck and pouch. The right eye is placed at (0.11, 0.04, −0.06) from the head center so it protrudes slightly from the surface.
+
+The head will be modeled as an ellipsoid rather than a perfect sphere to give it a rounded, natural shape. Both eyes are placed with a small protrusion so they remain visible from the side. The right wing is being mapped out with shoulder, mid-wing, and tip points extending back and slightly outward from the body.
+
+The right wing is being modeled as a rotated ellipsoid with radii 0.06, 0.12, and 0.40, tilted so its long axis points back and outward from the body. A capsule will form the wingtip, and the two shapes will be combined to give the wing proper volume.
+
+Legs are modeled as orange capsules: a 0.045-unit thigh from the hip to the knee and a 0.032-unit shin from the knee to the foot. The hip sits at (side×0.12, 1.12, 0.08) near the body base. The knee is placed by mixing toward the foot with a slight outward bend so the leg tracks the pedal arc cleanly.
+
+The knee is placed by normalizing a vector from the hip toward the foot and offsetting it outward by 0.14 units, with a guard against zero-length legs. A flattened ellipsoid will form the tail feathers at the rear of the body. The beak will include a subtle mandible separation to give it a more natural profile.
+
+The beak is being split into two tapered capsules: an upper mandible with a curved hook at the tip, and a thinner lower mandible. The pouch will sit between them, bulging downward to complete the profile.
+
+The pouch ellipsoid is being lowered slightly so its top edge overlaps the upper beak by about 0.02 units, keeping the two parts visually attached rather than separated.
+
+The beak and pouch will use a hard minimum with slight overlap so they read as separate materials rather than blending. The upper beak will appear as a straight orange sword above the balloon pouch, creating a clear side profile.
+
+The beak will use a depth-based shader gradient: deeper orange at the base, yellow at the tip, and a red nail at the hook. A small downward hook is added to the beak tip for a classic pelican signature.
+
+The author counted roughly fifty SDF primitives across the bike and pelican, then realized that evaluating them at eighty steps with four normals each would be too heavy for real-time rendering. Performance optimization is now a key concern.
+
+To meet the performance budget, the author is cutting the primitive count. Bounding boxes will restrict evaluation to nearby geometry only. Wheel geometry is being simplified by removing the separate axle and collapsing stays into single center capsules instead of paired left and right segments. March steps may also be reduced from eighty to forty-eight.
+
+The author decided to keep the dual stays for 3D coherence rather than collapsing them into single center capsules. The real performance bottleneck is the overlap region where the pelican and bike share geometry, such as near the legs and frame. A rough FLOP estimate for a 1920×1080 viewport was started but cut off before completion.
+
+A 1920×1080 viewport would require roughly 19 billion FLOPs, yielding only about ten to twenty frames per second. A smaller canvas of 512×512 drops the load to about five to fifteen milliseconds, which is acceptable but still too slow for the uncapped throughput target. The author will therefore reduce march steps to forty-eight, prune primitives further, tighten per-group bounding boxes to bail out early, and likely skip the normal finite-difference quality pass.
+
+The author realized normals are required for lighting, so the normal finite-difference pass cannot be skipped. Inside the bike SDF function, early bail-out branches will restrict wheel and frame evaluation to nearby bounding regions to reduce primitive evaluations.
+
+A faster SDF pass with fewer details will be used for the marching loop, while a more detailed pass will handle normals and final hits. This trades some surface fidelity for speed. Screen-space tricks are ruled out, and the author will keep the resolution at full canvas size.
+
+A faster SDF pass for the marching loop was rejected because it would create surface artifacts. The box-fold spoke geometry will stay. March steps may increase to fifty-six with a larger ray-march multiplier for distant objects.
+
+The author will unpack the shader to avoid dynamic-loop issues on some platforms. WebGL2 constant loops with breaks are safe. The code will be written now and reviewed for bugs. A try/catch block will handle canvas context creation failures.
+
+The WebGL2 context will be validated with a throw if unavailable. A fail-safe for shader source length is being considered. The module will remain a self-contained ES export with no imports. preserveDrawingBuffer is unnecessary because the evaluator reads the canvas after render() returns.
+
+preserveDrawingBuffer will be enabled to ensure the evaluator can read the canvas after render() returns. The slight performance cost is acceptable for safety.
+
+preserveDrawingBuffer will be set to false for performance, since the evaluator reads the canvas synchronously after render() returns. The author is re-reading the requirements to ensure nothing is missed.
+
+The module must export exactly one function named `createPelicanSdf(canvas)`. It should expose `render`, `setView`, `getView`, and `dispose` methods. The artwork must be unmistakably charming and coherent from every angle.
+
+The scene will include a full bicycle with two wheels, tires, frame, seat, handlebars, and visible crank or pedals. The pelican will have a body, head, eye, long beak, throat pouch, wings, and two legs in a plausible riding pose. The initial view will be an appealing three-quarter angle. setView(0, 0, distance) must show the bike from its right side. Positive yaw will orbit around world-up. Pointer or mouse drag will allow full 360-degree rotation. Two-finger pinch zoom will let the viewer move from full-subject to close inspection of the beak, rider contacts, frame, and pedals. Arrow keys will orbit when the canvas is focused, and plus and minus keys will zoom.
+
+Interaction gestures will be intercepted to prevent browser scrolling while the canvas is active. The implementation must not create its own animation loop. It must respect the drawing buffer size and never lower resolution, skip frames, or vary quality based on timing. render() and setView() must not resize the canvas. Output is deterministic for identical time, view, and canvas size. No rAF, timers, workers, audio, storage, dialogs, dynamic code evaluation, or WebGPU may be used. WebGL context loss must be handled gracefully without throwing. Clear errors are thrown if WebGL2 is unavailable or shader compilation fails.
+
+The module must stay at or below 32,768 UTF-8 bytes. Camera moves will change the rendered image. Quality is fixed and never adapts to frame time. The render method will draw synchronously without readPixels or fences.
+
+gl.finish() will be omitted to avoid artificially inflating throughput measurements. JS-side object allocation will also be minimized, though uniform updates do not require typed arrays.
+
+The `render` function is being drafted. It validates the WebGL context and canvas size, then sets the viewport and uploads resolution and time uniforms before drawing a single full-screen triangle. The author is checking whether this triangle correctly covers the NDC viewport.
+
+The full-screen triangle vertices are confirmed to cover the entire clip space. The author is now deciding the drag-to-look direction: whether dragging down should tilt the camera upward or downward.
+
+Drag sensitivity is fixed at 0.008 per pixel. Yaw will decrease on rightward drag and increase on leftward drag, while pitch will decrease on upward drag.
+
+Arrow keys will orbit yaw left and right, and pitch up and down. Zoom will use exponential wheel deltas so positive delta zooms in and negative zooms out. The author is calculating the minimum camera distance to ensure the beak remains inspectable at close range.
+
+The author realized the camera target sits only about 1.44 units from the beak tip, so zooming in from a distance of 1.2 would pass through the subject rather than reach the beak. The orbit target needs to be moved farther back so close inspection remains possible.
+
+A minimum camera distance of 0.8 units allows the viewer to pass behind the beak and inspect it closely, but risks clipping inside the body geometry.
+
+The camera target will remain near the body center. A minimum distance of 0.8 keeps the viewer just outside the geometry, so close inspection of the beak requires zooming to about 1.3 while orbiting into position.
+
+The minimum camera distance is being lowered to 0.65 units. This lets the viewer get close enough to inspect the frame tubes and pedal contacts, which sit near the target.
+
+The minimum camera distance is being set to 0.4 units so the viewer can inspect the pedals closely. The maximum distance is 20 units.
+
+The ray-marcher will detect when the camera starts inside geometry and render the interior color immediately. A small epsilon will be used for close inspection, but it must scale with distance so the march does not take too many steps.
+
+The ray-marcher epsilon will scale with distance as `max(0.00025, 0.00055 * t)`. A maximum step distance of 0.85 will prevent overshoot from SDF overestimates. The angular spoke SDF must be exact or an underestimate to avoid sphere-tracing errors.
+
+A solid hub disk and spoke SDF are being added to the wheels. The pelican body will be slightly rotated forward by about fifteen degrees to suggest a natural riding posture.
+
+The pelican will have a forward lean so its neck and wings follow the body. Wings will be raised and swept back at roughly thirty degrees to read as distinct wing shapes rather than flat lumps. Black tips will help define the wing edges.
+
+Wing geometry is being refined. The wing ellipsoid will extend slightly past the body center so the wing reads as a distinct protrusion. A second layer of covert feathers was considered but rejected as overkill; two leading-edge capsules plus the ellipsoid should suffice. The eye will use only two spheres: white sclera and black pupil.
+
+The eye highlight will be a shader specular reflection rather than extra geometry. The pupil is offset slightly forward and outward from the sclera so it remains visible. A brow ridge was considered but skipped to keep the module small.
+
+The pouch will use a fleshy salmon-orange wrap lighting and subsurface scattering to look translucent. A cheap ground shadow will be drawn with circles under the rear and front wheels.
+
+The ground shadow will be a soft analytic disk under the body. A second contact sample from the SDF will tighten the shadow near the bike and rider, but only at that local area to avoid expensive per-pixel distance queries across the whole screen.
+
+The contact shadow will be clamped to a radius of 2.5 units and blended into the ground color with a 0.6 base multiplier. Verbose comments will be stripped from the final output to keep the module under the 32,768-byte limit. Short variable names will be used in both JavaScript and GLSL to save space.
+
+The shader will be written as a template string. GLSL ES 3.00 features are being verified: two-argument atan, mat2 rotation, and integer loop indices are all available. The spoke angle folding formula is confirmed to work with atan returning -PI to PI. The standard iq ellipsoid SDF formula is being double-checked for correctness.
+
+The ellipsoid SDF will use a global understep of 0.8 to stay safe from overestimates. Spheres and capsules will use exact SDFs for reliability, while the body keeps the approximate ellipsoid for shape.
+
+The pelican body will stay an ellipsoid rather than a cheaper box. A single uniform angle derived from uTime will drive both the bike crank and the pelican legs, keeping the animation synchronized.
+
+The author confirmed the +X pedal moves toward -Z as it leaves the top, so forward motion rotates the wheels clockwise. Wheel local rotation will be applied inversely to the object rotation.
+
+The author is double-checking GLSL mat2 column-major semantics to ensure the wheel rotation matrix is built correctly.
+
+Confirmed the GLSL mat2 constructor is column-major. The wheel rotation matrix `mat2(c, s, -s, c)` correctly applies a positive-angle rotation to the local point.
+
+Wheel rotation will be roughly 2.5 times faster than the crank angle. The chain will remain static. The ground will use a sand color with a subtle distant water plane to suggest a beach path.
+
+A subtle vignette will be added to the fragment shader for polish. The camera target is fixed at (0, 0.95, -0.08), yaw at -0.55, pitch at 0.34, and distance at 6.8 units. This places the viewer in a front-right three-quarter view slightly above the subject.
+
+Keyboard zoom controls will use the plus, minus, and numpad keys. The canvas will be made focusable so arrow-key orbiting works. Touch scrolling and mouse wheel events will be suppressed to keep camera input clean.
+
+Pointer events will handle two-finger pinch and drag, while mouse events provide a fallback for evaluator compatibility.
+
+To avoid double-handling camera input, the code will check for native pointer support and use pointer events exclusively when available. Mouse events will serve as a fallback only if pointer events are unsupported.
+
+The author is abandoning the conditional pointer-or-mouse fallback. Instead, both pointer and mouse listeners will be attached, with a shared flag to prevent double-handling when both events fire.
+
+Pointer events fire before mouse events, so the shared flag reliably prevents double-handling. Drag listeners will attach to the window for both pointer and mouse fallbacks.
+
+A Map will track pointer positions by ID. setPointerCapture will lock input to the canvas. The move handler compares two pointers to detect pinch gestures.
+
+Pinch zoom will scale the camera distance by the ratio of the current two-pointer span to the previous span. Dragging with one pointer will rotate yaw and pitch, clamped between -1.4 and 1.4 radians so the camera can orbit through a full 360 degrees.
+
+The author realized the drag rotation is yaw, not pitch. They also noticed that when a second finger lands during a two-finger pinch, the previous span measurement could be stale, so `lastPinch` will be reset on `pointerdown` whenever exactly two pointers are present.
+
+Pinch zoom will scale camera distance directly from the two-pointer span ratio. Drag sensitivity is set to 0.0075 radians per pixel, allowing a full 360-degree orbit in roughly eight hundred pixels. Arrow-key zoom steps by 0.12 radians per press. The canvas will focus on pointer down without scrolling. Unrelated keyboard keys will not be intercepted.
+
+A try/catch wrapper will guard `canvas.focus({preventScroll: true})` in case the browser rejects the option. The `dispose()` function will remove all canvas event listeners, delete the WebGL program and buffer, and clear the pointer map to free resources.
+
+The author will store shader sources so the WebGL program can be rebuilt after a context loss. A context-restored event handler will call setupGL() and catch any errors without throwing.
+
+The initial WebGL setup will throw immediately if shader compilation fails. After a context loss, the old program and buffers are invalid, so the restore handler simply rebuilds them from scratch. A disposed flag will guard render() to prevent crashes after cleanup, while setView remains safe to call afterward.
+
+Uniform locations will be validated before use. The canvas will not resize itself; it will simply read the current width and height each frame. To guarantee deterministic output, the code avoids random numbers and Date.now(), relying solely on timeSeconds for animation. The sand texture uses a spatial hash built from sin() of position, which should remain consistent across frames on the same GPU.
+
+The author will add procedural clouds to the sky using only ray direction and a cheap sine-wave noise pattern, avoiding any texture images. Time will be passed as float32 and performance.now() will be avoided entirely.
+
+A multi-octave sine-wave noise pattern will generate soft, sparse procedural clouds in the sky. A sun disk and atmospheric glow are being added using directional dot products with high power exponents.
+
+The sun light and glow use warm yellow-orange tones. A faint warm bounce from the sand will illuminate the pelican's underside so it does not appear flat black.
+
+The author is now writing the complete shader and checking its approximate size. The crank arm will be thick enough to see at normal distance but disappear at close zoom. Pedals will be sized 0.1 by 0.03 by 0.06. Feet will sit slightly overlapping the pedal tops so contact is clearly visible on close inspection.
+
+The foot ellipsoid will sit at pedR.y + 0.03 with a radius of 0.02, so its bottom edge overlaps the pedal top by about 0.015. The pelican body and seat ellipsoids are positioned to intersect by roughly 0.02 at their contact points.
+
+The pelican body center was lowered to 1.30 so the seat ellipsoid overlaps by about 0.01, eliminating any visible gap. The neck connection must still hold.
+
+Smooth min with k=0.08 will bridge small gaps between the pelican body and neck. The orange beak and lower pouch will use a hard union so the orange stays crisp against the yellow pouch, positioned to overlap slightly.
+
+The author is writing the shader in a compact, comment-free style. They are carefully verifying the wheel SDF math to ensure the rear hub sits inside the tire correctly. A debug mode was considered but rejected because the evaluator cannot iterate on bugs after submission. The code will be re-read and rewritten cleanly.
+
+The author is now writing the core signed-distance-field primitives for the shader. They have defined `sdCylX` for horizontal cylinders, `sdBox` for axis-aligned boxes, `sdCap` for rounded caps, `sdSph` for spheres, and `sdEll` for ellipsoids. These functions will form the geometric building blocks for the pelican, bicycle, and environment.
+
+A tapered cylinder primitive is being added for the pelican's beak and neck. It interpolates radius between two endpoints but understeps slightly so it remains a valid signed-distance field. Eight spoke segments are being defined for the wheel hub using angular sector math.
+
+The spoke SDF is being finalized. Angular folding and rotation align each spoke segment to the Y-axis, and a centered box forms the spoke geometry.
+
+The spoke geometry is confirmed to align correctly with the hub. Wheel material will be rubber when the tire is closest, otherwise metal. A small `u2` helper will select the nearest distance. The frame will use teal and the rims silver, distinguished by material ID.
+
+The shader will use integer material IDs to distinguish wheel tire, chrome rim, teal frame, and seat. A `shade` function will assign albedo, shininess, and metalness based on this ID.
+
+The author finalized the material palette. Handlebar grips will use dark rubber. Pedals will be dark gray with yellow reflectors. The chain will be a separate dark material. A long if-else chain in the shader is acceptable because it runs only once per pixel.
+
+Fog will use exponential attenuation scaled by time squared, blended with the sky color. Ground roughness variation is being added cheaply. A basket and handlebar bell were considered but skipped as non-essential. The author briefly wondered if the pelican design could be mistaken for another bird.
+
+The pelican beak will be deliberately long and the pouch deliberately large so the bird is unmistakable even at thumbnail size. The enlarged pouch radii and extended beak length were chosen to ensure clear visual distinction. The author verified that the enlarged pouch slightly overlaps the neck but does not intersect the handlebar.
+
+The handlebar is raised to y=1.05 for proper bike proportions. The pelican's wings are being posed forward so they rest on the handlebars, creating a "riding" gesture. A curved wing path from the shoulder to the grip point will use flat feather ellipsoids to keep the shape recognizable as a wing.
+
+The pelican will keep its wings folded back rather than reaching forward. This avoids looking like a generic creature with arms. The bird will instead be clearly seated and pedaling, with large folded wings, black tips, a long beak, and a pouch to ensure unmistakability.
+
+The pelican's wings will extend back to z=0.65, clearly past the body midline, with black tips for a classic silhouette. A nape curve is being added using two tapered capsules with decreasing radius, blended smoothly into the head and body so the neck does not look like a sausage.
+
+A small yellow bare-skin ellipsoid is being added at the beak base to bridge the head and beak without extra geometry. Eye sockets will use a subtle color ring rather than depth geometry. The camera is positioned at +X looking toward -X, so the front of the bike faces screen-right.
+
+The pelican's right eye and wing will face the camera in side view, while the left eye stays hidden. A tail will extend toward screen-left to complete the silhouette.
+
+The author is writing the shader compactly to avoid WebGL2 instruction limits. Fifty primitives should fit on desktop hardware, but the code will stay moderate in size.
+
+The shader will use a custom `out vec4 o` variable instead of `gl_FragColor` to comply with ES 3.00. Uniform names are kept short to save bytes. The JavaScript side will throw immediately if any uniform location lookup fails, preventing a silent runtime error.
+
+The vertex shader will use a single `layout(location=0)` input and output `gl_Position` directly, avoiding varyings entirely. The fragment shader will include an early ray-sphere test against the scene bounding sphere centered at (0, 1.0, -0.1) with radius 2.3 to reject distant pixels before expensive geometry evaluation.
+
+The scene bounding sphere radius is being tightened to 1.85, centered at (0, 1.05, -0.15). Distances from that center to the beak tip, front wheel, and rear wheel were calculated as roughly 1.34, 1.53, and 1.57 units respectively.
+
+The ray-sphere intersection is being coded with the quadratic formula. The ray will march only between tStart and tEnd, skipping ground and sky when the sphere is missed.
+
+The ray-marching loop is being written with a 64-step limit. Each step advances the ray by 82 percent of the current signed distance, and the loop breaks if the ray exceeds the scene bounding sphere. Ground is intersected only when the ray passes below the horizon before hitting any object. If no object is struck, the shader shades either ground or sky.
+
+The ray-sphere test will be skipped entirely when the camera lies outside the scene bounding sphere. The 64-step march is expected to converge in about 20 to 40 steps for most features, with thin spokes reached directly by the signed-distance field.
+
+The ray-marching loop is being optimized for speed. Because the signed-distance field is exact, the ray converges in roughly four steps from a distance of one unit even with the 82 percent understep. The real performance bottleneck is a badly underestimated SDF that forces many slow refinement steps.
+
+The author realized that using a loose bounding-box distance for distant primitives would severely underestimate true distance. This forces the ray to creep forward in tiny steps, negating the ALU savings from skipping detailed geometry evaluation. The cheap bound should only be used when it remains a reasonably tight underestimate.
+
+The author abandoned the loose bounding-box shortcut. Instead, each primitive will be bounded by a tight sphere: a torso sphere of radius 0.7 for the pelican body, wings, tail, and neck; a beak sphere of radius 0.5 at the beak center; and wheel spheres of radius 0.56. The real signed-distance field will still be computed directly, but the cheap sphere bounds are only used to skip detailed evaluation when the ray is outside that tight sphere.
+
+The wheel sphere radius of 0.56 is too loose for side-view rays. A thin wheel only extends 0.1 unit along the axle, so the sphere underestimates distance by up to 0.5 when the ray approaches from the side. This would force the ray to creep forward in tiny steps and severely slow rendering.
+
+A flat cylinder or box will replace the loose bounding sphere for the wheels. The new bound uses a radius of 0.52 in the yz plane and a thickness of 0.12 along the axle, preventing side-view rays from creeping through an oversized sphere.
+
+The wheel bound is exact and cheap, so the ray will skip detailed evaluation whenever it stays outside a 0.02 margin of that bound. The frame will be bounded by a box at (0, 0.7, -0.1) with size (0.5, 0.7, 1.3), letting the ray bypass the ~12 capsule primitives when far away.
+
+The frame box is 0.5 units thick along the axle, which is slightly wider than the handlebars at 0.45 units, so it remains a reasonable fit. The ray will use the box distance whenever it stays outside a 0.05 margin; once the ray enters that margin, the shader switches to evaluating the detailed frame capsules. This keeps the ray from creeping through the box while still computing the exact geometry only for pixels that actually see the frame.
+
+The `map()` function is being structured to evaluate primitives in order: wheels, then frame, then pelican torso. The frame box is tightened to (0.55, 0.62, 1.25) centered at (0, 0.72, -0.12), and the pelican torso will be bounded by a box near (0, 1.45, 0).
+
+The pelican torso box is set to (0.6, 0.55, 0.75) centered at (0, 1.45, 0), and the beak box to (0.2, 0.35, 0.5) centered at (0, 1.68, -0.95). The ray will use the box distance whenever it stays outside an 0.08 margin for the torso and a 0.06 margin for the beak; otherwise it evaluates the detailed geometry. The legs are always evaluated because they are cheap. The author confirmed that skipping frame or wheel evaluation via a box bound cannot hide those primitives, since the shader always takes the minimum distance.
+
+The author realized that returning a bounding box distance as the final signed distance would create false hits on empty space. The correct approach is to use the bound only as a lower bound for ray stepping, never as the final surface distance. When the ray is far from a primitive, the shader should take the minimum of the cheap bound and the true distance; when close enough, it evaluates the detailed geometry directly.
+
+The author realized that returning the bounding-box distance whenever it is below a threshold would still cause false hits. If the bound distance is 0.05 and the ray approaches the box surface, the bound shrinks to 0.001 while the ray is still outside the true geometry, so the marcher would register a hit on empty space. The bound can only be used as a safe lower bound for stepping forward; it must never be returned as the final signed distance.
+
+The author settled on a 0.2-unit threshold for wheel bounds. When the bound distance exceeds 0.2, the ray steps by that bound; when it drops to 0.2 or less, the shader evaluates the detailed wheel SDF instead. This prevents false hits because the true SDF is only used once the ray is close enough to register a hit.
+
+The frame bounding box must fully contain every handlebar and tube to avoid stepping over geometry. Exact bounds are set: x from -0.42 to 0.42, y from 0.15 to 1.16, and z from -1.15 to 0.90.
+
+The frame bounding box is finalized at center (0, 0.65, -0.12) with half-size (0.50, 0.58, 1.15). The pelican torso box is set to center (0, 1.50, 0.08) with half-size (0.62, 0.52, 0.68). The beak and pouch box is centered at (0, 1.65, -0.95) with half-size (0.18, 0.32, 0.50).
+
+The legs bounding box is centered at (0, 0.65, -0.05) with half-size (0.40, 0.55, 0.40). It overlaps the frame box but still fully contains every foot position across all crank angles.
+
+The leg box spans z from -0.45 to 0.35, which fully covers every foot position across all crank angles. Because the leg box is large, many pixels near the bike center will evaluate the six leg capsules; this is acceptable. The frame box also includes empty interior space, so rays passing through wheel openings will enter it and evaluate all frame capsules to preserve correct visibility.
+
+The author confirmed that the capsule SDF correctly returns large distances inside frame openings, so the ray can step through those gaps once it enters the detailed evaluation zone. The extra cost of evaluating the frame group for every march step within 0.2 of its bounding box is acceptable. Crank, pedals, and chain will be grouped with the frame, while wheels remain separate.
+
+The frame box x half-size is increased to 0.55 to fully contain the seat and handlebar grips. The frame() function will use roughly fifteen capsule primitives, which is acceptable because it only runs near the bike. The ray marcher already exits early when the distance is very small. Fifty-six to sixty-four steps should suffice with these tight bounds.
+
+The hit epsilon is set below 0.01, so the ray can never terminate on a bounding-box distance. The author is now writing the compact shade() function with a sky background and warm dry sand ground, skipping fresnel reflections.
+
+The shadow blob positions will be hardcoded with the same constants as the wheel geometry to prevent mismatches. The front and rear wheel centers are set at (0, 0.50, -1.06) and (0, 0.50, 0.84), with a tire radius of 0.455 and thickness of 0.046. The wheel center is raised slightly above the ground to avoid z-fighting.
+
+The author finalized the exact wheel, frame, and pelican coordinates. The wheel radius is 0.45 with a thickness of 0.048 and a 0.004 gap above the ground. The front wheel center is (0, 0.50, -1.08) and the rear is (0, 0.50, 0.86). The seat position is (0, 1.12, 0.20), the head tube spans (0, 0.64, -0.76) to (0, 0.98, -0.64), and the handlebar grips end at ±0.36 on the y=1.04 plane. The pelican body ellipsoid is centered at (0, 1.32, 0.08) with radii (0.27, 0.2
+
+The author abandoned the detailed pelican head, neck, beak, and pouch coordinates to avoid bugs from forward lean. A simpler ellipsoid will suffice.
+
+A toon-style rim will be added to the shade() function for silhouette readability. The author is also considering gamma correction.
+
+The author chose a mild gamma correction of 0.4545 to keep the scene bright and charming. The lighting model uses a key light intensity of 0.85, an ambient fill of 0.22, and a bounce factor of 0.3. The sky background is interpolated between warm browns and cool blues based on the surface normal's vertical component.
+
+The shade() function is being simplified to avoid bugs. It uses a single directional light at (0.45, 0.75, -0.35) with wrap lighting and a rim highlight. The ground color blends warm browns and cool blues based on surface normal height.
+
+The shade() function now blends a rim highlight, a subtle specularity, and an environment reflection tinted by surface normal height. Metalness is applied per primitive so tires stay matte, chrome stays bright, and the teal frame keeps its color. A height-based ambient occlusion on the ground will add depth.
+
+Height-based ambient occlusion on the ground was dropped to avoid darkening the pelican too much. A single extra distance query per hit pixel will darken contact points like feet, wheels, and seat for better tactile reading. The author is now ready to write the complete shader module.
+
+A front-left fill light will prevent the left side from looking black. Eye pupils will use a high-specular white dot for a fake highlight. The author is now writing the compact shader and checking its byte length.
+
+The author will use `const` for JavaScript constants. Camera controls will update synchronously without debouncing so the evaluator sees immediate feedback. Arrow keys will handle both `e.key` and `e.code` for reliable repeat behavior.
+
+The author added keyboard controls for pitch, zoom, and reset. Pitch is clamped to ±1.45 and distance to 0.38–24. They noted that arrow-key-driven pitch changes will be clamped, which may conflict with setView.
+
+The author decided to clamp pitch in all user input paths—drag and keyboard—to ±1.4. setView will store raw values, but render will use a clamped basis to prevent jumps when the stored pitch exceeds the limit.
+
+The author decided not to clamp pitch inside setView. Only the render function and interactive controls will enforce the ±1.45 limit, so getView can return the exact value passed to it.
+
+Distance will be clamped to a minimum of 0.15 in the renderer so that negative or zero values do not flip the camera behind the pelican. The stored distance value returned by getView remains unchanged.
+
+The author added a contextmenu prevention handler and a non-passive wheel listener to the canvas for reliable camera controls. Time will default to zero if NaN is encountered. The focus outline was removed from the canvas style.
+
+The canvas will receive `tabIndex = 0`, `touchAction = 'none'`, and `userSelect = 'none'` to prevent drag-side effects and text selection. The author confirmed that setting these styles is acceptable and does not violate the rule against reading other DOM elements.
+
+The author decided against reading `document.activeElement` or using window-level keyboard listeners to avoid touching other DOM elements. Pointer capture and mousemove events will be bound only to the canvas itself.
+
+A window-level mousemove listener will serve as a fallback when pointer capture fails. It will be removed on disposal.
+
+The author is now writing the shader code with careful attention to visual quality. They decided against adding a chain guard. The pedal crank arm will be visible edge-on from the side and offset from the front. Orange webbed feet will sit flat on the pedals, partially hidden by the frame when viewed from one side.
+
+The pelican feet will be modeled as wide, forward-pointing ellipsoids with a slight orange tint. The legs will use a pinkish-orange shade. A small tail and wing will complete the bird shape. The beak will remain closed with a downward-pointing hook at its tip.
+
+A small nostril geometry was considered but skipped to avoid extra complexity. The beak will instead use a stretched ellipsoid to create a keel line.
+
+The author abandoned the stretched ellipsoid for the beak. A flat, tapered shape will read better. They are now writing a custom `sdFlatTaper` signed-distance function that scales the perpendicular offset to flatten the beak along its length.
+
+The author refined the beak geometry. A round capsule with a 0.55 compression factor on the X axis will create a narrow, tall profile from the front while remaining tall from the side.
+
+The author abandoned the flat beak taper because it overestimates distance and would require an understep. A round capsule is safer and sufficient for the side view. They will add a yellow eye ring behind each eye using two slightly larger spheres with the beak material.
+
+The author realized a white sclera would vanish against the pelican's white head. They will instead use a dark eye ring, black pupil, and small white catchlight to keep the eyes visible.
+
+The eye geometry is now defined as a yellow-orange facial ellipsoid, a black pupil sphere, and a tiny white highlight sphere. Six eye primitives will be used to ensure the eyes remain visible against the pelican's white head.
+
+The head will be slightly off-white to avoid blowout, and the eye highlight will be pure white. Each wing will receive a separate black ellipsoid at its back tip to clearly mark the pelican. The author is now ready to write the complete module and verify its byte count.
+
+The author is now writing the GLSL fragment shader. They will initialize all variables to avoid WebGL2 compiler errors, use highp precision, and avoid arrays or mixed-type ternaries that could trip up drivers. A fallback material color will be added for any stray hit id of zero. The ground is handled outside the material map so it does not slow the ray-marching loop.
+
+The author capped the infinite ground plane at 80 units to prevent extreme grazing-angle distances. Ground is hidden when an object is closer, and the camera below ground level is handled correctly.
+
+The ray-marching loop will be capped at the ground plane distance to avoid unnecessary steps below the surface. It will only march when the sphere is closer than the ground and the camera is above ground level.
+
+The author abandoned a soft sun shadow aligned with the light direction. Instead, simple contact shadows will darken the ground near the rear and front wheels using smoothstep distance fields in xz.
+
+The author added a subtle grain texture to the ground sand using a pseudo-random noise function. Distance fog will fade the ground toward the horizon color.
+
+The author wrote a `sky()` helper that blends horizon and zenith colors with smoothstep falloff, then adds a bright sun highlight using a directional dot product raised to the 48th power.
+
+The author added procedural clouds to the sky shader using sine waves in a horizontal view-space coordinate. They replaced the height-based branch with a branchless mix to avoid divergence.
+
+Anti-aliasing the silhouette was skipped to avoid extra rays. The spokes will be slightly thickened to 0.016 half-width to reduce sparkle. Rim flanges were considered but deemed unnecessary because the rim torus alone is sufficient.
+
+A chrome hub and axle will sit at the center of each wheel. The tire torus is rotationally symmetric, so only the spokes and hub will spin while the rim stays fixed.
+
+The author refined the wheel geometry to match a real bicycle. The rim will sit at radius 0.38 with a hub disk, leaving only thin spokes to fill the interior. This creates a dark tire ring with a lighter center, avoiding aliasing artifacts while keeping the spin visible.
+
+The author estimated the final module at roughly 15 KB, comfortably under the 32 KB limit. They decided against adding a water bottle or number plate to keep the frame geometry simple. A tiny bell on the handlebar was considered as a close-inspection reward but set aside to avoid extra complexity.
+
+A small bell sphere will be added to the handlebar. The handlebar will be teal to match the frame, with black rubber grips and a chrome stem. Six material categories are now defined: tire, chrome, frame paint, seat, grips, and pedals.
+
+The author mapped every object to a unique material ID, totaling seventeen distinct categories. To reduce shader branching, they plan to group similar materials into four broad classes: rubber-black, chrome, paint, and leather.
+
+The material map is now refined to five broad groups: white organic, beak orange, pouch, wing gray, and leg. The eye highlight will share the white organic material so it still catches reflections. The pupil will be matte black. Skin around the eyes will use the beak orange material.
+
+The material map is now reduced to nine broad groups. Black rubber covers the tire, pupil, grips, and wingtips. Orange is shared by the beak, legs, eye skin, and feet to match authentic pelican coloring. The remaining groups are chrome, teal paint, leather seat, white organic, pink pouch, gray wing, and dark pedal.
+
+The author added a red nail at the beak tip. The pouch will use a slightly lighter bottom color. Orange beak and leg albedo will vary by depth and height to distinguish the two.
+
+The author added a subsurface scattering term to the pouch material so it reads as soft flesh rather than flat paint. The pelican body will use a slightly off-white albedo instead of pure white, with a subtle gray back and warmer belly tint to keep shading visible.
+
+The author finalized the frame tube dimensions: main tubes at radius 0.036, stays at 0.02, and fork at 0.022. The seat will be an ellipsoid at (0, 1.105, 0.22) with a post capsule from (0, 0.7, 0.05) to (0, 1.08, 0.18). A subtle blue-gray shadow tint will be added to the diffuse for artistic depth.
+
+The frame geometry is being defined with precise tube endpoints. The seat tube runs from the bottom bracket to the seat position as a single capsule. The top tube, down tube, and head tube are each drawn as separate line segments. Chain stays and seat stays will extend from the bottom bracket toward the rear wheel. The fork will reach the front axle.
+
+The handlebar geometry is now defined with a chrome stem, a teal bar, and black rubber grips. The headset spacer was skipped to keep the frame simple.
+
+The bell will sit at (0.1, 1.15, -0.48) in chrome. The chain will be offset to x = 0.055 so it sits on the right side of the bike and avoids z-fighting with the frame tubes.
+
+The chainring and cog are drawn as tori with radii 0.12 and 0.055. The chain links run between the top and bottom points of the two rings. The crank arm connects to the pedals at ±0.13 on the x-axis, keeping the chain offset to 0.055 so it does not overlap the frame.
+
+The right pedal sits at x = 0.13, safely outside the chainring at x = 0.055. Feet will sit slightly above the pedals. Hips are placed at ±0.11 on the x-axis, just outside the seat width. Knee positions will be computed to keep legs from intersecting the frame or seat.
+
+The knee position is now calculated as a blend of hip and foot coordinates with a slight lateral offset, giving the pedaling motion a natural forward-outward arc. The leg geometry uses a 0.042 thigh capsule, a 0.03 shin capsule, and an ellipsoid foot. The foot will use the orange material while the pedal stays dark, so the contact point remains clearly visible for close inspection. The foot will also be slightly embedded into the pedal to eliminate any gap.
+
+The foot is placed 0.02 units above the pedal center with a height of 0.018, ensuring it overlaps the pedal by about 0.013 units. The seat and pelican body are checked for collision at their closest point; the overlap is only 0.003 units, so they do not intersect.
+
+The pelican body is lowered to y = 1.285, so its bottom now sits at 1.112 and overlaps the seat by 0.018 units. The neck base at (0, 1.40, -0.12) is confirmed inside the body ellipsoid, allowing the smooth min to blend the torso and neck naturally. The neck mid-point is at (0, 1.58, -0.16), the head top at (0, 1.74, -0.34), and the head center at (0, 1.76, -0.46).
+
+The head ellipsoid radii are fixed at (0.12, 0.11, 0.145). The beak start point is confirmed inside the head. The right wing ellipsoid is placed at (0.32, 1.28, 0.18) with radii (0.07, 0.11, 0.32), and its inner edge sits just inside the body boundary.
+
+The wing tip and tail ellipsoids are confirmed to overlap the body without gaps. A subtle vertical bob animation will be added to the pelican torso, hips, and head using a sine wave at half amplitude so the legs stretch slightly while the feet remain fixed on the pedals.
+
+The bob animation will affect the body, neck, head, wings, tail, eye, beak, pouch, and hips, but not the feet. A wing-flap effect was considered and rejected to avoid gaps where the wing meets the body. The author is now ready to write the shader code.
+
+No comments will be added to the module to save bytes. The author is carefully reviewing GLSL ES 3.00 syntax rules, such as function declaration order and const array support, to avoid shader compilation errors.
+
+The shader function order is now fixed to satisfy WebGL’s strict GLSL ES 3.00 rules. Primitives come first, followed by utility helpers, then the scene objects, sky, shade, and normal functions, with main last. Inlining was considered but skipped to keep the code readable.
+
+A 2D rotation helper is being added to spin the wheels. The crank and wheel directions were double-checked and confirmed consistent.
+
+The wheel will rotate 2.5 times for every crank revolution to show the gear ratio visually. The pedals are drawn as flat boxes so they stay level, with small capsule spindles connecting the crank arms to each pedal.
+
+The crank arm is lengthened to 0.16 units so the rotating portion appears correctly in the side view. The frame function will be tightened for compactness, and a front fork crown capsule was considered but skipped because the head tube already connects the fork blades.
+
+A normal-flip check will reverse surface normals when the camera is slightly inside geometry. The final tone curve applies a gamma correction without contrast crushing. A subtle vignette will be added after gamma.
+
+The vignette is applied as a 12% falloff from the center. The camera uses a focal length of 2.55, giving roughly 43 degrees of vertical field of view. At the intended distance of 7 units this frames the subject with surrounding environment; at close zoom it fills the canvas.
+
+The author is refining the camera framing. A focal length of 2.3 would give a wider establishing shot at distance 6.5, fitting the full bike and pelican comfortably. At that distance the subject projects to roughly 2.5 units, which fits well within the 5.7-unit half-height.
+
+The camera is now locked to a focal length of 2.35, an initial distance of 6.6 units, and a target point at (0, 0.96, -0.1). The JavaScript basis function will compute the eye position and forward vector from this target so the shader receives only the camera basis.
+
+The JavaScript basis function clamps pitch between -1.45 and 1.45 and distance to at least 0.12. It computes the eye position from the target point using spherical coordinates, derives the forward vector by negating the offset, and builds a right vector from the cross product of the forward and up axes.
+
+The basis function now returns the full camera matrix including the up vector. Pitch is clamped to 1.45 radians, which is below π/2, so the right vector never degenerates and the up vector stays normalized.
+
+Camera placement is confirmed: the eye sits above and to the right of the target, looking slightly downward. Zoom limits are set from 0.42 to 22 units so the full subject remains visible while close inspection stays possible. The scroll zoom factor uses an exponential step of exp(dy * 0.0012), yielding roughly a 12.7% distance change per notch.
+
+The zoom sensitivity is being tuned so the full zoom range from 6.6 to 0.4 fits within a reasonable number of input events. Scroll zoom now uses an exponential factor of exp(dy * 0.002), giving about 15 notches across the full range. The plus key will zoom in by a factor of 0.82 per press, which reaches 0.4 in roughly 12 presses. Numpad plus and minus keys will be supported via both e.key and e.code.
+
+The keyboard handler will stop event propagation to prevent page scrolling and use preventDefault on arrow keys. Zooming in is also mapped to the '=' key for convenience. The author considers the plan complete and is ready to write the code.
+
+A disposed and context-loss guard will be added to the render loop. WebGL methods can return null after a context loss, so the code will check isContextLost() at the start of each frame and skip rendering if the context is lost.
+
+Setup will throw if shader linking fails, not just compilation. Shaders are deleted after linking to free memory, and the WebGL2 context is created with alpha, antialias, depth, and stencil disabled.
+
+The WebGL2 context is created with `powerPreference: 'high-performance'`. The author begins the module body by defining a minimal vertex shader, declaring shader and buffer variables, and starting the `compile` helper.
+
+The `compile` helper now throws on shader creation failure and logs the WebGL info log if compilation fails. The `setupGL` function creates the vertex and fragment shaders and begins linking them into a program.
+
+The program links with the vertex and fragment shaders attached and the `a` attribute bound to location 0. After linking, the old shader objects are deleted and the new program is stored; if a previous program existed, it is freed first. The code then creates a vertex buffer and binds it as the active array buffer.
+
+The vertex buffer is filled with a full-screen triangle strip. The program is bound and the vertex attribute is enabled. Uniform locations for resolution, time, camera position, forward vector, right vector, and up vector are fetched. The setupGL call runs immediately. Camera state variables are declared next.
+
+Camera state is fixed at yaw 0.58, pitch 0.36, and distance 6.7. The render function validates the WebGL context, canvas dimensions, and time value before fetching the camera basis and binding the vertex buffer.
+
+The render function now uploads the camera basis vectors and resolution to the shader, then draws the full-screen triangle. Helper functions for setting and getting the camera state are added, along with a dispose routine that removes listeners and frees WebGL resources.
+
+The dispose routine now deletes the WebGL program and vertex buffer, then nulls both references. The module returns render, setView, getView, and dispose. Vertex attribute state is rebound each frame to guard against context reuse, even though default VAOs are safe. Depth testing and dithering remain disabled.
+
+The fullscreen triangle does not need depth testing. The author will explicitly enable the full color mask and disable scissor and blend. A bounding acceleration pass will be added to the fragment shader. The minimum of the frame-box distance and the wheel-specific detail is confirmed correct when the wheel sits inside the frame box.
+
+The pelican beak box does not overlap the front wheel box. The leg bounding boxes intersect with the frame box, but the knee and foot positions leave enough clearance so that close contact is acceptable.
+
+Hip-to-top-tube clearance is confirmed safe at roughly 0.046 units. The pelican body radii are being increased to (0.30, 0.22, 0.36) for a rounder, cuter appearance; this will slightly increase overlap with the seat.
+
+The pelican body center is set to (0, 1.33, 0.06) with radii (0.29, 0.21, 0.35). This creates a slight overlap with the seat at z=0.20 while keeping the neck base inside the frame.
+
+The pelican head radii are increased to (0.135, 0.125, 0.15) for a rounder look. Its center is set to (0, 1.78, -0.48). The neck top is adjusted to (0, 1.74, -0.40) so the head sits fully inside the frame. The beak will connect at the front of the head.
+
+The pelican beak starts at z = -0.58 and extends to z = -1.32, keeping its tip inside the head bounding box. The pouch is centered at y = 1.55 and z = -0.90, hanging below the beak with a slight overlap so it looks attached; its bottom sits at y = 1.44 for a droopy appearance.
+
+The pouch is widened to radii (0.09, 0.13, 0.32) and centered at (0, 1.54, -0.92), giving it a big droopy signature look. It is confirmed clear of the front wheel and handlebar. The eyes are placed at (±0.10, 1.82, -0.53), just outside the head sphere.
+
+The eye is pushed slightly outside the head sphere so its yellow skin patch can form a ring around the black pupil. A small white highlight sits on the eye surface. The author is ready to write the code.
+
+The wing geometry is being simplified to a single flat ellipsoid with radii (0.045, 0.10, 0.34) instead of multiple overlapping shapes. This thin, elongated form reads as a wing from the side and top while sticking out from the front. A wingP helper function will mirror and rotate the ellipsoid to sweep it back and down.
+
+The wing rotation logic is being dropped. A simpler flat ellipsoid long in z and offset in x will extend back along the body.
+
+The wing is fixed at (0, 1.30, 0.20) with radii (0.055, 0.09, 0.34). It extends from z = -0.14 to z = 0.54, forming a folded wing with a black tip at z = 0.48. From the front it reaches x = 0.395. This avoids rotation bugs entirely.
+
+The wing is raised to y = 1.36 so it reads as a wing rather than a belly bulge. The author decides against adding a smile to the beak and relies on the eye highlight for charm. A warm coral-red palette is chosen to evoke a coastal scene with sand, blue sky, and an orange beak.
+
+The bike frame is set to bright coral-red (#e24b4b) with chrome details, a brown seat, and black tires. The author notes that linear-space color values should be used since the final output will be gamma-corrected.
+
+Working in linear space for gamma-corrected output is too error-prone. The author will use gamma-space lighting instead, applying a mild gamma correction or none at all. This keeps the stylized look predictable and avoids darkening the coral-red frame.
+
+A gentle tonemap is applied in the fragment shader to preserve highlights. Perceptual colors are used directly: coral frame, white bird, orange beak, red pouch, and sky blue. Ambient light is set to 0.32 and diffuse to 0.75 so shadows do not crush the white pelican while black tires stay dark.
+
+The fragment shader now blends albedo with ambient and diffuse lighting plus a small spec component. Chrome parts use high metalness with a white reflection mix, while the frame stays mostly matte paint. The beak gets a clearcoat gloss, the eye pupil gains a catchlight, and the body remains soft. The author is ready to write the code.
+
+A final syntax review of the shader is planned after writing. The author briefly considered adding an analytic ground plane at y=0 to the SDF so ambient-occlusion samples could reach it, but decided that would unify the pipeline unnecessarily since the wheels already cast shadows via the existing analytic shadow.
+
+The wheel center is lowered to y = 0.49 so the tire sits slightly on the ground, eliminating a gap that could let light leak through.
+
+The wheel center is set to y = 0.495 so the tire sits 0.003 units below the ground plane, letting the ground clip the bottom edge visually without adding an SDF plane. The wheel radius is 0.45 and the tire thickness is 0.048.
+
+The wheel centers are fixed at y = 0.492 so the tires intersect the ground plane by 0.006 units. A rear reflector and a swaying pouch were considered but skipped as too subtle. The crank rotates at twice the elapsed time, placing the right pedal at the top and the left at the bottom.
+
+The initial pose at time zero is verified. The right leg is bent and the left leg extends downward, producing a clear pedaling stance. The wheel spokes align with the axes.
+
+The pelican neck is being curved into an S-shape with two capsules. It rises from the body, then angles forward toward the head. The base is thick and tapers to a thin point near the head. This creates an alert, upright posture that keeps the beak clearly visible.
+
+A smooth minimum function will blend the pelican body, neck, head, and tail into a single white material. Because all these parts share the same color, the soft transition is visually acceptable and avoids a hard material boundary.
+
+The pelican body, neck, head, and tail are blended into a single white material using smooth minimums with k values of 0.06, 0.05, 0.05, and 0.04. Wings and beak remain separate materials. Eye skin and pupils are unioned on top with a hard minimum so they render clearly on the surface. The author briefly considers smoothing the beak onto the head as well.
+
+The pelican will bob vertically via a sine wave applied only to the torso, neck, head, beak, pouch, wings, and eyes. Feet remain fixed so the body does not float. Hard minimums are kept for the beak base and pouch overlap to preserve crisp edges.
+
+The pelican bob is set to sin(uTime * 2.3) * 0.012 and applied only to the torso, neck, head, beak, pouch, wings, and eyes so the feet stay fixed. The leg bounding box extends to y = 1.20 to cover the bobbed hips. A sandy path or hashed ground will be added beneath the bike for a sense of place.
+
+A soft blue water band is being added behind the bike to evoke a coastal beach edge. Displaced shells and a wooden boardwalk were considered but rejected as too complex or random.
+
+The water color is set to a soft blue (0.20, 0.48, 0.62). It blends subtly into the sand ground ahead of the bike to suggest a coastal beach edge. A sky reflection is also added to the water surface so the background sky appears on the water plane.
+
+The wheel spin rotation is being placed after the bounding-box test so the bound stays rotationally symmetric. The author expects the final module to land around 12–18 KB and will trim features if it grows too large.
+
+The wheel geometry is built from a torus for the tire, a smaller torus for the rim, a cylinder for the hub, and spokes. The shader selects the tire material when it is closest to the ray; otherwise it returns the metal material.
+
+The wheel spoke geometry is refined so it runs from y = 0.05 to y = 0.40, meeting the rim cleanly at y = 0.385 with a small gap closed by a hub radius of 0.05. The spoke segment is centered at y = 0.225 with half-length 0.175. The author notes that atan(0,0) at the exact center is harmless because the hub covers it and the metal material wins over the spokes there.
+
+The spoke angle wrapping is confirmed to work correctly for negative values. The wheel hub will be a simple cylinder rather than an inner cone. The axle extends slightly past the tire edge because its half-length of 0.05 exceeds the tire half-width of 0.048.
+
+The hub half-length is 0.055 so the axle extends slightly past the tire edge. The front fork capsule ends at the hub center and merges visually with the hub.
+
+The head tube bottom at (0, 0.64, -0.76) intersects the front wheel center at (0, 0.492, -1.08). The distance is only 0.35 units while the wheel radius is 0.5. This collision must be fixed by moving the head tube forward-up or raising its base above the wheel.
+
+The head tube is being repositioned to (0, 0.78, -0.55) so it sits clearly outside the front wheel with roughly 0.09 units of clearance. The fork line from this new base toward the front axle may still pass through the tire.
+
+The fork line passes through the front wheel center, which is correct for a fork blade. The author now needs to verify whether the straight head-tube-to-hub segment intersects the tire torus.
+
+The fork line passes through the front wheel at radial distance 0.45, which falls inside the tire tube radius of 0.40–0.50. Because the fork sits at x = ±0.04 and the tire tube extends ±0.048 in that direction, the fork intersects the tire volume. This is a classic modeling issue that must be fixed.
+
+Fork blades will be placed at x = ±0.07, outside the tire width, and will connect to the axle ends rather than the wheel center. This prevents the fork from intersecting the tire volume.
+
+The fork blades are being moved to x = ±0.09, outside the tire width of 0.048, to ensure they do not intersect the wheel volume.
+
+The fork now sits at x = ±0.09, giving a 0.026-unit clearance past the tire edge. A crown is being added between the head tube and fork to keep the fork visually separate from the stem.
+
+The fork blades are fixed at x = ±0.09, safely outside the tire width of 0.048. The head tube base is now at (0, 0.84, -0.52), giving 0.15 units of clearance from the front wheel center. The author is also checking that the front wheel top does not collide with the fork crown.
+
+The front wheel is being moved to z = -1.16 so the fork crown clears the tire by 0.16 units. The head tube base is now at (0, 0.86, -0.58). The rear wheel is set to z = 0.90. The total wheelbase becomes 2.06.
+
+The fork line is now checked against the tire volume. It starts at y = 0.82 and ends at y = 0.492, so it remains below the tire top at y = 0.942. The fork also sits at z = -0.56, which is behind the wheel's back edge at z = -0.66, so it does not enter the wheel's interior. The head tube clearance is confirmed at roughly 0.187 units.
+
+The fork line is parameterized to check its exact position at the wheel's back edge. At z = -0.66 the fork sits at y = 0.765, well above the wheel's rear point at y = 0.492. The minimum distance from the wheel center to the fork line is now being calculated.
+
+The fork line passes through the tire's radial band but remains safely outside its x-width. It runs beside the wheel through the spoke region to the axle end, matching a real fork geometry.
+
+The axle half-length is extended to 0.10 so it meets the fork at x = ±0.09. The fork end at (±0.09, 0.492, -1.16) now sits on the axle, eliminating any visual gap between the fork and hub.
+
+Rear chain stays and seat stays are being offset to x = ±0.075 so they clear the rear tire. The seat stays run from the seat cluster to the rear axle ends, and the chain stays run from the bottom bracket to the same axle ends.
+
+The rear chain stay is being placed at x = ±0.075 with a radius of 0.015, giving a 0.027-unit clearance past the tire edge. The axle half-length is increased to 0.11 so the stays and fork meet cleanly at x = ±0.09. The chain cog sits inside the spoke region and stays well clear of the rear tire.
+
+The chain path is confirmed clear of the rear tire because it sits at a radial distance of 0.06, well inside the hub radius and far from the tire's outer band. The down tube from the head tube base to the bottom bracket is also verified to lie behind the front wheel.
+
+The down tube clears the front wheel by 0.045 units, and the top tube sits high enough to avoid collision. The author is now rewriting the geometry coordinates cleanly for the shader.
+
+The final coordinate set is now fixed. The rear wheel sits at z = 0.92, the front wheel at z = -1.16, and the bottom bracket at (0, 0.34, 0). The head tube runs from (0, 0.86, -0.56) to (0, 1.06, -0.44), with the seat cluster at (0, 0.98, 0.10) and the handlebar stem at (0, 1.12, -0.40). The handlebars clear the front wheel by sitting behind it at a higher elevation. The pelican beak extends to z = -1.32, which places it well above the front wheel top at y = 0.99.
+
+The beak clears the handlebars by 0.5 units and sits above the head tube, so no intersection occurs. The author considers this side view acceptable.
+
+The pelican's feet sit at the bottom bracket, well behind the front wheel, so no collision occurs. The author is now writing the complete module. A warmer key light will come from above and slightly in front, with a matching sun in the sky. Soft contact shadows on the ground will be added using ellipses.
+
+Broad ambient occlusion will darken the entire bike. Smooth sand patches using sine waves will break up flatness. All uniforms will be used to prevent null uniform locations from causing render failures.
+
+The author confirmed that WebGL calls with null uniform locations are no-ops and do not throw. They also decided against wrapping the render body in try/catch, instead checking isContextLost first to avoid masking bugs.
+
+The author will intercept WebGL context loss by calling preventDefault and tracking the lost state. When the context is restored, they will rebuild the WebGL setup inside a try-catch block to ensure the render loop never throws.
+
+WebGL listeners will be attached only after setup succeeds. If setup throws, no listeners leak and failed shaders are deleted.
+
+The author assumes a single module instance and does not guard against duplicate canvas listeners. The shader will use compact function names to stay within the byte limit. The draft begins with a high-precision WebGL 300 ES header, uniform declarations, and a short signed-distance sphere helper.
+
+The shader draft now includes compact signed-distance functions for boxes, capsules, ellipses, tori, and cylinders. These primitives will form the pelican and bicycle geometry.
+
+The shader draft now includes a capsule helper for the fork and a spoke-generator function that rotates points around the axle axis.
+
+The spoke-generator function now uses a compact box primitive for the spoke caps. A `wheel` helper is being defined to combine the tire, rim, hub, and spokes into a single signed-distance field, returning the nearest surface type.
+
+The wheel's bounding cylinder is verified to fully contain the axle and tire. The early-out bound check is confirmed safe because the bound radius and half-length exceed the actual geometry, so returning the bound distance when it exceeds 0.2 always yields a conservative estimate.
+
+The frame function is being drafted with tube primitives. It defines the bottom bracket, head tube, and wheel positions, then begins painting the seat tube and down tube using capsule signed-distance fields.
+
+The frame function now includes the top tube, head tube, stem, and handlebars as capsule primitives. Grip caps are added to the handlebars. The fork and stays are being painted as thin tubes.
+
+The frame function now includes the crown, seat stays, and seat tube as thin capsule primitives. A seat ellipsoid is added at the seat cluster. The crank arm is animated with a sine wave and drawn as a capsule between the bottom bracket and its rotating endpoint.
+
+The frame function now adds the pedal boxes and a chain ring. The pedals are drawn as small boxes at the crank arm endpoints. A torus forms the chain ring, and a smaller torus plus a capsule form the rear cog. The chain stays clear of the front wheel.
+
+The frame function now includes a bell at the handlebars. The author is computing the frame bounding box to ensure it fully contains all geometry, including the handlebar grips, seat, bell, and pedals.
+
+The frame bounding box is tightened to z = ±1.35 and y = 0.08–1.32 so the fork, rear wheel, pedals, seat, and chain stays all fit inside. The author confirms the box is valid.
+
+The pelican function is now being drafted as the artistic core. It begins with a vertical bobbing motion driven by a sine wave, then defines a torso bounding box and an ellipsoid body centered near y = 1.33.
+
+The pelican body is completed with a tail ellipsoid, two neck capsules, and a head ellipsoid. These white features are blended together using smooth minimums. The draft then begins the wing geometry with two side ellipsoids.
+
+The pelican draft now adds wing tips and eyes. Each eye uses a skin ellipsoid, a black pupil sphere, and a white highlight sphere.
+
+The pelican draft now adds a beak and pouch. A bounding box isolates the head area, and the beak is built from tapered ellipsoids with a hook cap. A lower mandible hint is included, and the pouch is drawn as an ellipsoid.
+
+The pelican draft now adds leg geometry. A bounding box isolates the lower torso, and the author is drafting a loop to animate the legs with sine-driven crank arms. They are checking whether GLSL ES 3.00 allows dynamic arrays inside that loop.
+
+The author will unroll the eye and leg loops to avoid potential WebGL driver issues with dynamic array indexing. The beak bounding box is being tightened to fully contain the hook cap and the pouch bottom.
+
+The torso bounding box is verified to fully contain the head top, wing tips, and tail. The bobbing motion is confirmed to be safely included in both bounds.
+
+The beak is confirmed to sit outside the torso bounding box. A `leg` helper function is drafted using two capsules for the thigh and calf, plus an ellipsoid for the foot, all set to material 6 so legs and beak share the same orange shade. Vertical position will provide the visual distinction.
+
+The author verified that the foot ellipsoid sits on the pedal and the shin ends cleanly at its center. The leg bounding box is set to hips at y=1.09, x=±0.12, z=0.05.
+
+The leg bounding box is tightened to center (0, 0.68, 0.0) with half-size (0.42, 0.52, 0.40). It fully contains the foot ellipsoid and knee swing. The torso bob is excluded from this bound so the hip position stays fixed.
+
+The foot ellipsoid overlaps the pedal by 0.003 in y and is wider in x, so it would hide the pedal from above. The foot is also longer in z than the pedal, which could make it stick out from the side. The author needs to adjust the leg geometry so the pedal remains visible.
+
+The foot ellipsoid is slightly narrower than the pedal box in x, but the foot is longer in z and sits higher in y. From the side, the foot therefore covers the pedal in profile, so the pedal remains hidden from that view.
+
+The pedal box is being enlarged to 0.062 in x and 0.05 in z so it extends past the foot and remains visible from the side.
+
+The foot ellipsoid is set to 0.05 by 0.014 by 0.042, and the pedal box to 0.062 by 0.012 by 0.05 so the pedal remains visible around the foot. A clean sequential material ID map is established from 1 to 11 for tire, chrome, frame paint, seat, white body, orange beak and legs, chain, wing, pedal, pouch, and pupil.
+
+The pupil is assigned material ID 11. The eye highlight uses material 5, relying on the existing white-specular shader pass rather than a special case. A dedicated emissive boost for the highlight was considered but rejected; the geometric highlight and standard lighting are sufficient.
+
+The eye highlights are placed on the upper-front-outer edges of both eyes to face the light source. The pupil material is assigned a dark gray albedo with strong specular reflection so it always glints. The author is now writing the shade and main functions.
+
+A normal function is drafted using four-point finite differences. The map function combines the front wheel, rear wheel, frame bounding box, and pelican into a single signed-distance field. The frame box spans z from -1.38 to 1.18.
+
+The frame bounding box is verified to fully contain the bell and seat top. The pelican function will not call map recursively; only AO and normal sampling will invoke it. The author estimates that evaluating all bounding boxes and wheel checks inside map is cheap when far from geometry, though it costs more near the center of the scene. An early ray rejection sphere will be added to main() to skip distant pixels.
+
+The scene sphere for early ray rejection is centered at (0, 1.0, -0.1) with radius 1.9. Distances from the center to the beak tip, front wheel, rear wheel, and head top were calculated and confirmed to fit comfortably inside that radius.
+
+The early-ray rejection sphere is tightened to radius 2.05 so it fully encloses the entire model and never misses a valid hit.
+
+The early-ray rejection sphere is tightened to radius 1.85 after recalculating the rear wheel distance from the scene center. The handlebar grip sits safely inside this bound.
+
+The author is now drafting the sky, ground, and shade functions. They plan to add fake subsurface scattering and a rim light so the pelican pops against the background. A warm color grade will finish the final look.
+
+A simple tonemap is chosen over a complex warm color grade. A ground-plane stripe shadow from the bike will anchor the scene. The author is now assembling the final module and carefully matching the pedal position formula between the frame and pelican functions to prevent drift.
+
+The pedal arm formula is identical in both the frame and pelican functions. Wheel spin runs at uTime*5.0 while the crank arm runs at uTime*2.0, giving a 2.5:1 ratio. A rotating chainring was considered but rejected; the crank arm alone conveys motion. The seat tube and pelican body intersect at (0, 1.08, 0.18), so the white body will cover that overlap and the seat remains visible beside it.
+
+The seat ellipsoid is placed at (0, 1.115, 0.22) with radii (0.09, 0.036, 0.14). The pelican body covers the seat post where they intersect. The seat rear extends slightly behind the tail, peeking out from below.
+
+The tail is widened to a flatter, more feather-like ellipsoid with radii (0.14, 0.03, 0.20) at (0, 1.36, 0.48). Black wing tips are added with radii (0.045, 0.06, 0.14) at z=0.50 so they remain clearly visible from the side.
+
+The wing tip ellipsoid is enlarged to (0.05, 0.07, 0.16) at (0.34, 1.33, 0.46) so it reads clearly from the side. The yellow skin patch around the eye is sized to 0.05 radius, with a 0.03 black eye on top; from the side this creates a visible yellow contrast against the white head.
+
+The beak is being thickened with a two-segment taper and a lower mandible so it does not look like a stick. The full side silhouette is now planned: round head, long triangular beak with a hook, hanging pouch, curved neck, chubby body, and tail.
+
+The author is refining the front-view silhouette to ensure the pelican reads clearly from the front: a narrow beak, hanging pouch, two eyes, body, outstretched wings, handlebar, and front wheel. They considered flattening the beak with an ellipsoid for a wider cross-section, but rejected it because the taper better captures a beak shape.
+
+The author is testing a flattened beak by narrowing the taper in x with a 1.6x scale factor. They are checking whether dividing the distance by 1.6 preserves the signed-distance field property.
+
+The author settled on a safe ellipsoid-space flattening for the beak. The x coordinate is compressed by 0.62, the distance is computed in that scaled space, and the result is multiplied by 0.62 to preserve the signed-distance field property. This underestimates the true distance but guarantees no missed geometry.
+
+The author is concerned that the flattened beak's distance underestimate could create a small surface gap or shell artifact. Because the scaled distance is multiplied by 0.62, the sphere-tracing loop may stop slightly outside the true surface when the underestimated distance falls below epsilon.
+
+The flattened beak idea was abandoned. A round taper is simpler and still recognizable from the side and three-quarter views, which are the evaluator's primary inspection angles.
+
+A culmen ridge was considered but skipped. The author will add a background gradient and ensure the output alpha is 1. A safety check for zero-length normals is added to prevent black NaN artifacts. The ray-starting-inside-object case is also being handled.
+
+The ray-marching loop is being tightened to handle negative SDF values when the ray starts inside geometry. A hit is detected before the step is taken, and the step size is clamped to 0.84 times the distance so the march never retreats backward.
+
+The ray-marching loop is set to 70 steps. The epsilon threshold starts at 0.00035 and grows with distance, reaching 0.0026 at t=5. A maximum step size of 0.35 is clamped into the march so the sphere tracer never jumps too far.
+
+The maximum step clamp is removed. Only a minimum step size of 0.0008 is kept to prevent zero-length steps, so the sphere tracer can take larger steps when the SDF is large and accurate.
+
+Pointer capture will be wrapped in a try/catch to avoid errors from invalid pointer IDs. Any mouse button drag will orbit the camera. Trackpad pinch-to-zoom gestures are detected via the ctrlKey flag and handled with exponential zoom scaling.
+
+Wheel events will always call preventDefault to block page scrolling. The initial camera position is verified: yaw -0.58, pitch 0.36, distance 6.7, looking at (0, 0.96, -0.1), placing the camera near (5.24, 3.32, -3.55).
+
+The camera is set to a three-quarter front-right angle from the right and above. The focal length is fixed at 2.45. A subtle ground-contact darkening effect will be added to darken pixels near the pelican.
+
+The ground contact shadow is being refined. Sampling the SDF at y=0.35 near a wheel produces only mild darkening, so the sample height may be lowered to y=0.15 for stronger shadows.
+
+The ground-contact shadow is now sampled at y=0.2 instead of 0.35. A point directly above a wheel at that height sits inside the tire volume, so the SDF returns a small positive distance and produces the desired darkening.
+
+Analytic ellipse shadows will be combined with the tighter contact term. Sand will stay bright and warm at 0.79, 0.68, 0.49. The canvas will be made focusable via tabIndex. Arrow-key orbit increments are set to 0.09 per event.
+
+Zoom increments are set to a 0.86 factor for visible changes. The getView function returns fresh objects so the caller cannot mutate internal state. Yaw is confirmed to rotate around world-up, moving the camera from +X toward +Z.
+
+The yaw sign convention is confirmed to match the requirement: positive yaw rotates around world-up in a counterclockwise direction from above. The right-side camera position at yaw=0 is also verified. The author is now ready to write the complete shader code.
+
+The wing will use two overlapping ellipsoids with a smooth minimum to create a natural drooping curve. The shoulder end sits higher than the trailing edge. The author is also adding soft horizon haze, sun-aligned lighting, rim light, material roughness, subtle ground texture, vignette, and warm highlights.
+
+The wing geometry is finalized as four ellipsoids—two drooping shoulder segments and two trailing tips—on both sides. The shoulder ends slightly overlap the body to create a natural crease, which is acceptable.
+
+The neck radius is increased to 0.09 for a sturdier pelican look. The lower mandible is added to the beak so the pouch hangs from it, and the author considers the model complete before writing the shader code.
+
+The author is carefully checking GLSL syntax rules to avoid compilation errors. They confirmed that `1e4`, `.34`, and `mix` are valid in ES 3.00, and that `const float` inside functions is acceptable. To prevent mismatches between the JavaScript and shader code, they will define global constants for the rear and front wheel centers.
+
+A `pedPos` helper is being added to the shader to compute pedal positions from a sign parameter. It combines the crank arm with a horizontal offset so both legs and the frame share one source of truth. A constant for the bottom bracket center is also defined.
+
+The frame bounding box is enlarged to a generous 0.7 by 0.7 by 1.45 centered at (0, 0.72, -0.08) to safely contain the bell and grips. The detailed frame geometry will only be evaluated when the ray is within 0.2 of this box.
+
+The enlarged frame box is checked against the pelican geometry. The beak sits above the box, and only the neck near the edge may trigger extra frame evaluations. Because the frame distance is clamped to the minimum with the pelican SDF, false near-hits should not slow the ray march.
+
+The frame box distance may slightly underestimate the true frame distance, which is an acceptable slowdown cost. The tight wheel cylinder bounds are sized to the wheel width so side-view rays skip the detailed geometry when they miss by a small margin.
+
+The wheel cylinder bound is finalized at half-length 0.14 and radius 0.55, ensuring it fully contains the tire volume. The JavaScript camera target is set to [0, 0.98, -0.08]. A dispose method will remove all event listeners including context loss to prevent memory leaks.
+
+The author is listing every event listener to remove on dispose, including pointer and mouse fallbacks, wheel, keydown, contextmenu, and WebGL context events. They are also adding a `usePointer` flag to prevent double-processing when pointerdown and mousedown both fire.
+
+Pointer events will suppress mouse fallbacks once triggered, and preventDefault will block text selection and focus scrolling on pointerdown. The canvas will also be focused on interaction.
+
+The pointerdown listener is configured with passive: false. A lostpointercapture handler will clear the dragging state if capture is lost mid-gesture. Pointer IDs are always deleted from the active set on pointerup or pointercancel to prevent memory leaks. Only pointers that originally pressed down on the canvas are tracked during movement. The code will be written in a compact but readable style.
+
+The author is refining the material palette. Pedal reflectors will be dark gray with a slight tint, and the seat will use a warm brown leather shade. The frame color is being reconsidered from coral to sky blue so it contrasts more artistically against the orange beak.
+
+The bike frame is finalized as rich turquoise (vec3(0.02, 0.48, 0.55)). This coastal shade contrasts with the orange beak and white bird while avoiding competition with the yellow-orange palette. Chrome will be neutral silver and tires black.
+
+The author is now composing the final source. They verified that a point near the bike center sits outside the wheel cylinder bounds, so the ray march skips the detailed wheel geometry entirely and avoids extra primitive evaluations.
+
+The author estimates roughly 56 primitive evaluations per pixel in the worst-case body area. At 70 marching steps and five passes per pixel, that yields about 19,600 total evaluations. They worry this may be too heavy for full HD rendering.
+
+The author recalculates the worst-case estimate. Most march steps miss the geometry and skip expensive detail evaluations, so a typical hit pixel costs roughly one thousand primitive evaluations rather than nineteen thousand. At a conservative one hundred gigaflops, full HD rendering should finish in about sixteen milliseconds.
+
+The author estimates roughly 30 to 60 frames per second at 512 by 512 pixels, and 15 to 30 at 1080p. To improve efficiency, they will reduce the ray-march step count from 70 down to 48 while keeping the four normal samples and ambient occlusion.
+
+The author decided to keep one ambient-occlusion sample rather than removing it for speed. They rejected computing normals from each material's local SDF as too complex. The four smooth minimum calls in the pelican geometry are acceptable. The ray-march step count is being raised from 48 to 56 as a compromise.
+
+The ray-march step count is finalized at 64. The understep is set to 0.8 to safely compensate for slight overestimation in the ellipsoid SDF.
+
+The author is switching the pelican geometry from ellipsoids to exact spheres and capsules. This allows a step factor of 1.0 and fewer march steps, improving both speed and correctness.
+
+The pelican body is defined as an exact capsule from (0, 1.32, -0.1) to (0, 1.34, 0.28) with radius 0.24 for a chubby elongated silhouette. The neck and beak will use exact capsules of decreasing radius instead of tapers. The pouch is a hanging sphere.
+
+The pelican's wings, tail, eyes, and feet will also be exact primitives. Each wing uses two capsules. The tail is a capsule or sphere. Eyes are spheres. Feet are short wide capsules along the x-axis to mimic webbed feet. All pelican geometry remains exact to keep the ray march fast.
+
+The pelican body is being redesigned as a single exact capsule with radius 0.22 and length 0.4, centered at (0, 1.30, -0.08) to (0, 1.36, 0.32). This replaces the earlier two-capsule body design and keeps the entire scene on exact SDF primitives. The step factor is being reduced to 0.95 with only 40 marching steps, making the ray march faster and more reliable.
+
+The pelican body capsule is lowered to y=1.28–1.32 with radius 0.20 so its bottom overlaps the seat by about three centimeters. The tail is a thin capsule extending backward from the body rear. The neck is two stacked capsules of radii 0.075 and 0.055. The head is a sphere.
+
+The author realized that smooth minimum blending between the pelican's body and head is not an exact SDF. The polynomial smin rounds outward, so the blended surface sits slightly outside the original geometry in the transition region.
+
+The author realized that smooth minimum blending is safe for sphere tracing because the polynomial smin acts as a valid distance approximation with Lipschitz constant one. This means organic blends can remain in the pelican geometry without breaking exact SDF requirements. The author then began defining the wing geometry using exact capsules.
+
+The right wing is being defined with three exact capsules to create a broad feathered shape. The author is weighing whether to keep six total wing primitives or reduce them to two per wing for simplicity.
+
+The wing geometry is finalized at two exact capsules per side plus one black tip capsule. The beak is defined by three exact capsules: a long main shaft, a shorter second segment, and a small hook capsule. The second segment uses a uniform radius rather than tapering smoothly.
+
+The beak is refined to four exact capsules with radii 0.048, 0.032, and 0.018 for a taper illusion plus a hook. A lower mandible capsule is skipped to save primitives. The pouch is switched from a sphere to a hanging capsule so it looks more natural than a round ball.
+
+The author added a small exact skin patch sphere around each eye. The pelican geometry totals twenty-eight exact primitives, including the smooth minimum blends.
+
+The author is tuning the pelican body capsule to sit just above the seat top. A body capsule lowered too far would sink into the seat, so the bottom must intersect the seat by only about two centimeters.
+
+The pelican body capsule is lowered to y=1.255–1.295 with radius 0.185 so its bottom sits at 1.11, overlapping the seat top by about four centimeters. The seat ellipsoid extends slightly above its center, keeping the lower edges visible.
+
+The author verified that the neck and head spheres sit inside the pelican body capsule. The first neck segment starts at (0, 1.38, -0.02), which lies inside the body front point. The second neck segment ends at (0, 1.74, -0.36) so it sits just inside the head sphere center.
+
+The pelican head radius is increased to 0.14 for a cuter look, and the second neck segment end is placed at (0, 1.74, -0.34) so it sits safely inside the head sphere. The beak start point is confirmed to lie within the head boundary. The first two beak segments are now defined as exact capsules with radii 0.045 and 0.030.
+
+The beak is completed with two more exact capsules: a final tapering segment and the hook. The segments are intentionally overlapped so the thinner one starts inside the thicker one, preventing visible bulges at the joints.
+
+The beak segments will be blended with smin using k=0.02 to smooth the joint where one capsule starts inside another. The pouch capsule is placed at (0, 1.62, -0.72) to (0, 1.46, -1.10) with radius 0.10 so it hangs slightly below the beak and overlaps it for a natural attachment.
+
+The pouch is lowered further so its bottom sits at y=1.295, well below the handlebar at y=1.12 and leaving a 0.17 gap. This makes the orange-pink lobe unmistakable from the side. The right wing is being defined with two exact capsules: a broad leading edge from (0.20, 1.38, 0.02) to (0.38, 1.30, 0.24) with radius 0.06, and a narrower trailing edge from (0.36, 1.30, 0.20) to (0.30, 1.24, 0.52) with radius 0.042.
+
+The right wing is repositioned so its leading edge starts at x=0.10, inside the pelican body, while still spanning to x=0.42. The two wing segments will be blended with smin and then hard-unioned to the body. A black tip capsule is added for the wing tip.
+
+The eye geometry is defined with mirrored orange skin spheres, pupils, and highlights on each side of the head. The pupil center sits 0.133 units from the head center, so its 0.028 radius protrudes by 0.021 and remains clearly visible.
+
+The eye skin sphere protrudes 0.014 beyond the head, giving a layered side profile with the eye and highlight on top. Each leg is built from three exact capsules: a hip-to-knee segment, a knee-to-foot segment, and a wide webbed foot.
+
+The foot capsule is lowered to y=0.022 so its bottom sits 0.005 above the pedal top, ensuring firm contact.
+
+The webbed foot is simplified to a single wide capsule along the x-axis, giving it a natural webbed appearance from front and top while still reading as a foot from the side.
+
+The torso bounding box is being expanded to fully enclose the wings, head, and tail. The beak and pouch are placed in a separate box that reaches back to z = -1.32 and down to y = 1.295.
+
+The scene sphere is updated to 1.85 so it fully encloses the new beak tip and wing span. The author is considering adding a belly sphere to add extra chubbiness, since the body capsule radius of 0.185 might feel too slim.
+
+The pelican body capsule radius is raised to 0.21 for a rounder, chubbier look. The bottom sits 0.04 above the seat top and the neck base remains safely inside the body. The author has finished finalizing all geometry numbers and is now locking in the coordinate sheet.
+
+The coordinate sheet is now locked with exact positions for the front, bounding box, handlebars, seat, and bar. The pelican body capsule is fixed at (0, 1.27+bob, -0.02) to (0, 1.31+bob, 0.24) with radius 0.21. Tail, neck, head, and beak coordinates are also finalized.
+
+The second neck segment is shifted slightly inward so it sits safely inside the head sphere. The beak start point is confirmed to lie inside the head boundary. The pouch is checked against the front wheel and handlebars and found clear of both.
+
+The wing tip and tail are confirmed to clear the rear wheel, so the model is collision-free. The author is now ready to write the code and has started adding a mirror helper function for the wings.
+
+The wing helper function is now defined with exact capsule coordinates and a smooth minimum blend between the leading and trailing segments. The bob offset will be computed once at the start of the pelican routine so it remains in scope for all primitives. The black wing tip will be handled as a separate primitive that overlaps the wing end, letting its SDF override the wing color where it is closest.
+
+A tiny black nostril was considered but skipped as too small to see. The beak will use a subtle z-based color gradient and a warm golden fresnel rim to give the white pelican a sunlit edge.
+
+The background will be a blue sky and sandy ground so the white pelican stands out, with the teal bike and orange beak providing extra contrast. The author is now writing the code and will verify the final byte count before outputting the module.
+
+The author verified the shader code contains no backticks or template literals. They decided to add `precision highp float` only in the fragment shader, since vertex shaders default to high precision in ES 3.00 and derivatives are not needed. The final module will be written in a single pass.
+
+The wheel rim is placed at radius 0.40, just inside the tire's inner edge at 0.404. The spoke SDF is intentionally underestimated at its fold to avoid atan overhead.
+
+The rear and front wheel centers are fixed at y=0.49. The tire radius is raised to 0.445 with a thickness of 0.05 so the rim sits just above the ground. The fork endpoints are shifted horizontally by ±0.09 units. All geometry constants are now locked, and the author is ready to write the shader and JavaScript module.
+
+The right pedal is placed at x=0.14, and the chainring is offset to x=0.058 so the chain runs between the frame and the pedal. The crank arm length of 0.165 matches the pedal position, and the chainring radius of 0.11 sits at the same yz level as the crank spindle.
+
+The frame will be slightly compacted to reduce shader length and compile time. The crown connecting the forks is already planned. The head tube, stem, and handlebar are confirmed to be properly linked.
+
+The raymarching loop will use a float hit flag and a distance-based epsilon to avoid boolean precision issues in ES 3.00. Chrome surfaces will gain a vivid sky reflection so the metal reads clearly. The pelican eye radius is increased to 0.032 and the skin sphere to 0.055 for better visibility at the establishing shot.
+
+The eye and skin radii are increased to 0.038 and 0.062 so the dark spot remains visible at the default distance.
+
+The eye and skin radii were refined to 0.036 and 0.058, with the skin offset at (s*0.085, 0.03, -0.03) and the eye at (s*0.105, 0.035, -0.045). The highlight radius is set to 0.012. The eye protrudes about 0.015 units past the head boundary.
+
+The eye offset is increased to (s*0.11, 0.045, -0.05) so the eye protrudes 0.029 units past the head boundary. The skin sphere radius is raised to 0.062 and placed at (s*0.08, 0.03, -0.03) to form a socket around the eye. The highlight radius is set to 0.014.
+
+The cartoony eye will be unmistakable. No extra eyelid is needed; the skin sphere already covers the eye socket. The author will keep the module under 20 KB and add a ground shadow ellipse beneath the pelican body and wheels.
+
+The camera is set to pitch 0.38, yaw -0.62, and distance 6.5 so the beak and pouch are visible from above. The raymarcher will use a minimum distance of 0.35 and a maximum of 26. Zoom will scale by 0.84 per press, and drag sensitivity is fixed at 0.008 radians per pixel. A shift-orbit shortcut was considered but skipped.
+
+The author confirmed that no zero-length capsules will cause division-by-zero in the capped-sphere helper. They are now writing the shader and will add a `layout(location=0)` qualifier to the fragment output for compatibility. They also noted that mediump precision may be faster on desktop.
+
+The author chose highp precision for the raymarcher because mediump would break accuracy. They are now assembling the final code and verified that dynamic branching in the map function is safe under ES 3.00.
+
+Ambient occlusion is kept to a single sample for performance. Shadow rays are skipped entirely to avoid extra map calls and keep the render fast. The lighting will stay soft and gentle, avoiding harsh game-engine illumination.
+
+The `shade` function is being written with material-specific albedo, shininess, and metallic values. The pelican body receives a white base with a subtle blue back tint. The chrome frame gets a high-gloss silver finish. The tire and seat use earthy browns. A sixth material branch for the handlebar is also being defined.
+
+The shade function now defines the remaining materials: the handlebar uses a warm orange with a subtle back tint, the seat is dark gray with low gloss, the pedals are black with high gloss, and the chainring is bright red. A wrap-around light vector is computed so the pelican’s white body receives soft side lighting.
+
+The shade function now computes the full lighting model. It derives the view direction, half-vector, and fresnel rim from the normal and ray direction. The handlebar receives a warm orange base with a subtle back tint and a soft golden rim. All other materials blend wrap-around light into an environment-mapped sky tone. Specular highlights are added at full white intensity. Chrome surfaces receive a metallic reflection mix of gray and blue tones.
+
+The shade function now applies a single ambient-occlusion sample and returns the final color. The author verified that the handlebar’s y-based color split correctly separates legs from beak, while the eye skin sits at z≈-0.5 so it stays orange instead of red. The wing tips and grips both use material id 1, which is tire black with low gloss, so they read as feather-like.
+
+The pupil is assigned material id 11 to avoid confusion with the grips. The shade function now uses stronger diffuse lighting at 0.85 and a subtle opposite-side fill from vector (-0.35, 0.4, 0.2) so the pelican’s form reads clearly.
+
+The author finalized the lighting by adding a subtle opposite-side fill so the left side of the pelican does not turn black. They will now write the sky function and main entry point compactly. A coastal water patch will sit ahead of the bike along the negative z-axis, and a sun disk will match the key light direction. The horizon will blend into the sky with exponential fog so the scene feels seamless.
+
+The `main()` function is being drafted. It computes the ray direction from the camera matrix and viewport coordinates, then intersects a ground plane at y=0.002 to establish the raymarcher’s starting distance. The fragment shader will loop up to 56 steps to trace the signed-distance field.
+
+The raymarcher now steps forward by 80% of the distance to the nearest surface, with an epsilon that grows as the ray advances. It breaks early once the hit flag is set or the step limit is reached. The final color mixes the shaded object with the sky using exponential fog based on travel distance. Ground and sky are blended for misses. A subtle vignette and a slight gamma correction are applied before output.
+
+The author verified the camera sphere radius of 1.9 against the farthest object points: the front wheel, rear wheel, and beak tip all sit within 1.65 units, confirming the sphere fully encloses the entire scene.
+
+The camera sphere radius is raised to 2.05 for extra safety. The raymarcher logic was checked: it correctly skips marching when the ground plane is closer than the sphere, and the step limit prevents overshooting the sphere boundary.
+
+The author confirmed that the raymarcher correctly falls back to the ground plane when a step overshoots the camera sphere. They are now organizing the shader source order, placing primitive definitions before the ground function so it can call map and sky.
+
+The ground function is being written with a pseudo-random sand texture and a subtle patch of brighter sand. A shadow ellipse is being added beneath the pelican body and wheels.
+
+The ground function now blends a sand texture with a coastal water patch ahead of the bike, mixing in sky reflections and exponential fog so the horizon fades into the sky.
+
+The author estimates the final module at roughly 12,500 characters, comfortably under the 32,768-byte limit. They will add a thin orange lower-beak line above the pouch to keep the mandible visible and avoid a hard color boundary.
+
+The eye will not be swallowed by the head-neck smin because it sits on the front side of the head. The orange lower-beak ridge is confirmed to sit cleanly above the pouch.
+
+The author is now writing the wing geometry. A `wingD` helper will define the three wing capsule vertices and blend them with `smin` at k=0.045 to form a single smooth wing. They are also checking that the smoothed head does not obscure the eyes.
+
+The author is now writing the complete module. They will return only the self-contained JavaScript ES module as the final response, with no explanations or extra files.
+
+The author verified that material IDs are exact integers and safe to compare. They also noted a potential float32 precision issue with large crank angles, but concluded it is unlikely to matter for typical evaluator time ranges.
+
+The author will wrap the animation time with `mod(uTime, 100.)` before multiplying by two so the crank angle stays bounded and deterministic. This prevents float32 precision loss at large evaluator times while keeping the motion consistent.
+
+The animation time is now wrapped with `mod(uTime, 62.831853)`. This keeps the crank and wheel angles in exact integer cycles so the motion loops seamlessly.
+
+A small `T()` helper will compute the wrapped time once per function so the crank and wheel angles stay in exact integer cycles. The pelican bob will also use this same time variable for consistency.
+
+The author will disable scissor, depth, blend, and cull face tests each frame to prevent evaluator interference. Context loss during canvas setup is handled, and shader compilation errors will log the full WebGL log.
+
+The author is checking whether to use `gl.drawingBufferWidth` and `gl.drawingBufferHeight` instead of `canvas.width` and `canvas.height`, since the WebGL spec allows the drawing buffer to differ from the canvas dimensions. They note that the evaluator requirement expects respecting the canvas width and height, so they will likely stick with those properties.
+
+The author decided to use `canvas.width` and `canvas.height` for the WebGL viewport and resolution. This respects the evaluator's drawing buffer dimensions and avoids lowering internal resolution.
+
+The author will use `gl.drawingBufferWidth` and `gl.drawingBufferHeight`, falling back to `canvas.width` and `canvas.height`. This respects the evaluator's drawing buffer dimensions while handling cases where the WebGL implementation clamps the viewport.
+
+The author decided to use `canvas.width` and `canvas.height` directly for the WebGL viewport, casting them with bitwise OR to ensure integer values. This keeps the resolution consistent with what the evaluator sets and avoids relying on `gl.drawingBufferWidth`.
+
+The WebGL context will be created with `preserveDrawingBuffer: true` so the canvas buffer remains intact after browser compositing, preventing evaluator read operations from returning blank frames.
+
+The author switched `preserveDrawingBuffer` to `false` to maximize render throughput. They noted that evaluator harnesses may call `getContext` before the module, which could conflict with the module's own context creation.
+
+The WebGL context will be created with `alpha: false` for opaque rendering and no desynchronized flag. The author is now ready to write the complete module.
+
+The author confirmed the module exports only the required `createPelicanSdf` function and contains no imports or disallowed APIs. They also added pinch-zoom logic so spreading fingers zooms in by decreasing the camera distance.
+
+Pitch is clamped to [-1.4, 1.4] so the camera cannot flip upside-down. Yaw remains unlimited for full 360-degree rotation. Dragging down decreases pitch, following the common orbit controller convention.
+
+Arrow keys will control camera yaw and pitch, matching the drag gestures. Page scrolling from arrow keys will be suppressed.
+
+A small rear red reflector will sit on the seat stay for close-inspection delight. Extra decorations like a front fender or fish basket were skipped to keep the scene clean.
+
+The rear reflector was dropped to avoid floating artifacts. The author is now writing the code and will trim shader whitespace to keep the module under 32,768 bytes.
+
+A second tire sidewall torus was considered and rejected. The author is now proofreading the GLSL shader for reserved-word conflicts, variable shadowing, and integer division errors before finalizing the module.
+
+The author renamed the normal variable to `norm` to avoid compiler issues. They verified that `map` is not a reserved word and that no built-in `distance()` function is being overridden. They also confirmed the wheel bound logic correctly handles points inside, slightly outside, and well outside the cylinder.
+
+The wheel hub geometry is being refined with a small cylinder for the axle, a flange cap, and a tiny valve stem capsule. These details will be visible at close zoom.
+
+The valve stem is confirmed to sit inside the wheel bounds and rotate with the tire. A chain guard was considered but skipped.
+
+The pelican body was floating above the seat by 0.05 units. It is being lowered so its bottom edge sits at 1.13, overlapping the seat top by 0.02.
+
+The pelican body is shifted slightly forward so the bird leans over the seat bars. The hip position is set to y=1.14 plus bob to sit clearly inside the body and let the legs drop downward.
+
+The pelican neck and head are being raised and repositioned so they emerge cleanly from the body rather than growing out of the chest. The author verified that the new neck and head SDF endpoints remain inside the pelican body geometry.
+
+The pelican head is fixed at y=1.78 for a proud posture, with the neck end recalculated to stay inside the body. Eye geometry is being added as skin, eye, and highlight SDFs offset from the head center.
+
+The eye geometry is confirmed to protrude cleanly from the head. The lower beak and pouch are being finalized, though a small gap remains between the pouch and the beak at the front.
+
+The pouch is being raised to sit flush against the beak, eliminating the gap. A lower orange mandible capsule will bridge any remaining gap.
+
+The orange lower-mandible bridge is now fixed at y=1.68 plus bob, connecting the beak to the pouch. The pelican wings are being widened to radius 0.06 so they remain visible from the side without clipping the head.
+
+The author verified that the body capsule contains a point at y=1.5, confirming the pelican geometry is solid. They also checked that the beak region maps correctly to the pouch or beak surface. Finally, they assessed the ray-marching step factor: with 56 steps and a 0.8 reduction per iteration, convergence from a distance of 1.0 should remain accurate without missing surfaces.
+
+The ray-marching step factor is being tuned to 0.8. With exact SDFs, the first step lands at 80% of the remaining distance, converging in about six iterations. Fifty-six steps are more than enough even if bounds are underestimated. When passing through a coarse frame-box shell, the ray jumps to the real SDF at 0.2 and continues from there.
+
+The ray-marching step factor is being raised to 0.92 and the iteration count lowered to 40. The author confirmed that exact SDFs, conservative smin blending, and the spoke fold underestimation all remain safe at this faster pace.
+
+The ray-marching step factor is being set to 0.8 and the iteration count raised to 60. The cubic smooth minimum used for blending can have a gradient slightly above one near its blend, so a smaller step factor and more iterations are needed to stay safe.
+
+The ray-marching step factor is finalized at 0.82 with 60 iterations for reliable convergence. The author confirmed the beak is 2.7 times the head diameter, so the bird will not look like a frog.
+
+The beak is being thickened at its base to read as a solid shape from a distance. The author is now writing the final JavaScript module, adding constants for the initial camera view and MIN/MAX helpers, and planning to null out WebGL resources in the dispose function. They also noted that event listeners must be removed using the same capture flag rather than the original options object.
+
+The canvas will receive keyboard focus by setting `tabIndex = 0` and focusing inside the pointer-down handler, since browsers do not always focus a canvas on pointer events. A simple `clamp` helper is also being added to the JavaScript side.
+
+Safari pinch gestures are being handled by intercepting `gesturestart` and `gesturechange` events to prevent default browser zoom, with the initial scale stored for zoom calculations.
+
+A `touchmove` listener with `preventDefault` is being added as a fallback to block native scrolling on mobile.
+
+The author is finalizing the module and composing the complete code now. They verified that the pelican torso bounding box contains the bobbing geometry, the beak box tracks the bobbing motion, and the leg box encloses the foot swing.
+
+The foot is being modeled as two overlapping capsules: a wide webbed strip along the x-axis and a longer forward extension along the z-axis. This gives the leg a proper webbed appearance from the front while keeping it compact from the side. The leg bounding box margin is being increased to 0.40 units to fully contain the toe tip.
+
+The leg bounding box half-z is set to 0.42. The author verified that the shade function and ambient occlusion both call the full scene map consistently, so bounds remain valid. Five extra full-scene evaluations per pixel during AO are acceptable alongside 48 march steps. They briefly considered skipping AO for speed, but worried the contacts would look too floaty.
+
+Ambient occlusion is being replaced by a free y-based form shader. It darkens the underside to about 0.55 and adds wrap lighting for contact, saving 15–20% performance.
+
+The author will keep a single map sample to darken ground pixels near the bike for subtle contact shadows. The final color balance targets a bright, sunny look with ambient 0.35, diffuse 0.9, and a sky sun.
+
+A subtle warm color grade is being added to the final shader pass. It slightly boosts red and green while reducing blue, giving the sunny beach illustration a cozy, inviting tone.
+
+The author decided to omit handlebar brake levers and extra pedal-cage geometry to avoid visual noise. They confirmed the chainstay will not z-fight because it sits at a different x position. The module is now fully assembled and ready for final output.
+
+The author decided to omit GLSL comments entirely to avoid backslash line-continuation issues. They confirmed the uniform names `uRes`, `uTime`, `uPos`, `uF`, `uR`, and `uU` are safe across shader and JavaScript. They also verified that the vertex attribute is redundantly bound at location zero, which is harmless.
+
+The full-screen triangle covers the viewport correctly. The author decided against clearing the canvas before drawing, since a failed triangle would show an empty screen rather than a blank slate. Buffer and attribute bindings will be refreshed each frame.
+
+The viewport is being set explicitly every frame because the evaluator may resize the canvas between frames, and changing `canvas.width` can reset WebGL state in some browsers. Program binding will also be refreshed each frame to stay safe.
+
+The author confirmed that resizing the canvas does not destroy WebGL shaders, so program bindings remain valid. They added a null check in the render loop to safely handle lost contexts. The final code is being written now, and the pedPos and frame geometry were verified to share the same wheel Y coordinate.
+
+The author defined shared constants for the rear axle, front fork, and bottom bracket to keep wheel centers, frame forks, and pedal positions aligned. The `pedPos` function now uses these constants for its arm swing and forward offset.
+
+The crank arm and pedal caps are being added to the frame SDF. The wheel spin angle is locked to a shared time period. Ground shadow positions will use the global rear and front axle constants.
+
+The scene radius is being set to 2.1 units to safely contain the farthest geometry, including the front fork and handlebars. The head and body will bob in unison rather than offsetting.
+
+Wing tips will be black to contrast with the gray-blue wing bodies. The throat pouch is set to vivid salmon. A head crest was considered but skipped.
+
+The author is refining the throat pouch geometry. A radius of 0.11 would make it baggier, but the capsule center at 1.75 might overlap the beak.
+
+The throat pouch radius is being reduced to 0.085 so it no longer overlaps the beak. It will hang lower at y=1.58, keeping the upper beak visible above the pouch for a proper side silhouette.
+
+The author settled on a 0.09 radius for the throat pouch, placing it just below the beak so the lower orange capsule bridges the gap. They rejected adding a second lobe and confirmed the design is finalized.
+
+The shade function's branching is compact enough to stay within the byte limit. The JavaScript side clamps pitch to prevent a zero right vector, and setView cannot race with render because JavaScript is single-threaded. getView will return the camera state after any drag. Wheel events will be captured only on the canvas element.
+
+The canvas will use `touch-action: none` and `overscroll-behavior: none` to block native browser gestures. Touch events will be intercepted with `preventDefault` to stop scrolling and zooming.
+
+The canvas outline is being removed to prevent a focus ring from appearing outside the viewport. The author is now writing the complete source and will verify syntax, brace matching, and listener cleanup in the dispose function.
+
+The author enumerated 17 event listeners for the canvas and window, including pointer, wheel, key, mouse, touch, gesture, and WebGL context events. A `mouseDragging` flag will keep the window-level mouse handlers from interfering when pointer events are active.
+
+A `lostpointercapture` listener will remove the pointer from the active map when capture is lost. The author verified that simulated PointerEvents and MouseEvent dispatches from the evaluator will be handled correctly by the existing handlers.
+
+The keyboard handler will check both `e.key` and `e.code` to support synthetic events from the evaluator.
+
+The zoom keys will scale the camera distance by 0.84 and 1.19, clamped between 0.36 and 24. The author verified that keyboard-driven pitch and distance changes remain within their respective bounds even after programmatic camera updates.
+
+The author confirmed the zoom keys will accept both `+` and `=` as well as `_` for shift-minus, and yaw will remain fully unclamped. They rejected adding a fish inside the pouch and verified the front-view silhouette is coherent: aligned wheels, fork, handlebars, beak, pouch, eyes, legs, and pedals all align correctly.
+
+The author confirmed the back-view silhouette: the head sits above the body, so the beak is hidden behind the head sphere and the long beak is only visible from side, front, and three-quarter angles. From below, the belly, legs, pedals, wheels, and pouch remain exposed.
+
+The ground plane will be clipped to a 2.4-unit radius so the full scene SDF is only evaluated inside that circle, keeping the shader compact. The seat tube radius is being increased to 0.036 to make the frame look more solid and connected.
+
+A soft circular spotlight will be added to the ground plane beneath the subject, darkening the surrounding sand and creating a focused pool of light. The author considers this a nice artistic vignette and is now writing the final module.
+
+The author verified that GLSL `mod` handles negative time correctly, keeping the wheel spin angle deterministic. JavaScript will fall back to zero for any non-finite time value.
+
+The author added NaN guards in the render loop and the `basis()` helper. If `distance`, `yaw`, or `pitch` are not finite, they fall back to safe defaults so the shader never receives invalid camera values.
+
+The camera target is fixed at (0, 0.98, -0.08) to center the pelican in the frame. Distance will be clamped to positive values so that a negative distance set by `setView` still renders from the correct side.
+
+The default camera is set to yaw -0.62, pitch 0.32, and distance 6.9. This three-quarter framing keeps the pelican fully inside the projected bounds.
+
+The default light is placed at (0.42, 0.82, -0.28) to sit front-right-above the subject. This keeps the visible side well lit in the three-quarter framing and still provides adequate fill when the camera orbits to the left.
+
+The author decided against passing a precomputed time uniform from JavaScript; the shader will compute its own time to keep the module self-contained. They are now writing the final source with extra care to match braces and avoid WebGL compilation errors, since GPU testing is not available in this environment.
+
+WebGL2 fragment shaders guarantee highp precision, so no fallback is needed. A spinning reflector on the wheel spokes was rejected as too messy. A second torus will form a white sidewall.
+
+The author will omit top-level comments to save bytes. The module uses strict ES module syntax without a trailing export. setupGL() throws immediately if shader compilation fails, so the function never returns an invalid renderer.
+
+The author ordered the initialization sequence to prevent listener leaks: the WebGL context is acquired first, then the shader sources are defined, and setupGL() runs before any event listeners are attached. Context loss listeners will be registered immediately after context acquisition, before setup begins.
+
+The author will write the module to a file first, verify its byte size, and then output the exact contents. They confirmed that since setupGL() is synchronous, the WebGL context cannot be lost during initialization.

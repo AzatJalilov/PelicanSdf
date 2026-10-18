@@ -70,5 +70,9 @@
   "results/gpt-6-sol-xhigh-run-01.json",
   "results/gpt-6-sol-max-run-01.json",
   "results/gpt-6-luna-medium-run-01.json",
-  "results/gpt-6-luna-max-run-01.json"
+  "results/gpt-6-luna-max-run-01.json",
+  "results/deepseek-v4-1-flash-low-run-01.json",
+  "results/deepseek-v4-1-flash-high-run-01.json",
+  "results/muse-wonder-low-run-01.json",
+  "results/muse-wonder-high-run-01.json"
 ]

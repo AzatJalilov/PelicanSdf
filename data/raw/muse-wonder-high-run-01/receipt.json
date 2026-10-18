@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "id": "muse-wonder-high-run-01",
+  "model": "meta/muse-wonder",
+  "provider": "OpenRouter via pi SDK",
+  "accent": "#0b6e75",
+  "modelDisplayName": "Meta: Muse Wonder",
+  "reasoningEffort": "high",
+  "maxOutputTokens": 131072,
+  "harness": {
+    "name": "pi SDK",
+    "version": "0.84.3",
+    "surface": "pi-coding-agent createAgentSession (in-memory, no tools)",
+    "sandbox": "n/a",
+    "ephemeral": true,
+    "userConfigLoaded": false,
+    "projectRulesLoaded": false
+  },
+  "prompt": {
+    "path": "benchmark/prompt.txt",
+    "bytes": 3387,
+    "sha256": "cd21d5a8bb3956d82ab5650304e7e491063eacdb27dad85be6b4a845512f5e6b"
+  },
+  "response": {
+    "path": "data/raw/muse-wonder-high-run-01/response.txt",
+    "bytes": 16171,
+    "sha256": "c06911ac3d06145cac1890041878ec67c7d4d75bf54d9ef2103dab075ebddbaa",
+    "source": "text"
+  },
+  "thinking": {
+    "path": "data/raw/muse-wonder-high-run-01/thinking.txt",
+    "bytes": 1086,
+    "sha256": "32aad99c45048c79c9fe53ea576f5d1789dcc9eab385f60476affe37b2b99965"
+  },
+  "usage": {
+    "inputTokens": 752,
+    "cachedInputTokens": 0,
+    "reasoningTokens": null,
+    "outputTokens": 15327,
+    "totalTokens": 16079
+  },
+  "billing": {
+    "mode": "openrouter",
+    "apiCostUsd": 0.30954800000000005,
+    "note": "OpenRouter invocation via pi SDK; cost computed by pi from provider pricing (per-million-token rates)."
+  },
+  "startedAt": "2026-10-18T19:55:16.994Z",
+  "completedAt": "2026-10-18T19:57:32.967Z",
+  "durationMs": 135973,
+  "exitCode": 0,
+  "error": null,
+  "eventCount": 705,
+  "files": {
+    "events": "data/raw/muse-wonder-high-run-01/events.jsonl",
+    "stderr": "data/raw/muse-wonder-high-run-01/stderr.txt",
+    "thinking": "data/raw/muse-wonder-high-run-01/thinking.txt"
+  }
+}
