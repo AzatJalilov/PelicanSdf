@@ -1,0 +1,98 @@
+{
+  "id": "claude-opus-5-5-high-run-01",
+  "title": "Claude Opus 5.5 / high effort",
+  "model": "claude-opus-5-5",
+  "provider": "Anthropic via Claude Code CLI",
+  "status": "unverified",
+  "track": "one-shot",
+  "promptVersion": "1.0.0",
+  "promptSha256": "cd21d5a8bb3956d82ab5650304e7e491063eacdb27dad85be6b4a845512f5e6b",
+  "artifactSha256": "43be2f23faf493fe7cdbe9b9e2231ddceae0861aecd3309c545061561068c52f",
+  "createdAt": "2026-10-18",
+  "artifact": "../artifacts/claude-opus-5-5-high-run-01.js",
+  "description": "A white pelican with a pale-yellow beak, pink throat pouch, rosy cheek, and black wing tips, its wings reaching to the handlebar and tan legs on the pedals, riding a teal bicycle with black tires and silver spokes along a gray road with yellow center dashes through striped green fields.",
+  "accent": "#c4532d",
+  "generationHarness": {
+    "name": "Claude Code CLI",
+    "version": "2.1.302 (Claude Code)",
+    "surface": "claude -p --tools \"\" --setting-sources \"\" --strict-mcp-config --system-prompt <minimal> --output-format json (prompt piped byte-exact via stdin)",
+    "sandbox": "n/a (no tools available)",
+    "notes": "Fresh non-interactive invocation with a minimal replacement system prompt and CLAUDE_CODE_DISABLE_AUTO_MEMORY=1; no tools, skills, hooks, MCP servers, CLAUDE.md, or memory in context. This CLI version also injects an environment block (cwd, OS, git status) and the account email, which cannot be disabled (~674-token bare context probe vs 253 on 2.1.214)."
+  },
+  "generationUsage": {
+    "inputTokens": 2,
+    "cachedInputTokens": 1389,
+    "reasoningTokens": null,
+    "outputTokens": 88461,
+    "totalTokens": 90253,
+    "apiCostUsd": 1.7727138000000002,
+    "billingMode": "subscription",
+    "source": "data/raw/claude-opus-5-5-high-run-01/events.jsonl",
+    "notes": "Claude subscription invocation; total_cost_usd is the CLI's pricing estimate, not a separate API charge."
+  },
+  "validation": {
+    "state": "warnings",
+    "checks": [
+      "JavaScript syntax",
+      "static module and API inspection",
+      "prompt and response receipt hashes",
+      "WebGL2 compilation",
+      "initial composition",
+      "twelve canonical views",
+      "three close inspection views",
+      "three serial GPU timer-query trials",
+      "Focusable canvas",
+      "Fixed drawing-buffer resolution",
+      "Clean WebGL rendering",
+      "Context-loss handling",
+      "Listener cleanup and disposal",
+      "Pointer orbit",
+      "Wheel zoom",
+      "Keyboard camera",
+      "Two-finger pinch"
+    ],
+    "unmetRequirements": [
+      {
+        "requirement": "Coherent scene from every angle",
+        "evidence": "The ground shadow includes large box-shaped dark regions with straight cut edges beyond the rider's silhouette, clearest in level-03 (a parallelogram reaching right of the bicycle) and raised-03 (a rectangular slab behind it), and also visible in level-04 to level-07 and raised-01. map() (lines 117-128) returns the bounding-box distances of the frame, pelican and leg groups as geometry outside their 0.03 margin, and shd() (lines 131-136) uses those proxy distances in its 12*h/t penumbra term."
+      }
+    ],
+    "warnings": []
+  },
+  "metrics": {
+    "sourceBytes": 17274,
+    "initMs": 4124,
+    "gpuMsMedian": 0.88134,
+    "gpuMsP95": 1.04712,
+    "throughputFps": 1134.635895341185,
+    "timingMethod": "gpu-query",
+    "environment": {
+      "gpu": "ANGLE (AMD, AMD Radeon(TM) Graphics (0x000015BF) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "browser": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36",
+      "platform": "Windows",
+      "resolution": [
+        960,
+        540
+      ]
+    },
+    "environmentKey": "ANGLE (AMD, AMD Radeon(TM) Graphics (0x000015BF) Direct3D11 vs_5_0 ps_5_0, D3D11)|Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36|960x540",
+    "profile": "pelican-canvas-960x540-v1",
+    "sampleCount": 36,
+    "trials": 3,
+    "measuredAt": "2026-10-18T17:08:36.958Z"
+  },
+  "visual": {
+    "readability": null,
+    "completeness": null,
+    "coherence": null,
+    "craft": null,
+    "inspectability": null,
+    "reviewers": 0
+  },
+  "provenance": {
+    "generatorKind": "model-eval",
+    "method": "Fresh one-shot Claude Code CLI invocation; text-only with tools and skills disabled; added trailing LF",
+    "rawResponse": "../raw/claude-opus-5-5-high-run-01/response.txt",
+    "decoding": "reasoning effort: high; other decoding settings not exposed"
+  }
+}

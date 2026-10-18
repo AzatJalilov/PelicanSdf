@@ -1,0 +1,95 @@
+{
+  "id": "claude-fable-5-1-low-run-01",
+  "title": "Claude Fable 5.1 / low effort",
+  "model": "claude-fable-5-1",
+  "provider": "Anthropic via Claude Code CLI",
+  "status": "unverified",
+  "track": "one-shot",
+  "promptVersion": "1.0.0",
+  "promptSha256": "cd21d5a8bb3956d82ab5650304e7e491063eacdb27dad85be6b4a845512f5e6b",
+  "artifactSha256": "40c70023a7ef229adf0a371dc45f8074036c860afd1d7feaefff1ed2ac479cb1",
+  "createdAt": "2026-10-18",
+  "artifact": "../artifacts/claude-fable-5-1-low-run-01.js",
+  "description": "A white pelican with a black eye, long yellow beak, peach throat pouch, and white wings, with yellow-orange legs on the pedals, riding a red bicycle with silver spokes and dark tires over an olive-green checkered floor under a pale blue sky.",
+  "accent": "#a0457e",
+  "generationHarness": {
+    "name": "Claude Code CLI",
+    "version": "2.1.302 (Claude Code)",
+    "surface": "claude -p --tools \"\" --setting-sources \"\" --strict-mcp-config --system-prompt <minimal> --output-format json (prompt piped byte-exact via stdin)",
+    "sandbox": "n/a (no tools available)",
+    "notes": "Fresh non-interactive invocation with a minimal replacement system prompt and CLAUDE_CODE_DISABLE_AUTO_MEMORY=1; no tools, skills, hooks, MCP servers, CLAUDE.md, or memory in context. This CLI version also injects an environment block (cwd, OS, git status) and the account email, which cannot be disabled (~674-token bare context probe vs 253 on 2.1.214)."
+  },
+  "generationUsage": {
+    "inputTokens": 2,
+    "cachedInputTokens": 0,
+    "reasoningTokens": null,
+    "outputTokens": 18201,
+    "totalTokens": 19993,
+    "apiCostUsd": 0.94587,
+    "billingMode": "subscription",
+    "source": "data/raw/claude-fable-5-1-low-run-01/events.jsonl",
+    "notes": "Claude subscription invocation; total_cost_usd is the CLI's pricing estimate, not a separate API charge."
+  },
+  "validation": {
+    "state": "warnings",
+    "checks": [
+      "JavaScript syntax",
+      "static module and API inspection",
+      "prompt and response receipt hashes",
+      "WebGL2 compilation",
+      "initial composition",
+      "twelve canonical views",
+      "three close inspection views",
+      "three serial GPU timer-query trials",
+      "Focusable canvas",
+      "Fixed drawing-buffer resolution",
+      "Clean WebGL rendering",
+      "Context-loss handling",
+      "Listener cleanup and disposal",
+      "Pointer orbit",
+      "Wheel zoom",
+      "Keyboard camera",
+      "Two-finger pinch"
+    ],
+    "unmetRequirements": [],
+    "warnings": [
+      "Faint pale arc lines appear on the ground near the shadow in level-04, level-05 and raised-01 to raised-03."
+    ]
+  },
+  "metrics": {
+    "sourceBytes": 11143,
+    "initMs": 2562.6000000089407,
+    "gpuMsMedian": 1.36262,
+    "gpuMsP95": 1.65816,
+    "throughputFps": 733.8803187976105,
+    "timingMethod": "gpu-query",
+    "environment": {
+      "gpu": "ANGLE (AMD, AMD Radeon(TM) Graphics (0x000015BF) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "browser": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36",
+      "platform": "Windows",
+      "resolution": [
+        960,
+        540
+      ]
+    },
+    "environmentKey": "ANGLE (AMD, AMD Radeon(TM) Graphics (0x000015BF) Direct3D11 vs_5_0 ps_5_0, D3D11)|Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36|960x540",
+    "profile": "pelican-canvas-960x540-v1",
+    "sampleCount": 36,
+    "trials": 3,
+    "measuredAt": "2026-10-18T18:52:09.001Z"
+  },
+  "visual": {
+    "readability": null,
+    "completeness": null,
+    "coherence": null,
+    "craft": null,
+    "inspectability": null,
+    "reviewers": 0
+  },
+  "provenance": {
+    "generatorKind": "model-eval",
+    "method": "Fresh one-shot Claude Code CLI invocation; text-only with tools and skills disabled; added trailing LF",
+    "rawResponse": "../raw/claude-fable-5-1-low-run-01/response.txt",
+    "decoding": "reasoning effort: low; other decoding settings not exposed"
+  }
+}

@@ -573,8 +573,9 @@ try {
     evaluatedRuns.push({ ...generatedRun, record, before, afterDrag, afterWheel, afterKeyboard, afterReset, afterPinch });
   }
 
-  const evaluatedGpt6Runs = [];
-  for (const item of publishedResults.filter((result) => /^gpt-6(?:\.|-)/.test(result.model))) {
+  const sweepFamily = /^(?:gpt-6(?:\.|-)|claude-(?:fable-5-1|opus-5-5|sonnet-5-5|haiku-5-5)$)/;
+  const evaluatedFamilyRuns = [];
+  for (const item of publishedResults.filter((result) => sweepFamily.test(result.model))) {
     await client.send("Page.navigate", { url: `${siteUrl}result.html?id=${item.id}` });
     await waitFor(client, `document.readyState === 'complete' && !document.querySelector('#run-page').hidden && document.querySelector('#run-viewer-loading').hidden`, 60000);
     const record = await evaluate(client, `({
@@ -599,7 +600,7 @@ try {
       || (expectedCost && !record.usage.includes(expectedCost))
       || record.requirements !== item.validation.unmetRequirements.length
       || record.scrollWidth > record.width) {
-      throw new Error(`GPT-6 run record failed: ${JSON.stringify({ id: item.id, record })}`);
+      throw new Error(`Sweep-family run record failed: ${JSON.stringify({ id: item.id, record })}`);
     }
     const controls = {};
     if (!failed) {
@@ -624,7 +625,7 @@ try {
       }
       if (controls.reset !== controls.before) throw new Error(`${item.id}: host reset failed`);
     }
-    evaluatedGpt6Runs.push({ id: item.id, record, controls });
+    evaluatedFamilyRuns.push({ id: item.id, record, controls });
   }
 
   await client.send("Page.navigate", { url: `${siteUrl}result.html?id=not-a-published-run` });
@@ -832,7 +833,7 @@ try {
     runDetail,
     runInteraction: { beforeRunDrag, afterRunDrag, afterRunZoom, afterRunReset },
     evaluatedRuns,
-    evaluatedGpt6Runs,
+    evaluatedFamilyRuns,
     sourceLoaded,
     missingRun,
     requirementRunDetail,

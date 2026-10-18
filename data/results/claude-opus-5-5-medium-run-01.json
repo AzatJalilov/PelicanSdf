@@ -1,0 +1,98 @@
+{
+  "id": "claude-opus-5-5-medium-run-01",
+  "title": "Claude Opus 5.5 / medium effort",
+  "model": "claude-opus-5-5",
+  "provider": "Anthropic via Claude Code CLI",
+  "status": "unverified",
+  "track": "one-shot",
+  "promptVersion": "1.0.0",
+  "promptSha256": "cd21d5a8bb3956d82ab5650304e7e491063eacdb27dad85be6b4a845512f5e6b",
+  "artifactSha256": "bd1f0bbc7b2d638b3a8b232b494ea0bc3ff24c4ca346fc06e444921e68a6ddb0",
+  "createdAt": "2026-10-18",
+  "artifact": "../artifacts/claude-opus-5-5-medium-run-01.js",
+  "description": "A white pelican with a long yellow beak, tan throat pouch, and pale blue-gray wing-arms gripping the handlebar, with yellow legs on the pedals, riding a light-blue bicycle with silver spokes along a gray dashed-line road through green fields; a pale rectangle and a noisy, stair-edged shadow show on the road.",
+  "accent": "#c4532d",
+  "generationHarness": {
+    "name": "Claude Code CLI",
+    "version": "2.1.302 (Claude Code)",
+    "surface": "claude -p --tools \"\" --setting-sources \"\" --strict-mcp-config --system-prompt <minimal> --output-format json (prompt piped byte-exact via stdin)",
+    "sandbox": "n/a (no tools available)",
+    "notes": "Fresh non-interactive invocation with a minimal replacement system prompt and CLAUDE_CODE_DISABLE_AUTO_MEMORY=1; no tools, skills, hooks, MCP servers, CLAUDE.md, or memory in context. This CLI version also injects an environment block (cwd, OS, git status) and the account email, which cannot be disabled (~674-token bare context probe vs 253 on 2.1.214)."
+  },
+  "generationUsage": {
+    "inputTokens": 2,
+    "cachedInputTokens": 1389,
+    "reasoningTokens": null,
+    "outputTokens": 57404,
+    "totalTokens": 59196,
+    "apiCostUsd": 1.1515738000000002,
+    "billingMode": "subscription",
+    "source": "data/raw/claude-opus-5-5-medium-run-01/events.jsonl",
+    "notes": "Claude subscription invocation; total_cost_usd is the CLI's pricing estimate, not a separate API charge."
+  },
+  "validation": {
+    "state": "warnings",
+    "checks": [
+      "JavaScript syntax",
+      "static module and API inspection",
+      "prompt and response receipt hashes",
+      "WebGL2 compilation",
+      "initial composition",
+      "twelve canonical views",
+      "three close inspection views",
+      "three serial GPU timer-query trials",
+      "Focusable canvas",
+      "Fixed drawing-buffer resolution",
+      "Clean WebGL rendering",
+      "Context-loss handling",
+      "Listener cleanup and disposal",
+      "Pointer orbit",
+      "Wheel zoom",
+      "Keyboard camera",
+      "Two-finger pinch"
+    ],
+    "unmetRequirements": [
+      {
+        "requirement": "Coherent scene from every angle",
+        "evidence": "The road shadow has a dithered, streaked texture with stair-stepped straight edges in level-04 to level-07 and raised-01 to raised-03 (clearest in level-05), and a pale rectangle outline surrounds the bicycle in initial, level-00 and raised-00. gnd() (lines 171-173) starts and ends the 32-step shadow march at the scene bounding box, and applies ground occlusion only inside the |x|<1.3, |z|<0.7 rectangle."
+      }
+    ],
+    "warnings": []
+  },
+  "metrics": {
+    "sourceBytes": 16225,
+    "initMs": 30617,
+    "gpuMsMedian": 1.05384,
+    "gpuMsP95": 1.29196,
+    "throughputFps": 948.9106505731419,
+    "timingMethod": "gpu-query",
+    "environment": {
+      "gpu": "ANGLE (AMD, AMD Radeon(TM) Graphics (0x000015BF) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "browser": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36",
+      "platform": "Windows",
+      "resolution": [
+        960,
+        540
+      ]
+    },
+    "environmentKey": "ANGLE (AMD, AMD Radeon(TM) Graphics (0x000015BF) Direct3D11 vs_5_0 ps_5_0, D3D11)|Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36|960x540",
+    "profile": "pelican-canvas-960x540-v1",
+    "sampleCount": 36,
+    "trials": 3,
+    "measuredAt": "2026-10-18T16:55:06.770Z"
+  },
+  "visual": {
+    "readability": null,
+    "completeness": null,
+    "coherence": null,
+    "craft": null,
+    "inspectability": null,
+    "reviewers": 0
+  },
+  "provenance": {
+    "generatorKind": "model-eval",
+    "method": "Fresh one-shot Claude Code CLI invocation; text-only with tools and skills disabled; added trailing LF",
+    "rawResponse": "../raw/claude-opus-5-5-medium-run-01/response.txt",
+    "decoding": "reasoning effort: medium; other decoding settings not exposed"
+  }
+}

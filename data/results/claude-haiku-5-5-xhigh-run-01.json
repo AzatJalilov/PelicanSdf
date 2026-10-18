@@ -1,0 +1,100 @@
+{
+  "id": "claude-haiku-5-5-xhigh-run-01",
+  "title": "Claude Haiku 5.5 / xhigh effort",
+  "model": "claude-haiku-5-5",
+  "provider": "Anthropic via Claude Code CLI",
+  "status": "unverified",
+  "track": "one-shot",
+  "promptVersion": "1.0.0",
+  "promptSha256": "cd21d5a8bb3956d82ab5650304e7e491063eacdb27dad85be6b4a845512f5e6b",
+  "artifactSha256": "3430bb3f1b07b69dcc688b1d9553954ac91ae3dc984c9f340db35104f97a4c5e",
+  "createdAt": "2026-10-18",
+  "artifact": "../artifacts/claude-haiku-5-5-xhigh-run-01.js",
+  "description": "A white pelican with a long pale-yellow beak, an orange throat pouch, gray wings, and orange legs riding a red bicycle with black tires and white spokes under hazy, washed-out lighting; a rectangular slab outline and box-shaped shadows show on the ground.",
+  "accent": "#3a6fc4",
+  "generationHarness": {
+    "name": "Claude Code CLI",
+    "version": "2.1.302 (Claude Code)",
+    "surface": "claude -p --tools \"\" --setting-sources \"\" --strict-mcp-config --system-prompt <minimal> --output-format json (prompt piped byte-exact via stdin)",
+    "sandbox": "n/a (no tools available)",
+    "notes": "Fresh non-interactive invocation with a minimal replacement system prompt and CLAUDE_CODE_DISABLE_AUTO_MEMORY=1; no tools, skills, hooks, MCP servers, CLAUDE.md, or memory in context. This CLI version also injects an environment block (cwd, OS, git status) and the account email, which cannot be disabled (~674-token bare context probe vs 253 on 2.1.214)."
+  },
+  "generationUsage": {
+    "inputTokens": 2,
+    "cachedInputTokens": 1389,
+    "reasoningTokens": null,
+    "outputTokens": 127465,
+    "totalTokens": 129259,
+    "apiCostUsd": 0.06382719,
+    "billingMode": "subscription",
+    "source": "data/raw/claude-haiku-5-5-xhigh-run-01/events.jsonl",
+    "notes": "Claude subscription invocation; total_cost_usd is the CLI's pricing estimate, not a separate API charge."
+  },
+  "validation": {
+    "state": "warnings",
+    "checks": [
+      "JavaScript syntax",
+      "static module and API inspection",
+      "prompt and response receipt hashes",
+      "WebGL2 compilation",
+      "initial composition",
+      "twelve canonical views",
+      "three close inspection views",
+      "three serial GPU timer-query trials",
+      "Focusable canvas",
+      "Fixed drawing-buffer resolution",
+      "Clean WebGL rendering",
+      "Context-loss handling",
+      "Listener cleanup and disposal",
+      "Pointer orbit",
+      "Wheel zoom",
+      "Keyboard camera",
+      "Two-finger pinch"
+    ],
+    "unmetRequirements": [
+      {
+        "requirement": "Coherent scene from every angle",
+        "evidence": "Each view shows a pale rectangular platform outline on the ground around the bicycle, and level views 03-06 and raised views 01-02 cast large box-shaped shadows with streaked interiors, much wider than the rider. wheel(), frameG() and riderG() (lines 100-101, 114-115, 160-161) return bounding-box distances as geometry; the wheel boxes reach y -0.025 below the ground (RA/FA y 0.595, half-extent 0.62), and shadow() and calcAO() (lines 214-235) march those proxies."
+      }
+    ],
+    "warnings": [
+      "The neck, tires and spokes show contour-ring banding in close-01 and close-02."
+    ]
+  },
+  "metrics": {
+    "sourceBytes": 18472,
+    "initMs": 8728.29999999702,
+    "gpuMsMedian": 2.20722,
+    "gpuMsP95": 2.44288,
+    "throughputFps": 453.05859859914284,
+    "timingMethod": "gpu-query",
+    "environment": {
+      "gpu": "ANGLE (AMD, AMD Radeon(TM) Graphics (0x000015BF) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "browser": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36",
+      "platform": "Windows",
+      "resolution": [
+        960,
+        540
+      ]
+    },
+    "environmentKey": "ANGLE (AMD, AMD Radeon(TM) Graphics (0x000015BF) Direct3D11 vs_5_0 ps_5_0, D3D11)|Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36|960x540",
+    "profile": "pelican-canvas-960x540-v1",
+    "sampleCount": 36,
+    "trials": 3,
+    "measuredAt": "2026-10-18T14:16:10.662Z"
+  },
+  "visual": {
+    "readability": null,
+    "completeness": null,
+    "coherence": null,
+    "craft": null,
+    "inspectability": null,
+    "reviewers": 0
+  },
+  "provenance": {
+    "generatorKind": "model-eval",
+    "method": "Fresh one-shot Claude Code CLI invocation; text-only with tools and skills disabled; removed one surrounding Markdown fence; added trailing LF",
+    "rawResponse": "../raw/claude-haiku-5-5-xhigh-run-01/response.txt",
+    "decoding": "reasoning effort: xhigh; other decoding settings not exposed"
+  }
+}

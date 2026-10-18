@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "id": "claude-haiku-5-5-medium-run-01",
+  "model": "claude-haiku-5-5",
+  "modelDisplayName": "Claude Haiku 5.5",
+  "provider": "Anthropic via Claude Code CLI",
+  "reasoningEffort": "medium",
+  "accent": "#3a6fc4",
+  "harness": {
+    "name": "Claude Code CLI",
+    "version": "2.1.302 (Claude Code)",
+    "surface": "claude -p --tools \"\" --setting-sources \"\" --strict-mcp-config --system-prompt <minimal> --output-format json (prompt piped byte-exact via stdin)",
+    "sandbox": "n/a (no tools available)",
+    "ephemeral": true,
+    "userConfigLoaded": false,
+    "projectRulesLoaded": false,
+    "notes": "Fresh non-interactive invocation with a minimal replacement system prompt and CLAUDE_CODE_DISABLE_AUTO_MEMORY=1; no tools, skills, hooks, MCP servers, CLAUDE.md, or memory in context. This CLI version also injects an environment block (cwd, OS, git status) and the account email, which cannot be disabled (~674-token bare context probe vs 253 on 2.1.214)."
+  },
+  "prompt": {
+    "path": "benchmark/prompt.txt",
+    "bytes": 3387,
+    "sha256": "cd21d5a8bb3956d82ab5650304e7e491063eacdb27dad85be6b4a845512f5e6b"
+  },
+  "response": {
+    "path": "data/raw/claude-haiku-5-5-medium-run-01/response.txt",
+    "bytes": 16951,
+    "sha256": "3670bd08ac084c06b7f46f7d76da19822e91286193690f8ccbfcc43310aa19e2"
+  },
+  "usage": {
+    "inputTokens": 2,
+    "cachedInputTokens": 1389,
+    "reasoningTokens": null,
+    "outputTokens": 63345,
+    "totalTokens": 65139
+  },
+  "billing": {
+    "mode": "subscription",
+    "apiCostUsd": 0.03176719,
+    "note": "Claude subscription invocation; total_cost_usd is the CLI's pricing estimate, not a separate API charge."
+  },
+  "startedAt": "2026-10-18T13:57:30.392Z",
+  "completedAt": "2026-10-18T14:01:50.447Z",
+  "durationMs": 260055,
+  "exitCode": 0,
+  "error": null,
+  "sessionId": "1e2cc892-3b40-415a-9e91-9ce7004512f5",
+  "files": {
+    "events": "data/raw/claude-haiku-5-5-medium-run-01/events.jsonl",
+    "stderr": "data/raw/claude-haiku-5-5-medium-run-01/stderr.txt"
+  }
+}

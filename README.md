@@ -31,7 +31,7 @@ harder, inspectable 3D task.
 - Explicit generation-harness metadata, including Codex CLI version/surface
 - Provider-reported token usage, billing mode, and actual or API-equivalent cost metadata
 - JSON result records, artifact hashes, schema, and repository validation
-- 59 one-shot runs across 19 model identifiers, including matched five-effort Sol and Claude sweeps
+- 72 one-shot runs across 23 model identifiers, including matched five-effort Sol and Claude sweeps
 - SDF-rendered catalog thumbnails generated from each renderable first response
 - MIT licensing and contribution/security guidance
 
@@ -180,7 +180,7 @@ view and close zoom in a browser, and open a pull request. See
 
 ## Evaluation caveat
 
-The 59 included entries were produced one-shot through Codex CLI, Claude Code
+The 72 included entries were produced one-shot through Codex CLI, Claude Code
 CLI, or the pi SDK with OpenRouter. Raw first responses, available event streams,
 and receipts are retained; two early seed entries predate the receipted runner
 and explicitly keep their missing usage fields. Renderable runs include
@@ -203,6 +203,21 @@ before returning an artifact. Its infrastructure-failure receipt is preserved
 separately with unknown usage and cost. The completed high result is explicitly
 identified as run-02; the interrupted attempt is excluded from completed-run
 totals and is not classified as a model failure.
+
+The [Claude 5.x comparison report](benchmark/claude-5x-2026-10-18.html) covers
+Fable 5.1, Opus 5.5, Sonnet 5.5, and Haiku 5.5 next to their predecessors. These
+runs used Claude Code CLI 2.1.302, which loads auto-memory despite
+`--setting-sources ""`; the runner now disables it with
+`CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`. That CLI version also injects an
+environment block and the account email that cannot be disabled, so the bare
+context is about 674 tokens instead of the 253 measured for the July runs. Every
+attempted max-effort run failed without a response: Haiku 5.5 and Sonnet 5.5
+exhausted the 128,000-token output limit across the CLI's automatic retries,
+and Opus 5.5 was stopped by a 60-minute generation limit introduced during the
+sweep. Fable 5.1 max was therefore not run. Their receipts are preserved under
+`data/raw/`. Where the CLI retried after a first attempt hit its output limit,
+the preserved response is the retry and the result notes say so. Responses that
+do not parse or break the no-imports contract are kept under `data/drafts/`.
 
 Accumulated CLI input usage can exceed a per-request pricing threshold through
 many short requests. When that happens and request-level counts are unavailable,

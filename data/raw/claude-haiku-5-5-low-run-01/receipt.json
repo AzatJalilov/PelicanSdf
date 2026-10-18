@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "id": "claude-haiku-5-5-low-run-01",
+  "model": "claude-haiku-5-5",
+  "modelDisplayName": "Claude Haiku 5.5",
+  "provider": "Anthropic via Claude Code CLI",
+  "reasoningEffort": "low",
+  "accent": "#3a6fc4",
+  "harness": {
+    "name": "Claude Code CLI",
+    "version": "2.1.302 (Claude Code)",
+    "surface": "claude -p --tools \"\" --setting-sources \"\" --strict-mcp-config --system-prompt <minimal> --output-format json (prompt piped byte-exact via stdin)",
+    "sandbox": "n/a (no tools available)",
+    "ephemeral": true,
+    "userConfigLoaded": false,
+    "projectRulesLoaded": false,
+    "notes": "Fresh non-interactive invocation with a minimal replacement system prompt and CLAUDE_CODE_DISABLE_AUTO_MEMORY=1; no tools, skills, hooks, MCP servers, CLAUDE.md, or memory in context. This CLI version also injects an environment block (cwd, OS, git status) and the account email, which cannot be disabled (~674-token bare context probe vs 253 on 2.1.214)."
+  },
+  "prompt": {
+    "path": "benchmark/prompt.txt",
+    "bytes": 3387,
+    "sha256": "cd21d5a8bb3956d82ab5650304e7e491063eacdb27dad85be6b4a845512f5e6b"
+  },
+  "response": {
+    "path": "data/raw/claude-haiku-5-5-low-run-01/response.txt",
+    "bytes": 13598,
+    "sha256": "5e4e566485331a9e1b4d4c6d7672787de147be5ff6502ad532c868dabed692e1"
+  },
+  "usage": {
+    "inputTokens": 2,
+    "cachedInputTokens": 0,
+    "reasoningTokens": null,
+    "outputTokens": 49864,
+    "totalTokens": 51658
+  },
+  "billing": {
+    "mode": "subscription",
+    "apiCostUsd": 0.025290599999999996,
+    "note": "Claude subscription invocation; total_cost_usd is the CLI's pricing estimate, not a separate API charge."
+  },
+  "startedAt": "2026-10-18T13:53:57.462Z",
+  "completedAt": "2026-10-18T13:57:30.191Z",
+  "durationMs": 212729,
+  "exitCode": 0,
+  "error": null,
+  "sessionId": "12b7a4cc-06b4-42f8-bc4f-35262303380a",
+  "files": {
+    "events": "data/raw/claude-haiku-5-5-low-run-01/events.jsonl",
+    "stderr": "data/raw/claude-haiku-5-5-low-run-01/stderr.txt"
+  }
+}

@@ -1,0 +1,95 @@
+{
+  "id": "claude-fable-5-1-xhigh-run-01",
+  "title": "Claude Fable 5.1 / xhigh effort",
+  "model": "claude-fable-5-1",
+  "provider": "Anthropic via Claude Code CLI",
+  "status": "unverified",
+  "track": "one-shot",
+  "promptVersion": "1.0.0",
+  "promptSha256": "cd21d5a8bb3956d82ab5650304e7e491063eacdb27dad85be6b4a845512f5e6b",
+  "artifactSha256": "990f99d53384fd02c5e6177ac1a964fef5d1d70c701017525d13d74f29b3a419",
+  "createdAt": "2026-10-18",
+  "artifact": "../artifacts/claude-fable-5-1-xhigh-run-01.js",
+  "description": "A white pelican with a black eye, yellow beak, and peach throat pouch, its white wings gripping the handlebar and mustard legs on the pedals, riding a coral-red bicycle with cream-walled tires and silver spokes on a round white pedestal against a pale gray backdrop.",
+  "accent": "#a0457e",
+  "generationHarness": {
+    "name": "Claude Code CLI",
+    "version": "2.1.302 (Claude Code)",
+    "surface": "claude -p --tools \"\" --setting-sources \"\" --strict-mcp-config --system-prompt <minimal> --output-format json (prompt piped byte-exact via stdin)",
+    "sandbox": "n/a (no tools available)",
+    "notes": "Fresh non-interactive invocation with a minimal replacement system prompt and CLAUDE_CODE_DISABLE_AUTO_MEMORY=1; no tools, skills, hooks, MCP servers, CLAUDE.md, or memory in context. This CLI version also injects an environment block (cwd, OS, git status) and the account email, which cannot be disabled (~674-token bare context probe vs 253 on 2.1.214)."
+  },
+  "generationUsage": {
+    "inputTokens": 4,
+    "cachedInputTokens": 1389,
+    "reasoningTokens": null,
+    "outputTokens": 112709,
+    "totalTokens": 116355,
+    "apiCostUsd": 5.680897250000001,
+    "billingMode": "subscription",
+    "source": "data/raw/claude-fable-5-1-xhigh-run-01/events.jsonl",
+    "notes": "Claude subscription invocation; total_cost_usd is the CLI's pricing estimate, not a separate API charge. The first attempt reached the CLI's 64000 output-token limit for this model before returning any text; Claude Code retried automatically and the second attempt is the preserved response. Usage and cost cover both attempts."
+  },
+  "validation": {
+    "state": "warnings",
+    "checks": [
+      "JavaScript syntax",
+      "static module and API inspection",
+      "prompt and response receipt hashes",
+      "WebGL2 compilation",
+      "initial composition",
+      "twelve canonical views",
+      "three close inspection views",
+      "three serial GPU timer-query trials",
+      "Focusable canvas",
+      "Fixed drawing-buffer resolution",
+      "Clean WebGL rendering",
+      "Context-loss handling",
+      "Listener cleanup and disposal",
+      "Pointer orbit",
+      "Wheel zoom",
+      "Keyboard camera",
+      "Two-finger pinch"
+    ],
+    "unmetRequirements": [],
+    "warnings": [
+      "Faint gray streaks appear on the pedestal around the cast shadow in level-05, level-06, raised-01 and raised-02."
+    ]
+  },
+  "metrics": {
+    "sourceBytes": 14049,
+    "initMs": 6378.100000008941,
+    "gpuMsMedian": 1.72916,
+    "gpuMsP95": 1.90168,
+    "throughputFps": 578.3154826621018,
+    "timingMethod": "gpu-query",
+    "environment": {
+      "gpu": "ANGLE (AMD, AMD Radeon(TM) Graphics (0x000015BF) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "browser": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36",
+      "platform": "Windows",
+      "resolution": [
+        960,
+        540
+      ]
+    },
+    "environmentKey": "ANGLE (AMD, AMD Radeon(TM) Graphics (0x000015BF) Direct3D11 vs_5_0 ps_5_0, D3D11)|Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36|960x540",
+    "profile": "pelican-canvas-960x540-v1",
+    "sampleCount": 36,
+    "trials": 3,
+    "measuredAt": "2026-10-18T19:27:55.539Z"
+  },
+  "visual": {
+    "readability": null,
+    "completeness": null,
+    "coherence": null,
+    "craft": null,
+    "inspectability": null,
+    "reviewers": 0
+  },
+  "provenance": {
+    "generatorKind": "model-eval",
+    "method": "Fresh one-shot Claude Code CLI invocation; text-only with tools and skills disabled; added trailing LF",
+    "rawResponse": "../raw/claude-fable-5-1-xhigh-run-01/response.txt",
+    "decoding": "reasoning effort: xhigh; other decoding settings not exposed"
+  }
+}

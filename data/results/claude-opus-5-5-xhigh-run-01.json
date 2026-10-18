@@ -1,0 +1,98 @@
+{
+  "id": "claude-opus-5-5-xhigh-run-01",
+  "title": "Claude Opus 5.5 / xhigh effort",
+  "model": "claude-opus-5-5",
+  "provider": "Anthropic via Claude Code CLI",
+  "status": "unverified",
+  "track": "one-shot",
+  "promptVersion": "1.0.0",
+  "promptSha256": "cd21d5a8bb3956d82ab5650304e7e491063eacdb27dad85be6b4a845512f5e6b",
+  "artifactSha256": "d8441fc734c5f77b50283b02973ba6910d5c20ac2a4445f5fe2c7f148a705869",
+  "createdAt": "2026-10-18",
+  "artifact": "../artifacts/claude-opus-5-5-xhigh-run-01.js",
+  "description": "A white pelican with a large peach throat pouch, orange-tipped beak, and black wing tips, its wings reaching to the handlebar and yellow legs on the pedals, riding a teal bicycle with black tires and silver spokes along a gray road with yellow center dashes through wavy green fields under hazy hills; a striped, comb-like patch shows in the road shadow.",
+  "accent": "#c4532d",
+  "generationHarness": {
+    "name": "Claude Code CLI",
+    "version": "2.1.302 (Claude Code)",
+    "surface": "claude -p --tools \"\" --setting-sources \"\" --strict-mcp-config --system-prompt <minimal> --output-format json (prompt piped byte-exact via stdin)",
+    "sandbox": "n/a (no tools available)",
+    "notes": "Fresh non-interactive invocation with a minimal replacement system prompt and CLAUDE_CODE_DISABLE_AUTO_MEMORY=1; no tools, skills, hooks, MCP servers, CLAUDE.md, or memory in context. This CLI version also injects an environment block (cwd, OS, git status) and the account email, which cannot be disabled (~674-token bare context probe vs 253 on 2.1.214)."
+  },
+  "generationUsage": {
+    "inputTokens": 4,
+    "cachedInputTokens": 1389,
+    "reasoningTokens": null,
+    "outputTokens": 233940,
+    "totalTokens": 237586,
+    "apiCostUsd": 4.6971178,
+    "billingMode": "subscription",
+    "source": "data/raw/claude-opus-5-5-xhigh-run-01/events.jsonl",
+    "notes": "Claude subscription invocation; total_cost_usd is the CLI's pricing estimate, not a separate API charge. The first attempt reached the CLI's 128000 output-token limit before returning any text; Claude Code retried automatically and the second attempt is the preserved response. Usage and cost cover both attempts."
+  },
+  "validation": {
+    "state": "warnings",
+    "checks": [
+      "JavaScript syntax",
+      "static module and API inspection",
+      "prompt and response receipt hashes",
+      "WebGL2 compilation",
+      "initial composition",
+      "twelve canonical views",
+      "three close inspection views",
+      "three serial GPU timer-query trials",
+      "Focusable canvas",
+      "Fixed drawing-buffer resolution",
+      "Clean WebGL rendering",
+      "Context-loss handling",
+      "Listener cleanup and disposal",
+      "Pointer orbit",
+      "Wheel zoom",
+      "Keyboard camera",
+      "Two-finger pinch"
+    ],
+    "unmetRequirements": [
+      {
+        "requirement": "Coherent scene from every angle",
+        "evidence": "Cast shadows break into sawtooth, stair-stepped edges on the grass in level-02, level-03, level-05, level-06, raised-01 and raised-02 (clearest in level-05), and striped comb-like patches appear in the road shadow near the wheels in initial, level-00, level-04 and raised-00. shadow() (line 120) limits the march to 40 steps inside the scene bounding box, with a minimum step of 0.006, so long grazing shadow rays stop before resolving."
+      }
+    ],
+    "warnings": []
+  },
+  "metrics": {
+    "sourceBytes": 15269,
+    "initMs": 5067.9000000059605,
+    "gpuMsMedian": 1.26864,
+    "gpuMsP95": 1.55524,
+    "throughputFps": 788.2456804136714,
+    "timingMethod": "gpu-query",
+    "environment": {
+      "gpu": "ANGLE (AMD, AMD Radeon(TM) Graphics (0x000015BF) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "browser": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36",
+      "platform": "Windows",
+      "resolution": [
+        960,
+        540
+      ]
+    },
+    "environmentKey": "ANGLE (AMD, AMD Radeon(TM) Graphics (0x000015BF) Direct3D11 vs_5_0 ps_5_0, D3D11)|Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36|960x540",
+    "profile": "pelican-canvas-960x540-v1",
+    "sampleCount": 36,
+    "trials": 3,
+    "measuredAt": "2026-10-18T17:45:51.961Z"
+  },
+  "visual": {
+    "readability": null,
+    "completeness": null,
+    "coherence": null,
+    "craft": null,
+    "inspectability": null,
+    "reviewers": 0
+  },
+  "provenance": {
+    "generatorKind": "model-eval",
+    "method": "Fresh one-shot Claude Code CLI invocation; text-only with tools and skills disabled; added trailing LF",
+    "rawResponse": "../raw/claude-opus-5-5-xhigh-run-01/response.txt",
+    "decoding": "reasoning effort: xhigh; other decoding settings not exposed"
+  }
+}

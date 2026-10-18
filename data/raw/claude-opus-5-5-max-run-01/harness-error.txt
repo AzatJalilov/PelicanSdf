@@ -1,0 +1,1 @@
+Run stopped at 2026-10-18T20:48:23+02:00 by the 60-minute generation limit, applied externally because this process started before the runner gained its built-in timeout. The stop came about 3 minutes late because of a process-id error in the watchdog.

@@ -1,0 +1,77 @@
+{
+  "id": "claude-fable-5-1-high-run-01",
+  "title": "Claude Fable 5.1 / high effort",
+  "model": "claude-fable-5-1",
+  "provider": "Anthropic via Claude Code CLI",
+  "status": "unverified",
+  "track": "one-shot",
+  "promptVersion": "1.0.0",
+  "promptSha256": "cd21d5a8bb3956d82ab5650304e7e491063eacdb27dad85be6b4a845512f5e6b",
+  "artifactSha256": "cfa8edc0421cb7cd68f2517981252474abdb078ca8991c699939e862bd927325",
+  "createdAt": "2026-10-18",
+  "artifact": "./artifacts/claude-fable-5-1-high-run-01.js",
+  "description": "The response is a 95-byte fragment that imports Node's fs module and announces it will write the module to disk first; no pelican module was returned.",
+  "accent": "#a0457e",
+  "generationHarness": {
+    "name": "Claude Code CLI",
+    "version": "2.1.302 (Claude Code)",
+    "surface": "claude -p --tools \"\" --setting-sources \"\" --strict-mcp-config --system-prompt <minimal> --output-format json (prompt piped byte-exact via stdin)",
+    "sandbox": "n/a (no tools available)",
+    "notes": "Fresh non-interactive invocation with a minimal replacement system prompt and CLAUDE_CODE_DISABLE_AUTO_MEMORY=1; no tools, skills, hooks, MCP servers, CLAUDE.md, or memory in context. This CLI version also injects an environment block (cwd, OS, git status) and the account email, which cannot be disabled (~674-token bare context probe vs 253 on 2.1.214)."
+  },
+  "generationUsage": {
+    "inputTokens": 2,
+    "cachedInputTokens": 1389,
+    "reasoningTokens": null,
+    "outputTokens": 32200,
+    "totalTokens": 33992,
+    "apiCostUsd": 1.6183872499999996,
+    "billingMode": "subscription",
+    "source": "data/raw/claude-fable-5-1-high-run-01/events.jsonl",
+    "notes": "Claude subscription invocation; total_cost_usd is the CLI's pricing estimate, not a separate API charge."
+  },
+  "validation": {
+    "state": "failed",
+    "checks": [
+      "JavaScript syntax",
+      "prompt and response receipt hashes"
+    ],
+    "unmetRequirements": [
+      {
+        "requirement": "Self-contained JavaScript ES module",
+        "evidence": "The entire response is import { readFileSync } from 'fs'; followed by the sentence \"Wait — I'll write the module to disk first and verify it.\" The run had no tools, no createPelicanSdf export was returned, and Node's syntax check reports Invalid or unexpected token at line 3."
+      }
+    ],
+    "warnings": [
+      "Not added to the catalog because the unchanged response does not pass executable-artifact publication constraints."
+    ]
+  },
+  "metrics": {
+    "sourceBytes": 96,
+    "initMs": null,
+    "gpuMsMedian": null,
+    "gpuMsP95": null,
+    "throughputFps": null,
+    "timingMethod": null,
+    "environment": null,
+    "environmentKey": null,
+    "profile": "pelican-canvas-960x540-v1",
+    "sampleCount": null,
+    "trials": null,
+    "measuredAt": null
+  },
+  "visual": {
+    "readability": null,
+    "completeness": null,
+    "coherence": null,
+    "craft": null,
+    "inspectability": null,
+    "reviewers": 0
+  },
+  "provenance": {
+    "generatorKind": "model-eval",
+    "method": "Fresh one-shot Claude Code CLI invocation; text-only with tools and skills disabled; added trailing LF",
+    "rawResponse": "../raw/claude-fable-5-1-high-run-01/response.txt",
+    "decoding": "reasoning effort: high; other decoding settings not exposed"
+  }
+}

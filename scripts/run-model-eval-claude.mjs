@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 const CLAUDE_BIN = process.env.CLAUDE_BIN || (process.platform === "win32" ? "claude.exe" : "claude");
 const allowedEfforts = new Set(["low", "medium", "high", "xhigh", "max"]);
+const RUN_TIMEOUT_MS = 60 * 60 * 1000;
 const SYSTEM_PROMPT =
   "You are a helpful coding assistant. Follow the user's instructions exactly and return exactly what is requested.";
 
@@ -16,6 +17,17 @@ const KNOWN_MODELS = {
   "claude-opus-4-8": { display: "Claude Opus 4.8", accent: "#b0762f" },
   "claude-sonnet-5": { display: "Claude Sonnet 5", accent: "#3f7f5f" },
   "claude-haiku-4-5-20251001": { display: "Claude Haiku 4.5", accent: "#4f8fb0" },
+  "claude-fable-5-1": { display: "Claude Fable 5.1", accent: "#a0457e" },
+  "claude-opus-5-5": { display: "Claude Opus 5.5", accent: "#c4532d" },
+  "claude-sonnet-5-5": { display: "Claude Sonnet 5.5", accent: "#5a8f2e" },
+  "claude-haiku-5-5": { display: "Claude Haiku 5.5", accent: "#3a6fc4" },
+};
+
+const HARNESS_NOTES = {
+  "2.1.214 (Claude Code)":
+    "Fresh non-interactive invocation with a minimal replacement system prompt; no tools, skills, hooks, MCP servers, CLAUDE.md, or memory in context (verified 253-token bare context probe).",
+  default:
+    "Fresh non-interactive invocation with a minimal replacement system prompt and CLAUDE_CODE_DISABLE_AUTO_MEMORY=1; no tools, skills, hooks, MCP servers, CLAUDE.md, or memory in context. This CLI version also injects an environment block (cwd, OS, git status) and the account email, which cannot be disabled (~674-token bare context probe vs 253 on 2.1.214).",
 };
 
 function parseArgs(argv) {
@@ -44,17 +56,28 @@ async function exists(filePath) {
   }
 }
 
-function runClaude(cliArgs, stdinBuffer) {
+function runClaude(cliArgs, stdinBuffer, timeoutMs = 0) {
   return new Promise((resolve, reject) => {
-    const child = spawn(CLAUDE_BIN, cliArgs, { stdio: ["pipe", "pipe", "pipe"] });
+    // CLI >= 2.1.302 loads auto-memory even with --setting-sources "".
+    const env = { ...process.env, CLAUDE_CODE_DISABLE_AUTO_MEMORY: "1" };
+    const child = spawn(CLAUDE_BIN, cliArgs, { stdio: ["pipe", "pipe", "pipe"], env });
     const stdout = [];
     const stderr = [];
     child.stdout.on("data", (chunk) => stdout.push(chunk));
     child.stderr.on("data", (chunk) => stderr.push(chunk));
+    let timedOut = false;
+    const timer = timeoutMs
+      ? setTimeout(() => {
+          timedOut = true;
+          child.kill();
+        }, timeoutMs)
+      : null;
     child.on("error", reject);
     child.on("close", (code) => {
+      clearTimeout(timer);
       resolve({
         code,
+        timedOut,
         stdout: Buffer.concat(stdout).toString("utf8"),
         stderr: Buffer.concat(stderr).toString("utf8"),
       });
@@ -102,15 +125,19 @@ const cliArgs = [
 ];
 
 const startedAt = new Date();
-const run = await runClaude(cliArgs, prompt);
+const run = await runClaude(cliArgs, prompt, RUN_TIMEOUT_MS);
 const completedAt = new Date();
 
 let output = null;
 let errorMessage = null;
-try {
-  output = JSON.parse(run.stdout);
-} catch {
-  errorMessage = "Failed to parse claude --output-format json stdout";
+if (run.timedOut) {
+  errorMessage = "run exceeded the " + RUN_TIMEOUT_MS / 60000 + "-minute generation limit and was stopped";
+} else {
+  try {
+    output = JSON.parse(run.stdout);
+  } catch {
+    errorMessage = "Failed to parse claude --output-format json stdout";
+  }
 }
 if (output && output.is_error) {
   errorMessage = "claude reported is_error: " + String(output.result).slice(0, 500);
@@ -156,8 +183,7 @@ const receipt = {
     ephemeral: true,
     userConfigLoaded: false,
     projectRulesLoaded: false,
-    notes:
-      "Fresh non-interactive invocation with a minimal replacement system prompt; no tools, skills, hooks, MCP servers, CLAUDE.md, or memory in context (verified 253-token bare context probe).",
+    notes: HARNESS_NOTES[harnessVersion] ?? HARNESS_NOTES.default,
   },
   prompt: {
     path: "benchmark/prompt.txt",

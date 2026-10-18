@@ -1,0 +1,108 @@
+{
+  "id": "claude-haiku-5-5-high-run-01",
+  "title": "Claude Haiku 5.5 / high effort",
+  "model": "claude-haiku-5-5",
+  "provider": "Anthropic via Claude Code CLI",
+  "status": "unverified",
+  "track": "one-shot",
+  "promptVersion": "1.0.0",
+  "promptSha256": "cd21d5a8bb3956d82ab5650304e7e491063eacdb27dad85be6b4a845512f5e6b",
+  "artifactSha256": "1cbe366567abdeef3070c15466c34c1b32b9b807f5a8e0df10025aef5c69b1d3",
+  "createdAt": "2026-10-18",
+  "artifact": "../artifacts/claude-haiku-5-5-high-run-01.js",
+  "description": "A white pelican with a yellow beak, dark wing tips, and orange legs riding a red bicycle with dark tires and dense silver spokes; the opening framing crops the top of the head, and the pink throat pouch floats detached below the beak.",
+  "accent": "#3a6fc4",
+  "generationHarness": {
+    "name": "Claude Code CLI",
+    "version": "2.1.302 (Claude Code)",
+    "surface": "claude -p --tools \"\" --setting-sources \"\" --strict-mcp-config --system-prompt <minimal> --output-format json (prompt piped byte-exact via stdin)",
+    "sandbox": "n/a (no tools available)",
+    "notes": "Fresh non-interactive invocation with a minimal replacement system prompt and CLAUDE_CODE_DISABLE_AUTO_MEMORY=1; no tools, skills, hooks, MCP servers, CLAUDE.md, or memory in context. This CLI version also injects an environment block (cwd, OS, git status) and the account email, which cannot be disabled (~674-token bare context probe vs 253 on 2.1.214)."
+  },
+  "generationUsage": {
+    "inputTokens": 2,
+    "cachedInputTokens": 1389,
+    "reasoningTokens": null,
+    "outputTokens": 77483,
+    "totalTokens": 79277,
+    "apiCostUsd": 0.03883619,
+    "billingMode": "subscription",
+    "source": "data/raw/claude-haiku-5-5-high-run-01/events.jsonl",
+    "notes": "Claude subscription invocation; total_cost_usd is the CLI's pricing estimate, not a separate API charge."
+  },
+  "validation": {
+    "state": "warnings",
+    "checks": [
+      "JavaScript syntax",
+      "static module and API inspection",
+      "prompt and response receipt hashes",
+      "WebGL2 compilation",
+      "initial composition",
+      "twelve canonical views",
+      "three close inspection views",
+      "three serial GPU timer-query trials",
+      "Focusable canvas",
+      "Fixed drawing-buffer resolution",
+      "Clean WebGL rendering",
+      "Context-loss handling",
+      "Listener cleanup and disposal",
+      "Pointer orbit",
+      "Wheel zoom",
+      "Keyboard camera",
+      "Two-finger pinch"
+    ],
+    "unmetRequirements": [
+      {
+        "requirement": "Useful full-subject framing",
+        "evidence": "The initial 960x540 view cuts off the top of the head and eye and clips the bottom of the front wheel. All eight level views (level-00 to level-07) crop the head at the top edge; the camera targets y 0.85 (line 235) with focal 1.8 (line 240) while the head reaches about y 1.84."
+      },
+      {
+        "requirement": "Throat pouch attached to the beak",
+        "evidence": "The pouch ellipsoid at (0.5, 1.42) with y-radius 0.11 (line 119) tops out near y 1.53, while the lower mandible (line 118) bottoms out near y 1.57 at the same x, and nothing joins them. The pouch hangs as a separate floating ellipsoid with visible background between it and the beak in initial, level-00, level-04 and raised-01."
+      },
+      {
+        "requirement": "Close inspection of the beak",
+        "evidence": "close-00 to close-02 frame the torso, legs and handlebar; the beak is out of frame in all three and only the bottom edge of the pouch is visible. The close-range camera target stays at (0.3, 1.12, 0) (lines 236 and 305-306), below the beak at y 1.56-1.72."
+      }
+    ],
+    "warnings": [
+      "Concentric ripple artifacts appear on the ground near the rear wheel in initial, level-00, raised-00 and close-00."
+    ]
+  },
+  "metrics": {
+    "sourceBytes": 14929,
+    "initMs": 6701.800000011921,
+    "gpuMsMedian": 2.96662,
+    "gpuMsP95": 3.41232,
+    "throughputFps": 337.08395412961556,
+    "timingMethod": "gpu-query",
+    "environment": {
+      "gpu": "ANGLE (AMD, AMD Radeon(TM) Graphics (0x000015BF) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "browser": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36",
+      "platform": "Windows",
+      "resolution": [
+        960,
+        540
+      ]
+    },
+    "environmentKey": "ANGLE (AMD, AMD Radeon(TM) Graphics (0x000015BF) Direct3D11 vs_5_0 ps_5_0, D3D11)|Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36|960x540",
+    "profile": "pelican-canvas-960x540-v1",
+    "sampleCount": 36,
+    "trials": 3,
+    "measuredAt": "2026-10-18T14:07:25.968Z"
+  },
+  "visual": {
+    "readability": null,
+    "completeness": null,
+    "coherence": null,
+    "craft": null,
+    "inspectability": null,
+    "reviewers": 0
+  },
+  "provenance": {
+    "generatorKind": "model-eval",
+    "method": "Fresh one-shot Claude Code CLI invocation; text-only with tools and skills disabled; added trailing LF",
+    "rawResponse": "../raw/claude-haiku-5-5-high-run-01/response.txt",
+    "decoding": "reasoning effort: high; other decoding settings not exposed"
+  }
+}
